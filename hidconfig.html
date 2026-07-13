@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Bridge — HID Config & Debug</title>
+<style>
+  :root { color-scheme: light dark; --line:#8884; --hi:#3b82f6; --ok:#22c55e;
+          --err:#ef4444; --warn:#f59e0b; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 1.5rem auto;
+         padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.3rem; } h2 { font-size: 1rem; margin: 1.2rem 0 .4rem; }
+  button { padding: .5rem .9rem; margin: .2rem .3rem .2rem 0; cursor: pointer;
+           border: 1px solid var(--line); border-radius: 8px;
+           background: transparent; color: inherit; font-size: .9rem; }
+  button.primary { background: var(--hi); border-color: var(--hi); color:#fff;
+                   font-weight: 600; }
+  button:disabled { opacity: .4; cursor: default; }
+  textarea { width: 100%; min-height: 320px; font-family: ui-monospace, monospace;
+             font-size: .8rem; padding: .5rem; border-radius: 8px;
+             border: 1px solid var(--line); background: transparent; color: inherit; }
+  #log { height: 260px; overflow-y: auto; font-family: ui-monospace, monospace;
+         font-size: .78rem; border: 1px solid var(--line); border-radius: 8px;
+         padding: .5rem; background: rgba(128,128,128,.06); white-space: pre-wrap; }
+  #log .ev { color: var(--hi); } #log .rx { color: var(--ok); }
+  #log .tx { color: var(--warn); } #log .er { color: var(--err); }
+  .status { display: inline-block; padding: .15rem .6rem; border-radius: 999px;
+            font-size: .8rem; border: 1px solid var(--line); }
+  .status.on { background: var(--ok); color:#fff; border-color: var(--ok); }
+  .status.off { background: var(--err); color:#fff; border-color: var(--err); }
+  .bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin:.6rem 0; }
+  .muted { opacity: .7; font-size: .85rem; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+</style>
+</head>
+<body>
+<h1>🔌 Pi Bridge — HID Config &amp; Debug</h1>
+<p class="muted">Talks to the Pi over the vendor-HID interface on the same USB
+cable — no network needed. Works in Chrome/Edge. Everything stays local to this
+machine.</p>
+
+<div class="bar">
+  <button class="primary" id="connect">Connect to device</button>
+  <span class="status off" id="conn">disconnected</span>
+  <button id="ping" disabled>Ping</button>
+</div>
+
+<div class="grid">
+  <div>
+    <h2>Live event monitor</h2>
+    <div class="bar">
+      <button id="evon" disabled>▶ Start events</button>
+      <button id="evoff" disabled>⏸ Stop events</button>
+      <button id="clear" disabled>Clear log</button>
+      <span class="muted">Press keys / move the mouse on this PC and watch what
+      the bridge is doing with each event.</span>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <div>
+    <h2>Configuration (bridge_config.json)</h2>
+    <div class="bar">
+      <button id="read" disabled>⬇ Read from device</button>
+      <button id="write" class="primary" disabled>⬆ Write to device</button>
+      <span class="muted" id="cfgstat"></span>
+    </div>
+    <textarea id="cfg" spellcheck="false"
+      placeholder="Click “Read from device” to load the current config…"></textarea>
+  </div>
+</div>
+
+<script>
+// ---- protocol constants (mirror hidconfig.py) ----
+const RPT=32, CHUNK=RPT-4;
+const PING=0x20, GET=0x01, PUT_BEGIN=0x02, PUT_CHUNK=0x03, PUT_END=0x04,
+      EVENTS_ON=0x10, EVENTS_OFF=0x11;
+const PONG=0xA0, CFG_BEGIN=0x81, CFG_CHUNK=0x82, CFG_END=0x83,
+      EVENT=0x90, ACK=0xE0, ERR=0xE1;
+const FILTER = [{ vendorId: 0x1d6b }];   // our gadget's VID; usagePage 0xFF00 also works
+
+let device = null;
+let rxTotal = 0, rxBuf = [], rxGot = {};   // config reassembly state
+
+const $ = id => document.getElementById(id);
+function log(msg, cls='') {
+  const el = $('log');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  const t = new Date().toLocaleTimeString();
+  line.textContent = `${t}  ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function setConn(on) {
+  $('conn').textContent = on ? 'connected' : 'disconnected';
+  $('conn').className = 'status ' + (on ? 'on' : 'off');
+  ['ping','evon','evoff','clear','read','write'].forEach(id => $(id).disabled = !on);
+}
+
+function pad(arr) {
+  const u = new Uint8Array(RPT);
+  u.set(arr.slice(0, RPT));
+  return u;
+}
+async function send(arr, quiet=false) {
+  if (!device) return;
+  await device.sendReport(0, pad(arr));
+  if (!quiet) log('→ type 0x' + arr[0].toString(16).padStart(2,'0'), 'tx');
+}
+
+// ---- incoming reports ----
+function onReport(e) {
+  const d = new Uint8Array(e.data.buffer);
+  const t = d[0];
+  if (t === PONG) { log('← PONG', 'rx'); }
+  else if (t === EVENT) {
+    const len = d[1];
+    const txt = new TextDecoder().decode(d.slice(2, 2+len));
+    log(txt, 'ev');
+  }
+  else if (t === CFG_BEGIN) {
+    rxTotal = d[1] | (d[2]<<8) | (d[3]<<16) | (d[4]<<24);
+    rxGot = {}; rxBuf = [];
+    log(`← config: ${rxTotal} bytes incoming`, 'rx');
+  }
+  else if (t === CFG_CHUNK) {
+    const seq = d[1] | (d[2]<<8); const len = d[3];
+    rxGot[seq] = d.slice(4, 4+len);
+  }
+  else if (t === CFG_END) {
+    const parts = Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
+    const total = new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+    let off=0; for (const p of parts){ total.set(p,off); off+=p.length; }
+    const text = new TextDecoder().decode(total);
+    if (total.length !== rxTotal) {
+      $('cfgstat').textContent = `⚠ got ${total.length}/${rxTotal} bytes — try Read again`;
+    } else {
+      try { $('cfg').value = JSON.stringify(JSON.parse(text), null, 1); }
+      catch { $('cfg').value = text; }
+      $('cfgstat').textContent = `✓ read ${total.length} bytes`;
+      log('← config reassembled OK', 'rx');
+    }
+  }
+  else if (t === ACK) { log('← ACK', 'rx'); $('cfgstat').textContent = '✓ saved to device (hot-reloads in ~2s)'; }
+  else if (t === ERR) {
+    const txt = new TextDecoder().decode(d.slice(1)).replace(/\0+$/,'');
+    log('← ERR ' + txt, 'er'); $('cfgstat').textContent = '✗ ' + txt;
+  }
+}
+
+// ---- actions ----
+$('connect').onclick = async () => {
+  if (!('hid' in navigator)) {
+    alert('WebHID not available. Use Chrome or Edge, and check it isn\'t blocked by policy.');
+    return;
+  }
+  try {
+    const devices = await navigator.hid.requestDevice({ filters: FILTER });
+    if (!devices.length) { log('No device selected', 'er'); return; }
+    // pick the collection that is our vendor page
+    device = devices.find(d => d.collections.some(c => c.usagePage === 0xFF00)) || devices[0];
+    await device.open();
+    device.addEventListener('inputreport', onReport);
+    setConn(true);
+    log('Connected: ' + device.productName, 'rx');
+  } catch (err) { log('Connect failed: ' + err, 'er'); }
+};
+$('ping').onclick   = () => send([PING]);
+$('evon').onclick   = () => { send([EVENTS_ON]); log('events ON'); };
+$('evoff').onclick  = () => { send([EVENTS_OFF]); log('events OFF'); };
+$('clear').onclick  = () => $('log').innerHTML = '';
+$('read').onclick   = () => { $('cfgstat').textContent='reading…'; send([GET]); };
+$('write').onclick  = async () => {
+  let text;
+  try { text = JSON.stringify(JSON.parse($('cfg').value)); }
+  catch (e) { $('cfgstat').textContent = '✗ not valid JSON: ' + e.message; return; }
+  const data = new TextEncoder().encode(text);
+  $('cfgstat').textContent = `writing ${data.length} bytes…`;
+  await send([PUT_BEGIN, data.length&0xff, (data.length>>8)&0xff,
+              (data.length>>16)&0xff, (data.length>>24)&0xff], true);
+  let seq = 0;
+  for (let off=0; off<data.length; off+=CHUNK) {
+    const piece = data.slice(off, off+CHUNK);
+    await send([PUT_CHUNK, seq&0xff, (seq>>8)&0xff, piece.length, ...piece], true);
+    seq++;
+    await new Promise(r=>setTimeout(r,3));   // pace the device ring buffer
+  }
+  await send([PUT_END], true);
+};
+
+// reconnect automatically if the device was granted before
+navigator.hid?.getDevices().then(ds => {
+  const d = ds.find(x => x.collections.some(c => c.usagePage === 0xFF00));
+  if (d) log('Tip: click Connect and pick "Pi Text Expander" to reconnect.');
+});
+</script>
+</body>
+</html>
