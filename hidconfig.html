@@ -3,198 +3,478 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pi Bridge — HID Config & Debug</title>
+<title>Pi Bridge — HID Config &amp; Debug</title>
 <style>
-  :root { color-scheme: light dark; --line:#8884; --hi:#3b82f6; --ok:#22c55e;
-          --err:#ef4444; --warn:#f59e0b; }
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 1.5rem auto;
-         padding: 0 1rem; line-height: 1.5; }
-  h1 { font-size: 1.3rem; } h2 { font-size: 1rem; margin: 1.2rem 0 .4rem; }
-  button { padding: .5rem .9rem; margin: .2rem .3rem .2rem 0; cursor: pointer;
-           border: 1px solid var(--line); border-radius: 8px;
-           background: transparent; color: inherit; font-size: .9rem; }
-  button.primary { background: var(--hi); border-color: var(--hi); color:#fff;
-                   font-weight: 600; }
-  button:disabled { opacity: .4; cursor: default; }
-  textarea { width: 100%; min-height: 320px; font-family: ui-monospace, monospace;
-             font-size: .8rem; padding: .5rem; border-radius: 8px;
-             border: 1px solid var(--line); background: transparent; color: inherit; }
-  #log { height: 260px; overflow-y: auto; font-family: ui-monospace, monospace;
-         font-size: .78rem; border: 1px solid var(--line); border-radius: 8px;
-         padding: .5rem; background: rgba(128,128,128,.06); white-space: pre-wrap; }
-  #log .ev { color: var(--hi); } #log .rx { color: var(--ok); }
-  #log .tx { color: var(--warn); } #log .er { color: var(--err); }
-  .status { display: inline-block; padding: .15rem .6rem; border-radius: 999px;
-            font-size: .8rem; border: 1px solid var(--line); }
-  .status.on { background: var(--ok); color:#fff; border-color: var(--ok); }
-  .status.off { background: var(--err); color:#fff; border-color: var(--err); }
-  .bar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin:.6rem 0; }
-  .muted { opacity: .7; font-size: .85rem; }
-  .grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+:root { color-scheme: light dark;
+  --panel: rgba(128,128,128,.08); --line: rgba(128,128,128,.25);
+  --hi: #3b82f6; --hi2: #22c55e; --warn: #f59e0b; --err:#ef4444; }
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem;
+       max-width: 1100px; margin-inline: auto; }
+h1 { font-size: 1.3rem; margin: .2rem 0 .6rem; }
+h2 { font-size: 1rem; margin: 0 0 .6rem; }
+.topbar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+          margin-bottom: .6rem; }
+.status { display: inline-block; padding: .15rem .6rem; border-radius: 999px;
+          font-size: .8rem; border: 1px solid var(--line); }
+.status.on { background: var(--hi2); color:#fff; border-color: var(--hi2); }
+.status.off { background: var(--err); color:#fff; border-color: var(--err); }
+.tabs, .pills { display: flex; gap: .4rem; flex-wrap: wrap; margin: .6rem 0; }
+.tab, .pill { padding: .35rem .8rem; border: 1px solid var(--line);
+  border-radius: 999px; cursor: pointer; user-select: none; font-size: .9rem; }
+.tab.on, .pill.on { background: var(--hi); color: #fff; border-color: var(--hi); }
+.wrap { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; }
+@media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 1rem; }
+svg .region { fill: rgba(128,128,128,.25); stroke: var(--line);
+  stroke-width: 1.5; cursor: pointer; transition: fill .12s; }
+svg .region:hover { fill: rgba(59,130,246,.35); }
+svg .region.sel { fill: var(--hi); }
+svg .region.mapped { stroke: var(--hi2); stroke-width: 3; }
+svg text { font: 11px system-ui; fill: currentColor; pointer-events: none; }
+.kb { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; }
+.kb .half { display: grid; gap: 3px; }
+.key { border: 1px solid var(--line); border-radius: 5px; padding: .45rem 0;
+  text-align: center; font-size: .72rem; cursor: pointer; min-width: 2rem;
+  background: rgba(128,128,128,.12); position: relative; }
+.key:hover { background: rgba(59,130,246,.3); }
+.key.sel { background: var(--hi); color: #fff; }
+.key.mapped { border-color: var(--hi2); border-width: 2px; }
+.key .to { position: absolute; right: 2px; bottom: 0; font-size: .6rem;
+  color: var(--hi2); }
+label { display: block; margin: .5rem 0 .15rem; font-size: .85rem; opacity: .85; }
+select, input[type=text], input[type=number], textarea {
+  width: 100%; padding: .35rem; border-radius: 6px;
+  border: 1px solid var(--line); background: transparent; color: inherit; }
+textarea { font-family: ui-monospace, monospace; font-size: .85rem; }
+.row { display: flex; gap: .6rem; } .row > * { flex: 1; }
+button { padding: .5rem 1rem; cursor: pointer; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: inherit; }
+button.primary { background: var(--hi); border-color: var(--hi); color: #fff;
+  font-weight: 600; }
+button:disabled { opacity: .4; cursor: default; }
+#savebar { position: sticky; bottom: 0; padding: .8rem 0; display: flex;
+  gap: .8rem; align-items: center; backdrop-filter: blur(6px); flex-wrap: wrap; }
+#toast { color: var(--hi2); font-weight: 600; }
+.muted { opacity: .65; font-size: .82rem; }
+.macro { margin-bottom: .8rem; }
+.macro summary { cursor: pointer; font-size: .9rem; padding: .2rem 0; }
+.hidden { display: none !important; }
+/* debug panel */
+#dbg { border: 1px solid var(--line); border-radius: 12px; margin: 1rem 0;
+       background: var(--panel); }
+#dbg > summary { cursor: pointer; padding: .7rem 1rem; font-weight: 600;
+       font-size: .95rem; user-select: none; }
+#dbgbody { padding: 0 1rem 1rem; }
+#log { height: 240px; overflow-y: auto; font-family: ui-monospace, monospace;
+       font-size: .78rem; border: 1px solid var(--line); border-radius: 8px;
+       padding: .5rem; background: rgba(0,0,0,.15); white-space: pre-wrap; }
+#log .ev { color: var(--hi); } #log .rx { color: var(--hi2); }
+#log .tx { color: var(--warn); } #log .er { color: var(--err); }
 </style>
 </head>
 <body>
-<h1>🔌 Pi Bridge — HID Config &amp; Debug</h1>
-<p class="muted">Talks to the Pi over the vendor-HID interface on the same USB
-cable — no network needed. Works in Chrome/Edge. Everything stays local to this
-machine.</p>
 
-<div class="bar">
-  <button class="primary" id="connect">Connect to device</button>
+<div class="topbar">
+  <h1 style="margin:0">🔌 Pi Bridge Config &amp; Debug</h1>
+  <button class="primary" id="connect">Connect device</button>
   <span class="status off" id="conn">disconnected</span>
   <button id="ping" disabled>Ping</button>
+  <span class="muted">Talks to the Pi over the USB cable — no network needed.</span>
 </div>
 
-<div class="grid">
-  <div>
-    <h2>Live event monitor</h2>
-    <div class="bar">
+<details id="dbg" open>
+  <summary>🐞 Live event monitor</summary>
+  <div id="dbgbody">
+    <div class="topbar">
       <button id="evon" disabled>▶ Start events</button>
       <button id="evoff" disabled>⏸ Stop events</button>
-      <button id="clear" disabled>Clear log</button>
+      <button id="clear" disabled>Clear</button>
       <span class="muted">Press keys / move the mouse on this PC and watch what
-      the bridge is doing with each event.</span>
+      the bridge does with each event.</span>
     </div>
     <div id="log"></div>
   </div>
+</details>
 
-  <div>
-    <h2>Configuration (bridge_config.json)</h2>
-    <div class="bar">
-      <button id="read" disabled>⬇ Read from device</button>
-      <button id="write" class="primary" disabled>⬆ Write to device</button>
-      <span class="muted" id="cfgstat"></span>
-    </div>
-    <textarea id="cfg" spellcheck="false"
-      placeholder="Click “Read from device” to load the current config…"></textarea>
-  </div>
+<div class="tabs" id="devtabs">
+  <div class="tab on" data-dev="mouse">Vertical Mouse</div>
+  <div class="tab" data-dev="kbd">Split Keyboard</div>
+  <div class="tab" data-dev="macros">Macros</div>
+  <div class="tab" data-dev="custom">+ Custom layout</div>
+</div>
+
+<div class="pills" id="layers"></div>
+
+<div class="wrap">
+  <div class="panel" id="viz"><h2>Connect the device, then Read config</h2>
+    <p class="muted">Click “Connect device”, pick “Pi Text Expander”, then
+    “Read from device” in the save bar below.</p></div>
+  <div class="panel" id="editor"><h2>Select a button or key</h2>
+    <p class="muted">Click a control on the diagram to edit its behavior on the
+    selected layer.</p></div>
+</div>
+
+<div id="savebar">
+  <button id="read" disabled>⬇ Read from device</button>
+  <button class="primary" id="write" disabled>⬆ Save to device</button>
+  <span class="muted">Engine hot-reloads within ~2 seconds.</span>
+  <span id="toast"></span>
 </div>
 
 <script>
-// ---- protocol constants (mirror hidconfig.py) ----
+// ============================ HID transport ============================
 const RPT=32, CHUNK=RPT-4;
 const PING=0x20, GET=0x01, PUT_BEGIN=0x02, PUT_CHUNK=0x03, PUT_END=0x04,
       EVENTS_ON=0x10, EVENTS_OFF=0x11;
 const PONG=0xA0, CFG_BEGIN=0x81, CFG_CHUNK=0x82, CFG_END=0x83,
       EVENT=0x90, ACK=0xE0, ERR=0xE1;
-const FILTER = [{ vendorId: 0x1d6b }];   // our gadget's VID; usagePage 0xFF00 also works
+const FILTER=[{ vendorId: 0x1d6b }];
 
-let device = null;
-let rxTotal = 0, rxBuf = [], rxGot = {};   // config reassembly state
+let device=null, cfg=null, layer=0, dev='mouse', sel=null;
+let rxTotal=0, rxGot={};
 
 const $ = id => document.getElementById(id);
+
 function log(msg, cls='') {
-  const el = $('log');
-  const line = document.createElement('div');
-  if (cls) line.className = cls;
-  const t = new Date().toLocaleTimeString();
-  line.textContent = `${t}  ${msg}`;
-  el.appendChild(line);
-  el.scrollTop = el.scrollHeight;
+  const el=$('log'); const line=document.createElement('div');
+  if (cls) line.className=cls;
+  line.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  el.appendChild(line); el.scrollTop = el.scrollHeight;
+  while (el.childNodes.length > 500) el.removeChild(el.firstChild);
 }
 function setConn(on) {
   $('conn').textContent = on ? 'connected' : 'disconnected';
-  $('conn').className = 'status ' + (on ? 'on' : 'off');
-  ['ping','evon','evoff','clear','read','write'].forEach(id => $(id).disabled = !on);
+  $('conn').className = 'status ' + (on ? 'on':'off');
+  ['ping','evon','evoff','clear','read','write'].forEach(id=>$(id).disabled=!on);
 }
-
-function pad(arr) {
-  const u = new Uint8Array(RPT);
-  u.set(arr.slice(0, RPT));
-  return u;
-}
-async function send(arr, quiet=false) {
+function pad(arr){ const u=new Uint8Array(RPT); u.set(arr.slice(0,RPT)); return u; }
+async function send(arr, quiet=false){
   if (!device) return;
   await device.sendReport(0, pad(arr));
-  if (!quiet) log('→ type 0x' + arr[0].toString(16).padStart(2,'0'), 'tx');
+  if (!quiet) log('→ 0x'+arr[0].toString(16).padStart(2,'0'), 'tx');
 }
-
-// ---- incoming reports ----
-function onReport(e) {
-  const d = new Uint8Array(e.data.buffer);
-  const t = d[0];
-  if (t === PONG) { log('← PONG', 'rx'); }
-  else if (t === EVENT) {
-    const len = d[1];
-    const txt = new TextDecoder().decode(d.slice(2, 2+len));
-    log(txt, 'ev');
+function onReport(e){
+  const d=new Uint8Array(e.data.buffer), t=d[0];
+  if (t===PONG) log('← PONG','rx');
+  else if (t===EVENT){
+    const len=d[1]; log(new TextDecoder().decode(d.slice(2,2+len)),'ev');
   }
-  else if (t === CFG_BEGIN) {
-    rxTotal = d[1] | (d[2]<<8) | (d[3]<<16) | (d[4]<<24);
-    rxGot = {}; rxBuf = [];
-    log(`← config: ${rxTotal} bytes incoming`, 'rx');
+  else if (t===CFG_BEGIN){
+    rxTotal = d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24); rxGot={};
+    log(`← config ${rxTotal} bytes incoming`,'rx');
   }
-  else if (t === CFG_CHUNK) {
-    const seq = d[1] | (d[2]<<8); const len = d[3];
-    rxGot[seq] = d.slice(4, 4+len);
+  else if (t===CFG_CHUNK){
+    const seq=d[1]|(d[2]<<8), len=d[3]; rxGot[seq]=d.slice(4,4+len);
   }
-  else if (t === CFG_END) {
-    const parts = Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
-    const total = new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
-    let off=0; for (const p of parts){ total.set(p,off); off+=p.length; }
-    const text = new TextDecoder().decode(total);
-    if (total.length !== rxTotal) {
-      $('cfgstat').textContent = `⚠ got ${total.length}/${rxTotal} bytes — try Read again`;
-    } else {
-      try { $('cfg').value = JSON.stringify(JSON.parse(text), null, 1); }
-      catch { $('cfg').value = text; }
-      $('cfgstat').textContent = `✓ read ${total.length} bytes`;
-      log('← config reassembled OK', 'rx');
-    }
+  else if (t===CFG_END){
+    const parts=Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
+    const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+    let off=0; for (const p of parts){ buf.set(p,off); off+=p.length; }
+    if (buf.length!==rxTotal){ toast(`⚠ got ${buf.length}/${rxTotal} bytes — Read again`,true); return; }
+    try { cfg = JSON.parse(new TextDecoder().decode(buf)); }
+    catch(err){ toast('✗ device sent invalid JSON',true); return; }
+    normalizeCfg(); render(); toast('✓ read '+buf.length+' bytes'); log('← config OK','rx');
   }
-  else if (t === ACK) { log('← ACK', 'rx'); $('cfgstat').textContent = '✓ saved to device (hot-reloads in ~2s)'; }
-  else if (t === ERR) {
-    const txt = new TextDecoder().decode(d.slice(1)).replace(/\0+$/,'');
-    log('← ERR ' + txt, 'er'); $('cfgstat').textContent = '✗ ' + txt;
+  else if (t===ACK){ toast('✓ saved — hot-reloads in ~2s'); log('← ACK','rx'); }
+  else if (t===ERR){
+    const m=new TextDecoder().decode(d.slice(1)).replace(/\0+$/,'');
+    toast('✗ '+m,true); log('← ERR '+m,'er');
   }
 }
+function toast(msg, bad=false){
+  const t=$('toast'); t.textContent=msg; t.style.color = bad?'var(--err)':'var(--hi2)';
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.textContent='',4000);
+}
+function normalizeCfg(){
+  for (const k of ['macros','mouse_mappings','kbd_mappings','wheel_by_layer',
+                   'port2_kbd','tap_hold']) if (!cfg[k]) cfg[k]={};
+}
 
-// ---- actions ----
 $('connect').onclick = async () => {
-  if (!('hid' in navigator)) {
-    alert('WebHID not available. Use Chrome or Edge, and check it isn\'t blocked by policy.');
-    return;
-  }
+  if (!('hid' in navigator)){ alert('WebHID unavailable — use Chrome/Edge, not policy-blocked.'); return; }
   try {
-    const devices = await navigator.hid.requestDevice({ filters: FILTER });
-    if (!devices.length) { log('No device selected', 'er'); return; }
-    // pick the collection that is our vendor page
-    device = devices.find(d => d.collections.some(c => c.usagePage === 0xFF00)) || devices[0];
+    const ds = await navigator.hid.requestDevice({ filters: FILTER });
+    if (!ds.length){ log('No device selected','er'); return; }
+    device = ds.find(d=>d.collections.some(c=>c.usagePage===0xFF00)) || ds[0];
     await device.open();
     device.addEventListener('inputreport', onReport);
-    setConn(true);
-    log('Connected: ' + device.productName, 'rx');
-  } catch (err) { log('Connect failed: ' + err, 'er'); }
+    setConn(true); log('Connected: '+device.productName,'rx');
+    readConfig();                       // auto-read on connect
+  } catch(err){ log('Connect failed: '+err,'er'); }
 };
-$('ping').onclick   = () => send([PING]);
-$('evon').onclick   = () => { send([EVENTS_ON]); log('events ON'); };
-$('evoff').onclick  = () => { send([EVENTS_OFF]); log('events OFF'); };
-$('clear').onclick  = () => $('log').innerHTML = '';
-$('read').onclick   = () => { $('cfgstat').textContent='reading…'; send([GET]); };
-$('write').onclick  = async () => {
-  let text;
-  try { text = JSON.stringify(JSON.parse($('cfg').value)); }
-  catch (e) { $('cfgstat').textContent = '✗ not valid JSON: ' + e.message; return; }
-  const data = new TextEncoder().encode(text);
-  $('cfgstat').textContent = `writing ${data.length} bytes…`;
-  await send([PUT_BEGIN, data.length&0xff, (data.length>>8)&0xff,
-              (data.length>>16)&0xff, (data.length>>24)&0xff], true);
-  let seq = 0;
-  for (let off=0; off<data.length; off+=CHUNK) {
-    const piece = data.slice(off, off+CHUNK);
-    await send([PUT_CHUNK, seq&0xff, (seq>>8)&0xff, piece.length, ...piece], true);
-    seq++;
-    await new Promise(r=>setTimeout(r,3));   // pace the device ring buffer
+$('ping').onclick  = ()=>send([PING]);
+$('evon').onclick  = ()=>{ send([EVENTS_ON]); log('events ON'); };
+$('evoff').onclick = ()=>{ send([EVENTS_OFF]); log('events OFF'); };
+$('clear').onclick = ()=>$('log').innerHTML='';
+$('read').onclick  = readConfig;
+$('write').onclick = writeConfig;
+
+function readConfig(){ toast('reading…'); rxGot={}; send([GET]); }
+async function writeConfig(){
+  if (!cfg){ toast('nothing to save yet',true); return; }
+  const data = new TextEncoder().encode(JSON.stringify(cfg));
+  toast('writing '+data.length+' bytes…');
+  await send([PUT_BEGIN, data.length&0xff,(data.length>>8)&0xff,
+              (data.length>>16)&0xff,(data.length>>24)&0xff], true);
+  let seq=0;
+  for (let off=0; off<data.length; off+=CHUNK){
+    const piece=data.slice(off, off+CHUNK);
+    await send([PUT_CHUNK, seq&0xff,(seq>>8)&0xff, piece.length, ...piece], true);
+    seq++; await new Promise(r=>setTimeout(r,3));
   }
   await send([PUT_END], true);
-};
+}
 
-// reconnect automatically if the device was granted before
-navigator.hid?.getDevices().then(ds => {
-  const d = ds.find(x => x.collections.some(c => c.usagePage === 0xFF00));
-  if (d) log('Tip: click Connect and pick "Pi Text Expander" to reconnect.');
-});
+// ============================ editor UI ============================
+const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',
+0x0b:'H',0x0c:'I',0x0d:'J',0x0e:'K',0x0f:'L',0x10:'M',0x11:'N',0x12:'O',
+0x13:'P',0x14:'Q',0x15:'R',0x16:'S',0x17:'T',0x18:'U',0x19:'V',0x1a:'W',
+0x1b:'X',0x1c:'Y',0x1d:'Z',0x1e:'1',0x1f:'2',0x20:'3',0x21:'4',0x22:'5',
+0x23:'6',0x24:'7',0x25:'8',0x26:'9',0x27:'0',0x28:'Enter',0x29:'Esc',
+0x2a:'Bksp',0x2b:'Tab',0x2c:'Space',0x2d:'-',0x2e:'=',0x2f:'[',0x30:']',
+0x31:'\\',0x33:';',0x34:"'",0x35:'`',0x36:',',0x37:'.',0x38:'/',
+0x39:'Caps',0x3a:'F1',0x3b:'F2',0x3c:'F3',0x3d:'F4',0x3e:'F5',0x3f:'F6',
+0x40:'F7',0x41:'F8',0x42:'F9',0x43:'F10',0x44:'F11',0x45:'F12',
+0x49:'Ins',0x4a:'Home',0x4b:'PgUp',0x4c:'Del',0x4d:'End',0x4e:'PgDn',
+0x4f:'Right',0x50:'Left',0x51:'Down',0x52:'Up'};
+const MODS={0xe0:'LCtrl',0xe1:'LShift',0xe2:'LAlt',0xe3:'LWin',
+0xe4:'RCtrl',0xe5:'RShift',0xe6:'RAlt',0xe7:'RWin'};
+const NAME2KEY={}; for (const [u,n] of Object.entries(KEYS)) NAME2KEY[n.toLowerCase()]=+u;
+const NAME2MOD={ctrl:0xe0,lctrl:0xe0,shift:0xe1,lshift:0xe1,alt:0xe2,lalt:0xe2,
+win:0xe3,lwin:0xe3,cmd:0xe3,rctrl:0xe4,rshift:0xe5,ralt:0xe6,altgr:0xe6,rwin:0xe7};
+const LAYER_NAMES=['0 · Base','1 · CapsLock','2 · Right-btn','3 · Back-btn','4 · Fwd-btn','5 · (extra)'];
+const BTN_NAMES={1:'Left',2:'Right',3:'Middle',4:'Back',5:'Forward'};
+
+function usageName(u){ const p=u>>>16,x=u&0xffff;
+  if (p===0x0009) return 'btn'+x; if (u===0x00010038) return 'wheel';
+  if (p===0x0007) return (MODS[x]||KEYS[x]||'0x'+x.toString(16)).toLowerCase();
+  return '0x'+u.toString(16); }
+function macroToText(steps){ return steps.map(s=>s.length?s.map(usageName).join('+'):'.').join('\n'); }
+function textToMacro(text){
+  const steps=[];
+  for (let line of text.split('\n')){
+    line=line.trim().toLowerCase();
+    if (!line) continue;
+    if (line==='.'){ steps.push([]); continue; }
+    const us=[];
+    for (const tok of line.split('+').map(t=>t.trim()).filter(Boolean)){
+      if (tok.startsWith('btn')) us.push(0x00090000+parseInt(tok.slice(3)));
+      else if (tok==='wheel') us.push(0x00010038);
+      else if (NAME2MOD[tok]!==undefined) us.push(0x00070000+NAME2MOD[tok]);
+      else if (NAME2KEY[tok]!==undefined) us.push(0x00070000+NAME2KEY[tok]);
+      else if (tok.startsWith('0x')) us.push(parseInt(tok,16));
+    }
+    steps.push(us);
+  }
+  return steps;
+}
+
+function render(){
+  if (!cfg) return;
+  const L=$('layers'); L.innerHTML=''; L.classList.toggle('hidden', dev==='macros'||dev==='custom');
+  LAYER_NAMES.forEach((n,i)=>{ const p=document.createElement('div');
+    p.className='pill'+(i===layer?' on':''); p.textContent=n;
+    p.onclick=()=>{ layer=i; render(); }; L.appendChild(p); });
+  document.querySelectorAll('#devtabs .tab').forEach(t=>t.classList.toggle('on',t.dataset.dev===dev));
+  const viz=$('viz');
+  if (dev==='mouse') renderMouse(viz);
+  else if (dev==='kbd') renderKbd(viz);
+  else if (dev==='macros') renderMacros(viz);
+  else renderCustom(viz);
+  renderEditor();
+}
+
+function renderMouse(el){
+  const mapped=k=>cfg.mouse_mappings[`${layer},${k}`]?'mapped':'';
+  const s=k=>(sel&&sel.type==='btn'&&sel.id===k)?'sel':'';
+  el.innerHTML=`<h2>Vertical mouse — click a control</h2>
+  <svg viewBox="0 0 360 300" width="100%" style="max-width:420px">
+    <path d="M60,270 Q40,150 110,70 Q150,25 210,35 Q280,50 300,130 Q315,200 290,255 Q280,275 250,278 L90,278 Q65,278 60,270 Z"
+          fill="rgba(128,128,128,.12)" stroke="var(--line)" stroke-width="2"/>
+    <path class="region ${mapped(1)} ${s(1)}" data-btn="1" d="M120,62 Q160,25 210,36 Q250,45 268,80 L210,120 Q160,110 130,95 Z"/>
+    <text x="185" y="70">1 · Left</text>
+    <path class="region ${mapped(2)} ${s(2)}" data-btn="2" d="M270,84 Q298,120 300,160 L245,170 Q235,135 213,122 L268,82 Z"/>
+    <text x="248" y="135">2 · Right</text>
+    <ellipse class="region ${mapped(3)} ${s(3)}" data-btn="3" cx="205" cy="130" rx="16" ry="28"/>
+    <text x="188" y="178">3 · Wheel-click</text>
+    <rect class="region ${mapped(0)} ${sel&&sel.type==='wheel'?'sel':''}" data-wheel="1" x="196" y="106" width="18" height="20" rx="4"/>
+    <path class="region ${mapped(4)} ${s(4)}" data-btn="4" d="M78,190 Q72,160 82,130 L118,140 Q112,168 116,195 Z"/>
+    <text x="80" y="215">4 · Back</text>
+    <path class="region ${mapped(5)} ${s(5)}" data-btn="5" d="M86,124 Q96,95 118,78 L146,100 Q128,118 122,136 Z"/>
+    <text x="122" y="62">5 · Fwd</text>
+  </svg>
+  <p class="muted">Small rect on the wheel = scroll behavior for this layer.</p>`;
+  el.querySelectorAll('[data-btn]').forEach(r=>r.onclick=()=>{ sel={type:'btn',id:+r.dataset.btn}; render(); });
+  el.querySelector('[data-wheel]').onclick=()=>{ sel={type:'wheel'}; render(); };
+}
+
+const KBD_ROWS=[
+ [0x35,0x1e,0x1f,0x20,0x21,0x22, 0x23,0x24,0x25,0x26,0x27,0x2d,0x2e],
+ [0x2b,0x14,0x1a,0x08,0x15,0x17, 0x1c,0x18,0x0c,0x12,0x13,0x2f,0x30],
+ [0x39,0x04,0x16,0x07,0x09,0x0a, 0x0b,0x0d,0x0e,0x0f,0x33,0x34,0x28],
+ [0xe1,0x1d,0x1b,0x06,0x19,0x05, 0x11,0x10,0x36,0x37,0x38,0xe5,0x29],
+ [0xe0,0xe3,0xe2,0x2c,0x2c,0x2c, 0x2c,0x2c,0x2c,0x4f,0x51,0x52,0x50]];
+function renderKbd(el){
+  el.innerHTML=`<h2>Split keyboard — click a key</h2><div class="kb">
+    <div class="half" id="lh" style="grid-template-columns:repeat(6,1fr)"></div>
+    <div class="half" id="rh" style="grid-template-columns:repeat(7,1fr)"></div></div>
+    <p class="muted">Modifiers &amp; Space are passthrough-only. Green tag = remapped here.</p>`;
+  const lh=el.querySelector('#lh'), rh=el.querySelector('#rh');
+  for (const row of KBD_ROWS) row.forEach((u,i)=>{
+    const d=document.createElement('div'); const name=MODS[u]||KEYS[u]||'?';
+    const tgt=cfg.kbd_mappings[`${layer},${u}`];
+    d.className='key'+(tgt!==undefined?' mapped':'')+(sel&&sel.type==='key'&&sel.id===u&&sel.i===i?' sel':'');
+    d.innerHTML=name+(tgt!==undefined&&tgt!==0?`<span class="to">→${KEYS[tgt]||'0x'+(+tgt).toString(16)}</span>`
+      : tgt===0?'<span class="to">∅</span>':'');
+    if (!MODS[u]&&u!==0x2c) d.onclick=()=>{ sel={type:'key',id:u,i}; render(); };
+    else d.style.opacity=.45;
+    (i<6?lh:rh).appendChild(d);
+  });
+}
+
+function renderMacros(el){
+  let h=`<h2>Macros (12 ms per step; "." = pause)</h2>
+  <p class="muted">One step per line; tokens joined by “+”: <code>ctrl+c</code>,
+  <code>btn1</code>, <code>wheel</code>, key names.</p>`;
+  for (let n=1;n<=30;n++){ const steps=cfg.macros[n]||[];
+    h+=`<details class="macro"><summary><strong>Macro ${n}</strong> — ${steps.length
+      ? macroToText(steps).split('\n').filter(l=>l!=='.').slice(0,3).join(' · ')
+      : '<span class="muted">empty</span>'}</summary>
+      <textarea data-macro="${n}" rows="${Math.max(3,steps.length)}">${macroToText(steps)}</textarea></details>`; }
+  el.innerHTML=h;
+  el.querySelectorAll('textarea[data-macro]').forEach(t=>t.onchange=()=>{ cfg.macros[t.dataset.macro]=textToMacro(t.value); });
+}
+
+function renderCustom(el){
+  el.innerHTML=`<h2>Custom device layouts</h2>
+  <p class="muted">Custom layouts are stored on the device via the network UI's
+  uploader. Over this HID channel, layouts aren't transferred — use the mouse
+  and keyboard tabs here. (Placeholder for future HID-side layout upload.)</p>`;
+}
+
+function actionToUI(a){ if(!a) return {press:'pass',release:'none'};
+  const k=a[0];
+  if (k==='btn') return {press:'btn',pressBtn:a[1],release:'none'};
+  if (k==='key') return {press:'key',pressKey:a[1],release:'none'};
+  if (k==='macro') return {press:'macro',pressMacro:a[1],release:'none'};
+  if (k==='suppress') return {press:'suppress',release:'none'};
+  if (k==='macro_up') return {press:'suppress',release:'macro',relMacro:a[1]};
+  if (k==='macro_both') return {press:'macro',pressMacro:a[1],release:'macro',relMacro:a[2]};
+  return {press:'pass',release:'none'}; }
+function uiToAction(u){
+  if (u.release==='macro'){ if (u.press==='macro') return ['macro_both',+u.pressMacro,+u.relMacro]; return ['macro_up',+u.relMacro]; }
+  if (u.press==='pass') return null;
+  if (u.press==='suppress') return ['suppress'];
+  if (u.press==='btn') return ['btn',+u.pressBtn];
+  if (u.press==='key') return ['key',+u.pressKey];
+  if (u.press==='macro') return ['macro',+u.pressMacro];
+  return null; }
+function keyOptions(v){ return Object.entries(KEYS).map(([u,n])=>`<option value="${u}" ${+u===+v?'selected':''}>${n}</option>`).join(''); }
+function macroOptions(v){ let h=''; for(let n=1;n<=30;n++) h+=`<option value="${n}" ${n===+v?'selected':''}>Macro ${n}</option>`; return h; }
+
+function renderEditor(){
+  const ed=$('editor');
+  if (!sel){ ed.innerHTML=`<h2>Select a button or key</h2>
+    <p class="muted">Release-triggers work like X-Mouse: set “On press” to
+    Suppress and put a macro on “On release”.</p>`; return; }
+  if (sel.type==='wheel') return renderWheelEditor(ed);
+  if (sel.type==='btn'){
+    const key=`${layer},${sel.id}`, ui=actionToUI(cfg.mouse_mappings[key]), th=cfg.tap_hold[sel.id];
+    ed.innerHTML=`<h2>Button ${sel.id} · ${BTN_NAMES[sel.id]} — layer ${layer}</h2>
+      <label>On press</label>
+      <select id="press">
+        <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
+        <option value="suppress" ${ui.press==='suppress'?'selected':''}>Suppress / nothing</option>
+        <option value="btn" ${ui.press==='btn'?'selected':''}>Mouse button…</option>
+        <option value="key" ${ui.press==='key'?'selected':''}>Keyboard key (held)…</option>
+        <option value="macro" ${ui.press==='macro'?'selected':''}>Run macro…</option>
+      </select><div id="pressArg"></div>
+      <label>On release <span class="muted">(X-Mouse-style release trigger)</span></label>
+      <select id="release">
+        <option value="none" ${ui.release==='none'?'selected':''}>Nothing</option>
+        <option value="macro" ${ui.release==='macro'?'selected':''}>Run macro…</option>
+      </select><div id="relArg"></div>
+      ${[2,4,5].includes(sel.id)?`<hr style="border-color:var(--line);margin:1rem 0">
+      <h2>Tap-hold (base layer)</h2>
+      <div class="row">
+        <div><label>Quick tap</label><select id="thTap">
+          <option value="btn" ${th&&th[0][0]==='btn'?'selected':''}>Click button</option>
+          <option value="macro" ${th&&th[0][0]==='macro'?'selected':''}>Macro…</option>
+          <option value="off" ${!th?'selected':''}>Disabled</option></select></div>
+        <div><label>Tap macro #</label><select id="thMacro">${macroOptions(th&&th[0][0]==='macro'?th[0][1]:1)}</select></div>
+        <div><label>Hold = layer</label><input id="thLayer" type="number" min="1" max="5" value="${th?th[1]:sel.id===2?2:sel.id===4?3:4}"></div>
+      </div>`:''}`;
+    const refresh=()=>{
+      const p=ed.querySelector('#press').value;
+      ed.querySelector('#pressArg').innerHTML =
+        p==='btn'?`<select id="pressBtn">${Object.entries(BTN_NAMES).map(([n,l])=>`<option value="${n}" ${+n===+(ui.pressBtn||1)?'selected':''}>${l}</option>`).join('')}</select>`:
+        p==='key'?`<select id="pressKey">${keyOptions(ui.pressKey||0x28)}</select>`:
+        p==='macro'?`<select id="pressMacro">${macroOptions(ui.pressMacro||1)}</select>`:'';
+      const r=ed.querySelector('#release').value;
+      ed.querySelector('#relArg').innerHTML = r==='macro'?`<select id="relMacro">${macroOptions(ui.relMacro||1)}</select>`:'';
+    };
+    refresh();
+    ed.querySelectorAll('select,input').forEach(x=>x.onchange=()=>{
+      if (x.id==='press'||x.id==='release') refresh();
+      const u={press:ed.querySelector('#press').value, release:ed.querySelector('#release').value,
+        pressBtn:ed.querySelector('#pressBtn')?.value, pressKey:ed.querySelector('#pressKey')?.value,
+        pressMacro:ed.querySelector('#pressMacro')?.value, relMacro:ed.querySelector('#relMacro')?.value};
+      const a=uiToAction(u);
+      if (a) cfg.mouse_mappings[key]=a; else delete cfg.mouse_mappings[key];
+      const tt=ed.querySelector('#thTap');
+      if (tt){ if (tt.value==='off') delete cfg.tap_hold[sel.id];
+        else cfg.tap_hold[sel.id]=[tt.value==='btn'?['btn',sel.id]:['macro',+ed.querySelector('#thMacro').value], +ed.querySelector('#thLayer').value]; }
+      if (dev==='mouse'||dev==='kbd') render();
+    });
+  } else if (sel.type==='key'){
+    const key=`${layer},${sel.id}`, cur=cfg.kbd_mappings[key];
+    ed.innerHTML=`<h2>${KEYS[sel.id]} — layer ${layer}</h2>
+      <label>Behavior on this layer</label>
+      <select id="kmode">
+        <option value="pass" ${cur===undefined?'selected':''}>Pass through</option>
+        <option value="remap" ${cur!==undefined&&cur!==0?'selected':''}>Remap to key…</option>
+        <option value="nothing" ${cur===0?'selected':''}>Suppress</option>
+      </select><div id="karg">${cur!==undefined&&cur!==0?`<select id="ktgt">${keyOptions(cur)}</select>`:''}</div>`;
+    const apply=()=>{ const m=ed.querySelector('#kmode').value;
+      ed.querySelector('#karg').innerHTML = m==='remap'?`<select id="ktgt">${keyOptions(cur||0x28)}</select>`:'';
+      if (m==='pass') delete cfg.kbd_mappings[key];
+      else if (m==='nothing') cfg.kbd_mappings[key]=0;
+      else cfg.kbd_mappings[key]=+(ed.querySelector('#ktgt')?.value||0x28);
+      ed.querySelectorAll('select').forEach(s=>s.onchange=apply);
+      if (dev==='kbd') render(); };
+    ed.querySelectorAll('select').forEach(s=>s.onchange=apply);
+  }
+}
+
+function renderWheelEditor(ed){
+  const cur=cfg.wheel_by_layer[layer]||['pass'];
+  ed.innerHTML=`<h2>Wheel — layer ${layer}</h2><label>Scroll behavior</label>
+    <select id="wmode">
+      <option value="pass" ${cur[0]==='pass'?'selected':''}>Accelerated passthrough</option>
+      <option value="scale" ${cur[0]==='scale'?'selected':''}>Scaled (×N)</option>
+      <option value="pan" ${cur[0]==='pan'?'selected':''}>Horizontal scroll (×N)</option>
+      <option value="macro_updown" ${cur[0]==='macro_updown'?'selected':''}>Macros: up / down</option>
+      <option value="macro_per" ${cur[0]==='macro_per'?'selected':''}>Macro every N detents</option>
+    </select><div id="warg"></div>`;
+  const refresh=()=>{ const m=ed.querySelector('#wmode').value, w=ed.querySelector('#warg');
+    w.innerHTML =
+      m==='scale'?`<label>Multiplier</label><input id="w1" type="number" step="0.5" value="${cur[0]==='scale'?cur[1]:1}">`:
+      m==='pan'?`<label>Multiplier (negative inverts)</label><input id="w1" type="number" step="0.5" value="${cur[0]==='pan'?cur[1]:-0.5}">`:
+      m==='macro_updown'?`<div class="row"><div><label>Wheel up</label><select id="w1">${macroOptions(cur[0]==='macro_updown'?cur[1]:22)}</select></div><div><label>Wheel down</label><select id="w2">${macroOptions(cur[0]==='macro_updown'?cur[2]:23)}</select></div></div>`:
+      m==='macro_per'?`<div class="row"><div><label>Macro</label><select id="w1">${macroOptions(cur[0]==='macro_per'?cur[1]:10)}</select></div><div><label>Every N detents</label><input id="w2" type="number" min="1" value="${cur[0]==='macro_per'?cur[2]:2}"></div></div>`:'';
+    bind(); };
+  const bind=()=>ed.querySelectorAll('select,input').forEach(x=>x.onchange=()=>{
+    if (x.id==='wmode') refresh();
+    const m=ed.querySelector('#wmode').value, v1=ed.querySelector('#w1')?.value, v2=ed.querySelector('#w2')?.value;
+    cfg.wheel_by_layer[layer] = m==='pass'?['pass']:m==='scale'?['scale',+v1]:m==='pan'?['pan',+v1]:
+      m==='macro_updown'?['macro_updown',+v1,+v2]:['macro_per',+v1,+v2];
+  });
+  refresh();
+}
+
+document.querySelectorAll('#devtabs .tab').forEach(t=>t.onclick=()=>{ dev=t.dataset.dev; sel=null; if(cfg) render(); });
 </script>
 </body>
 </html>
