@@ -265,12 +265,16 @@ function btResult(text){
     <td>${conn?'<span class="status on">connected</span>':paired?'<span class="status">paired</span>':''}</td>
     <td style="text-align:right">
     ${!paired?`<button onclick="btPairFlow('${mac}')">Pair</button>`:''}
-    ${paired&&!conn?`<button onclick="btCmd('connect ${mac}')">Connect</button>`:''}
-    ${conn?`<button onclick="btCmd('disconnect ${mac}')">Disconnect</button>`:''}
-    ${paired?`<button onclick="if(confirm('Remove ${info.name}?'))btCmd('remove ${mac}')">Remove</button>`:''}
+    ${paired&&!conn?`<button onclick="btAction('connect','${mac}')">Connect</button>`:''}
+    ${conn?`<button onclick="btAction('disconnect','${mac}')">Disconnect</button>`:''}
+    ${paired?`<button onclick="if(confirm('Remove ${info.name}?'))btAction('remove','${mac}')">Remove</button>`:''}
     </td></tr>`;}
   $('btdevices').innerHTML=h+'</table>';}
 window.btCmd=btCmd;
+window.btAction=async(verb,mac)=>{await btCmd(verb+' '+mac);
+  // state chips come from parsing `bluetoothctl devices ...`; refresh them
+  // after the action settles so the table reflects the Pi's real state
+  setTimeout(()=>btCmd('list'), verb==='connect'?5000:2500);};
 window.btPairFlow=async mac=>{await btCmd('pair '+mac);
   setTimeout(()=>btCmd('trust '+mac),4000);
   setTimeout(()=>btCmd('connect '+mac),8000);
@@ -644,11 +648,18 @@ function renderEditor(){
     const r=$('release').value;
     $('relArg').innerHTML=r==='macro'?`<select id="relMacro">${macOpts(ui.relMacro||1)}</select>`:'';};
   refresh();
-  ed.querySelectorAll('#press,#release,#pressArg,#relArg').forEach(x=>x.onchange=()=>{refresh();
-    apply(uiToAction({press:$('press').value,release:$('release').value,
-      pressBtn:$('pressBtn')?.value,pressKey:$('pressKey')?.value,
-      pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value}));
-    render();});
+  // Bind to EVERY select/input in the editor, not just the two top-level
+  // dropdowns -- the macro/key/button number pickers (#pressMacro,
+  // #pressKey, #pressBtn, #relMacro) are created dynamically inside
+  // #pressArg/#relArg by refresh(), and a narrower selector here (an
+  // earlier regression) meant selecting a specific macro number, key, or
+  // button in those dropdowns silently did nothing.
+  ed.querySelectorAll('#press,#release,#pressArg select,#relArg select')
+    .forEach(x=>x.onchange=()=>{refresh();
+      apply(uiToAction({press:$('press').value,release:$('release').value,
+        pressBtn:$('pressBtn')?.value,pressKey:$('pressKey')?.value,
+        pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value}));
+      render();});
   bindEditorCommon(apply);
 }
 function renderWheelEd(ed){
