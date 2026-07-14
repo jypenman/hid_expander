@@ -67,11 +67,14 @@ button:disabled { opacity: .4; cursor: default; }
 #dbg > summary { cursor: pointer; padding: .7rem 1rem; font-weight: 600;
        font-size: .95rem; user-select: none; }
 #dbgbody { padding: 0 1rem 1rem; }
-#log { height: 240px; overflow-y: auto; font-family: ui-monospace, monospace;
+.loggrid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+@media (max-width: 700px) { .loggrid { grid-template-columns: 1fr; } }
+.logbox { height: 240px; overflow-y: auto; font-family: ui-monospace, monospace;
        font-size: .78rem; border: 1px solid var(--line); border-radius: 8px;
        padding: .5rem; background: rgba(0,0,0,.15); white-space: pre-wrap; }
-#log .ev { color: var(--hi); } #log .rx { color: var(--hi2); }
-#log .tx { color: var(--warn); } #log .er { color: var(--err); }
+.logbox .ev { color: var(--hi); } .logbox .rx { color: var(--hi2); }
+.logbox .tx { color: var(--warn); } .logbox .er { color: var(--err); }
+.loghead { font-size: .8rem; font-weight: 600; margin-bottom: .25rem; opacity: .8; }
 </style>
 </head>
 <body>
@@ -94,7 +97,12 @@ button:disabled { opacity: .4; cursor: default; }
       <span class="muted">Press keys / move the mouse on this PC and watch what
       the bridge does with each event.</span>
     </div>
-    <div id="log"></div>
+    <div class="loggrid">
+      <div><div class="loghead">⬅ RAW — events arriving from the keyboard/mouse</div>
+        <div class="logbox" id="log"></div></div>
+      <div><div class="loghead">➡ SENT — reports the Pi sends to this PC</div>
+        <div class="logbox" id="outlog"></div></div>
+    </div>
   </div>
 </details>
 
@@ -137,8 +145,8 @@ let rxTotal=0, rxGot={};
 
 const $ = id => document.getElementById(id);
 
-function log(msg, cls='') {
-  const el=$('log'); const line=document.createElement('div');
+function log(msg, cls='', box='log') {
+  const el=$(box); const line=document.createElement('div');
   if (cls) line.className=cls;
   line.textContent = new Date().toLocaleTimeString() + '  ' + msg;
   el.appendChild(line); el.scrollTop = el.scrollHeight;
@@ -159,7 +167,9 @@ function onReport(e){
   const d=new Uint8Array(e.data.buffer), t=d[0];
   if (t===PONG) log('← PONG','rx');
   else if (t===EVENT){
-    const len=d[1]; log(new TextDecoder().decode(d.slice(2,2+len)),'ev');
+    const len=d[1]; const txt=new TextDecoder().decode(d.slice(2,2+len));
+    if (txt.startsWith('OUT:')) log(txt.slice(4),'tx','outlog');
+    else log(txt,'ev','log');
   }
   else if (t===CFG_BEGIN){
     rxTotal = d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24); rxGot={};
@@ -207,7 +217,7 @@ $('connect').onclick = async () => {
 $('ping').onclick  = ()=>send([PING]);
 $('evon').onclick  = ()=>{ send([EVENTS_ON]); log('events ON'); };
 $('evoff').onclick = ()=>{ send([EVENTS_OFF]); log('events OFF'); };
-$('clear').onclick = ()=>$('log').innerHTML='';
+$('clear').onclick = ()=>{ $('log').innerHTML=''; $('outlog').innerHTML=''; };
 $('read').onclick  = readConfig;
 $('write').onclick = writeConfig;
 
