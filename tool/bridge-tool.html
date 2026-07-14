@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi HID Bridge</title>
+<style>
+:root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
+--hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;margin:0;padding:1rem;max-width:1200px;margin-inline:auto}
+h1{font-size:1.25rem;margin:.2rem 0}.muted{opacity:.65;font-size:.82rem}
+button{padding:.45rem .9rem;cursor:pointer;border-radius:8px;border:1px solid var(--line);
+background:var(--panel);color:inherit;font-size:.88rem}
+button.primary{background:var(--hi);border-color:var(--hi);color:#fff;font-weight:600}
+button:disabled{opacity:.4;cursor:default}
+.bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0}
+.status{padding:.1rem .6rem;border-radius:999px;font-size:.8rem;border:1px solid var(--line)}
+.status.on{background:var(--ok);color:#fff}.status.off{background:var(--err);color:#fff}
+.tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin:.7rem 0;border-bottom:1px solid var(--line);padding-bottom:.5rem}
+.tab{padding:.4rem 1rem;border:1px solid var(--line);border-radius:8px 8px 0 0;cursor:pointer;font-weight:600}
+.tab.on{background:var(--hi);color:#fff;border-color:var(--hi)}
+.pills{display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0}
+.pill{padding:.3rem .75rem;border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:.85rem}
+.pill.on{background:var(--hi);color:#fff;border-color:var(--hi)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1rem;margin:.6rem 0}
+#stage{position:relative}
+#chordsvg{position:absolute;inset:0;pointer-events:none;z-index:5}
+#chordsvg line{pointer-events:stroke}
+.devrow{display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start}
+svg .region{fill:rgba(128,128,128,.25);stroke:var(--line);stroke-width:1.5;cursor:pointer}
+svg .region:hover{fill:rgba(59,130,246,.35)}
+svg .region.sel{fill:var(--hi)}
+svg .region.layerkey{fill:rgba(184,134,11,.55)}
+svg .region.mapped{stroke:var(--ok);stroke-width:2.5}
+svg .region.flash-red{fill:rgba(239,68,68,.55)!important}
+svg .region.flash-yel{fill:rgba(245,158,11,.55)!important}
+svg .region.flash-grn{fill:rgba(34,197,94,.55)!important}
+svg .region.flash-blu{fill:rgba(59,130,246,.6)!important}
+svg text{font:10px system-ui;fill:currentColor;pointer-events:none}
+.kb{display:flex;gap:1.6rem;flex-wrap:wrap}
+.kb .half{display:grid;gap:3px}
+.key{border:1px solid var(--line);border-radius:5px;padding:.4rem 2px .55rem;text-align:center;
+font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12);position:relative}
+.key:hover{background:rgba(59,130,246,.3)}
+.key.sel{background:var(--hi);color:#fff}
+.key.mapped{border-color:var(--ok);border-width:2px}
+.key.layerkey{background:rgba(184,134,11,.45)}
+.key.chordhl{outline:2px dashed var(--warn);outline-offset:1px}
+.key.flash-red{background:rgba(239,68,68,.55)!important}
+.key.flash-yel{background:rgba(245,158,11,.55)!important}
+.key.flash-grn{background:rgba(34,197,94,.55)!important}
+.key.flash-blu{background:rgba(59,130,246,.6)!important}
+.chip{position:absolute;right:1px;bottom:-1px;font-size:.56rem;color:var(--ok);max-width:100%;
+overflow:hidden;white-space:nowrap}
+.chip a{color:var(--ok);text-decoration:underline;cursor:pointer}
+label{display:block;margin:.45rem 0 .1rem;font-size:.84rem;opacity:.85}
+select,input[type=text],input[type=number],textarea{width:100%;padding:.35rem;border-radius:6px;
+border:1px solid var(--line);background:transparent;color:inherit}
+textarea{font-family:ui-monospace,monospace;font-size:.85rem}
+.row{display:flex;gap:.6rem;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
+.loggrid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+@media(max-width:700px){.loggrid{grid-template-columns:1fr}}
+.logbox{height:200px;overflow-y:auto;font-family:ui-monospace,monospace;font-size:.75rem;
+border:1px solid var(--line);border-radius:8px;padding:.5rem;background:rgba(0,0,0,.15);white-space:pre-wrap}
+.logbox .ev{color:var(--hi)}.logbox .rx{color:var(--ok)}.logbox .tx{color:var(--warn)}.logbox .er{color:var(--err)}
+details.dbg{border:1px solid var(--line);border-radius:12px;margin:.6rem 0;background:var(--panel)}
+details.dbg>summary{cursor:pointer;padding:.6rem 1rem;font-weight:600}
+.macro summary{cursor:pointer;padding:.2rem 0}
+.macro.flashtgt{outline:2px solid var(--hi);border-radius:6px}
+#chordbar{display:none;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.4rem 0;
+padding:.5rem;border:1px dashed var(--warn);border-radius:8px}
+#dragmsg{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);
+background:rgba(30,30,30,.75);color:#fff;padding:.4rem .9rem;border-radius:999px;
+font-size:.8rem;display:none;z-index:99}
+#popover{position:absolute;z-index:50;background:Canvas;border:1px solid var(--line);
+border-radius:10px;padding:.6rem;font-size:.83rem;box-shadow:0 4px 18px rgba(0,0,0,.3);display:none}
+.pluspill{display:inline-block;padding:.05rem .5rem;border-radius:999px;background:var(--warn);
+color:#000;font-weight:700;cursor:grab}
+a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
+</style></head><body>
+
+<div class="bar">
+  <h1 style="margin:0">🔌 Pi HID Bridge</h1>
+  <button class="primary" id="connect">Connect</button>
+  <span class="status off" id="conn">disconnected</span>
+  <span style="flex:1"></span>
+  <button id="read" disabled>⬇ Read device</button>
+  <button id="write" class="primary" disabled>⬆ Save to device</button>
+  <button id="dl" disabled>💾 Download profile</button>
+  <label style="margin:0"><input type="file" id="up" accept=".json" style="display:none">
+    <button onclick="document.getElementById('up').click()">📂 Load profile file</button></label>
+  <span id="toast"></span>
+</div>
+
+<details class="dbg"><summary>🐞 Debug monitors</summary>
+  <div style="padding:0 1rem 1rem">
+  <div class="bar"><button id="evon" disabled>▶ Events</button>
+    <button id="evoff" disabled>⏸ Stop</button><button id="clear" disabled>Clear</button>
+    <span class="muted">Live input also highlights the wireframes: red=raw, yellow=mapped output, green=macro, blue=expansion.</span></div>
+  <div class="loggrid">
+    <div><div class="muted"><b>⬅ RAW</b> from keyboard/mouse</div><div class="logbox" id="log"></div></div>
+    <div><div class="muted"><b>➡ SENT</b> to this PC</div><div class="logbox" id="outlog"></div></div>
+  </div></div>
+</details>
+
+<div class="tabs" id="toptabs">
+  <div class="tab on" data-t="map">Mapping</div>
+  <div class="tab" data-t="macros">Macros</div>
+  <div class="tab" data-t="exp">Expansions</div>
+  <div class="tab" data-t="expr">Expressions</div>
+  <div class="tab" data-t="bt">Bluetooth</div>
+</div>
+
+<div id="page-map">
+  <div class="pills" id="layers"></div>
+  <div id="chordbar">
+    <b>Chord:</b><span id="chordinfo"></span>
+    <span class="pluspill" id="pluspill" draggable="true" title="Drag onto a key/button to add it to this layer">＋</span>
+    <button id="changechord">Change chord…</button>
+    <button id="chordopts">Options ▾</button>
+    <button onclick="clearChordSel()">✕</button>
+  </div>
+  <div class="panel" id="stage">
+    <svg id="chordsvg"></svg>
+    <div class="devrow">
+      <div id="mousewrap"></div>
+      <div id="kbdwrap" style="flex:1;min-width:520px"></div>
+    </div>
+  </div>
+  <div class="panel" id="editor"><h2 style="font-size:1rem">Select an input</h2>
+  <p class="muted">Click a button or key. Dark-yellow inputs start chords (layers);
+  click a dashed line to inspect its chord.</p></div>
+</div>
+
+<div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div></div>
+
+<div id="page-exp" style="display:none"><div class="panel">
+  <div class="bar"><button id="expread" disabled>⬇ Read expansions</button>
+    <button id="expwrite" class="primary" disabled>⬆ Save expansions</button></div>
+  <table style="width:100%" id="exptable"></table>
+  <button onclick="addExpRow('','')">+ row</button>
+  <p class="muted">Triggers like <code>\sig</code>; values may embed chords: <code>{{ctrl+c}}</code>.
+  Built-ins: <code>\dt \tm \tdt</code>.</p>
+</div></div>
+
+<div id="page-expr" style="display:none"><div class="panel">
+  <h2 style="font-size:1rem">Expressions (implemented in Python on the Pi — documented here)</h2>
+  <p><b>Scroll acceleration</b> (layer 0 wheel): momentum <code>v = v·0.98^dt_ms + detents</code>,
+  output <code>v + 0.82·(1.4v)³</code>, clamped ±150, slow-scroll halved below 3.1 and again below 2.0,
+  fractional output accumulated. Constants: <code>ACCEL_DECAY, ACCEL_CUBIC_GAIN, ACCEL_CUBIC_SCALE,
+  ACCEL_CLAMP, ACCEL_SLOW1, ACCEL_SLOW2</code> at the top of expander.py.</p>
+  <p><b>Turbo click</b> (CapsLock + hold left): 20 Hz, 50 ms period (<code>TURBO_PERIOD</code>).</p>
+  <p><b>DPI cycle</b> (software pointer scale): factors <code>[1.0, 1.5, 2.0, 0.5]</code>
+  (<code>DPI_FACTORS</code>), applied with fractional accumulation.</p>
+</div></div>
+
+<div id="page-bt" style="display:none"><div class="panel">
+  <div class="bar">
+    <button id="btscan" disabled>🔍 Scan (~12 s)</button>
+    <button id="btlist" disabled>↻ Refresh list</button>
+    <span class="muted">Pairing a keyboard may print a passkey below — type it
+    on that keyboard and press Enter there.</span>
+  </div>
+  <div id="btdevices"></div>
+  <div class="logbox" id="btout" style="height:150px;margin-top:.6rem"></div>
+</div></div>
+
+<div id="dragmsg">Drag a key/button here onto the input you want to replace it with</div>
+<div id="popover"></div>
+
+<script>
+/* ============ transport ============ */
+const RPT=32,CHUNK=RPT-4;
+const PING=0x20,GET=0x01,PUT_BEGIN=0x02,PUT_CHUNK=0x03,PUT_END=0x04,EVENTS_ON=0x10,EVENTS_OFF=0x11;
+const PONG=0xA0,CFG_BEGIN=0x81,CFG_CHUNK=0x82,CFG_END=0x83,EVENT=0x90,ACK=0xE0,ERR=0xE1;
+const BT_CMD=0x30,BT_BEGIN=0xB0,BT_CHUNK=0xB1,BT_END=0xB2;
+let btTotal=0,btGot={};
+let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
+let rxTotal=0,rxGot={};
+const $=id=>document.getElementById(id);
+function log(m,c='',box='log'){const el=$(box),l=document.createElement('div');
+if(c)l.className=c;l.textContent=new Date().toLocaleTimeString()+'  '+m;
+el.appendChild(l);el.scrollTop=el.scrollHeight;
+while(el.childNodes.length>500)el.removeChild(el.firstChild);}
+function toast(m,bad){const t=$('toast');t.textContent=m;t.style.color=bad?'var(--err)':'var(--ok)';
+clearTimeout(toast._t);toast._t=setTimeout(()=>t.textContent='',3500);}
+function setConn(on){$('conn').textContent=on?'connected':'disconnected';
+$('conn').className='status '+(on?'on':'off');
+['read','write','dl','evon','evoff','clear','expread','expwrite','btscan','btlist'].forEach(i=>$(i).disabled=!on);}
+function pad(a){const u=new Uint8Array(RPT);u.set(a.slice(0,RPT));return u;}
+async function send(a,q=true){if(!device)return;await device.sendReport(0,pad(a));
+if(!q)log('→ 0x'+a[0].toString(16),'tx');}
+function onReport(e){
+  const d=new Uint8Array(e.data.buffer),t=d[0];
+  if(t===PONG)log('← PONG','rx');
+  else if(t===EVENT){const n=d[1],txt=new TextDecoder().decode(d.slice(2,2+n));
+    if(txt.startsWith('OUT:')){log(txt.slice(4),'tx','outlog');liveOut(txt.slice(4));}
+    else{log(txt,'ev','log');liveRaw(txt);}}
+  else if(t===CFG_BEGIN){rxTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);rxGot={};}
+  else if(t===CFG_CHUNK){rxGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
+  else if(t===CFG_END){
+    const parts=Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
+    const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
+    for(const p of parts){buf.set(p,o);o+=p.length;}
+    if(buf.length!==rxTotal){toast('short read — try again',true);return;}
+    const obj=JSON.parse(new TextDecoder().decode(buf));
+    if(curFile===0){cfg=obj;normalize();render();toast('✓ config read');}
+    else{exps=obj;renderExp();toast('✓ expansions read');}}
+  else if(t===BT_BEGIN){btTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);btGot={};}
+  else if(t===BT_CHUNK){btGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
+  else if(t===BT_END){
+    const parts=Object.keys(btGot).map(Number).sort((a,b)=>a-b).map(k=>btGot[k]);
+    const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
+    for(const p of parts){buf.set(p,o);o+=p.length;}
+    btResult(new TextDecoder().decode(buf));}
+  else if(t===ACK)toast('✓ saved (hot-reloads ~2s)');
+  else if(t===ERR)toast('✗ '+new TextDecoder().decode(d.slice(1)).replace(/\0+$/,''),true);
+}
+async function getFile(fid){curFile=fid;rxGot={};await send([GET,fid]);}
+async function putFile(fid,obj){
+  const data=new TextEncoder().encode(JSON.stringify(obj));
+  await send([PUT_BEGIN,data.length&255,(data.length>>8)&255,(data.length>>16)&255,(data.length>>24)&255,fid]);
+  let seq=0;
+  for(let off=0;off<data.length;off+=CHUNK){const p=data.slice(off,off+CHUNK);
+    await send([PUT_CHUNK,seq&255,(seq>>8)&255,p.length,...p]);seq++;
+    await new Promise(r=>setTimeout(r,3));}
+  await send([PUT_END]);
+}
+$('connect').onclick=async()=>{
+  if(!('hid'in navigator)){alert('WebHID unavailable (use Chrome/Edge).');return;}
+  const ds=await navigator.hid.requestDevice({filters:[{vendorId:0x1d6b}]});
+  if(!ds.length)return;
+  device=ds.find(d=>d.collections.some(c=>c.usagePage===0xFF00))||ds[0];
+  await device.open();device.addEventListener('inputreport',onReport);
+  setConn(true);getFile(0);
+};
+$('read').onclick=()=>getFile(0);
+$('write').onclick=()=>putFile(0,cfg);
+$('dl').onclick=()=>{const a=document.createElement('a');
+a.href=URL.createObjectURL(new Blob([JSON.stringify({config:cfg,expansions:exps},null,1)],{type:'application/json'}));
+a.download='bridge-profile-'+new Date().toISOString().slice(0,10)+'.json';a.click();};
+$('up').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+const o=JSON.parse(await f.text());
+if(o.config){cfg=o.config;if(o.expansions)exps=o.expansions;}else cfg=o;
+normalize();render();toast('profile loaded — Save to device to apply');};
+$('evon').onclick=()=>send([EVENTS_ON]);
+$('evoff').onclick=()=>send([EVENTS_OFF]);
+$('clear').onclick=()=>{$('log').innerHTML='';$('outlog').innerHTML='';};
+async function btCmd(c){
+  $('btout').textContent+='\n$ '+c+'\n';
+  const b=new TextEncoder().encode(c);
+  await send([BT_CMD,b.length,...b]);}
+function btResult(text){
+  const el=$('btout');el.textContent+=text;el.scrollTop=el.scrollHeight;
+  // parse "Device MAC Name" lines into the device table (dedup by MAC)
+  const secs={};let cur='';
+  for(const line of text.split('\n')){
+    const s=line.match(/^== (.+) ==/);if(s){cur=s[1];continue;}
+    const m=line.match(/^Device ((?:[0-9A-F]{2}:){5}[0-9A-F]{2}) (.+)$/i);
+    if(m){(secs[m[1]]=secs[m[1]]||{name:m[2],tags:new Set()}).tags.add(cur||'known');}}
+  if(!Object.keys(secs).length)return;
+  let h='<table style="width:100%">';
+  for(const[mac,info]of Object.entries(secs)){
+    const conn=info.tags.has('Connected'),paired=info.tags.has('Paired');
+    h+=`<tr><td><b>${info.name}</b><br><span class="muted">${mac}</span></td>
+    <td>${conn?'<span class="status on">connected</span>':paired?'<span class="status">paired</span>':''}</td>
+    <td style="text-align:right">
+    ${!paired?`<button onclick="btPairFlow('${mac}')">Pair</button>`:''}
+    ${paired&&!conn?`<button onclick="btCmd('connect ${mac}')">Connect</button>`:''}
+    ${conn?`<button onclick="btCmd('disconnect ${mac}')">Disconnect</button>`:''}
+    ${paired?`<button onclick="if(confirm('Remove ${info.name}?'))btCmd('remove ${mac}')">Remove</button>`:''}
+    </td></tr>`;}
+  $('btdevices').innerHTML=h+'</table>';}
+window.btCmd=btCmd;
+window.btPairFlow=async mac=>{await btCmd('pair '+mac);
+  setTimeout(()=>btCmd('trust '+mac),4000);
+  setTimeout(()=>btCmd('connect '+mac),8000);
+  setTimeout(()=>btCmd('list'),12000);};
+$('btscan').onclick=()=>btCmd('scan');
+$('btlist').onclick=()=>btCmd('list');
+$('expread').onclick=()=>getFile(1);
+$('expwrite').onclick=()=>{collectExp();putFile(1,exps);};
+function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wheel_by_layer',
+'port2_kbd','tap_hold','button_inputs','button_labels'])if(!cfg[k])cfg[k]={};}
+
+/* ============ names ============ */
+const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:'H',0x0c:'I',
+0x0d:'J',0x0e:'K',0x0f:'L',0x10:'M',0x11:'N',0x12:'O',0x13:'P',0x14:'Q',0x15:'R',0x16:'S',
+0x17:'T',0x18:'U',0x19:'V',0x1a:'W',0x1b:'X',0x1c:'Y',0x1d:'Z',0x1e:'1',0x1f:'2',0x20:'3',
+0x21:'4',0x22:'5',0x23:'6',0x24:'7',0x25:'8',0x26:'9',0x27:'0',0x28:'Enter',0x29:'Esc',
+0x2a:'Bksp',0x2b:'Tab',0x2c:'Space',0x2d:'-',0x2e:'=',0x2f:'[',0x30:']',0x31:'\\',0x33:';',
+0x34:"'",0x35:'`',0x36:',',0x37:'.',0x38:'/',0x39:'Caps',0x4f:'→',0x50:'←',0x51:'↓',0x52:'↑',
+0x4a:'Home',0x4b:'PgUp',0x4c:'Del',0x4d:'End',0x4e:'PgDn',0x49:'Ins'};
+for(let i=0;i<12;i++)KEYS[0x3a+i]='F'+(i+1);
+const MODS={0xe0:'LCtrl',0xe1:'LShift',0xe2:'LAlt',0xe3:'LWin',0xe4:'RCtrl',0xe5:'RShift',0xe6:'RAlt',0xe7:'RWin'};
+const NAME2KEY={};for(const[u,n]of Object.entries(KEYS))NAME2KEY[n.toLowerCase()]=+u;
+const NAME2MOD={ctrl:0xe0,shift:0xe1,alt:0xe2,win:0xe3,cmd:0xe3,rctrl:0xe4,rshift:0xe5,ralt:0xe6,rwin:0xe7};
+// evdev -> HID usage (for RAW highlight); common subset
+const EV2HID={30:0x04,48:0x05,46:0x06,32:0x07,18:0x08,33:0x09,34:0x0a,35:0x0b,23:0x0c,36:0x0d,
+37:0x0e,38:0x0f,50:0x10,49:0x11,24:0x12,25:0x13,16:0x14,19:0x15,31:0x16,20:0x17,22:0x18,
+47:0x19,17:0x1a,45:0x1b,21:0x1c,44:0x1d,2:0x1e,3:0x1f,4:0x20,5:0x21,6:0x22,7:0x23,8:0x24,
+9:0x25,10:0x26,11:0x27,28:0x28,1:0x29,14:0x2a,15:0x2b,57:0x2c,12:0x2d,13:0x2e,26:0x2f,
+27:0x30,43:0x31,39:0x33,40:0x34,41:0x35,51:0x36,52:0x37,53:0x38,58:0x39,105:0x50,106:0x4f,
+103:0x52,108:0x51,29:0xe0,42:0xe1,56:0xe2,125:0xe3,97:0xe4,54:0xe5,100:0xe6,126:0xe7};
+const EVBTN={272:1,273:2,274:3,275:4,276:5,277:6,278:7,279:8,256:9,257:10,258:11,259:12,260:13,261:14,262:15};
+const LAYER_NAMES=['0 · Base','1 · CapsLock','2 · Right-btn','3 · Back-btn','4 · Fwd-btn','5'];
+function btnLabel(n){return (cfg.button_labels&&cfg.button_labels[n])||({1:'Left',2:'Right',3:'Wheel'}[n]||('B'+n));}
+function actShort(a){if(!a)return'';const k=a[0];
+if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
+if(k==='macro')return'M'+a[1];if(k==='macro_up')return'M'+a[1]+'↑';
+if(k==='macro_both')return'M'+a[1]+'/M'+a[2]+'↑';
+if(k==='suppress')return'∅';if(k==='dpi_cycle')return'DPI';return k;}
+function actHTML(a){const s=actShort(a);
+if(!s)return'';
+if(s.startsWith('M'))return s.replace(/M(\d+)/g,'<a class="mlink" onclick="gotoMacro($1)">M$1</a>');
+return s;}
+
+/* ============ layer sources ============ */
+function layerSources(){ // layer -> {type:'key'|'btn', id}
+  const out={1:{type:'key',id:0x39}};
+  for(const[b,v]of Object.entries(cfg.tap_hold||{}))out[v[1]]={type:'btn',id:+b};
+  return out;}
+
+/* ============ rendering ============ */
+function render(){
+  if(!cfg)return;
+  const L=$('layers');L.innerHTML='';
+  LAYER_NAMES.forEach((n,i)=>{const p=document.createElement('div');
+  p.className='pill'+(i===layer?' on':'');p.textContent=n;
+  p.onclick=()=>{layer=i;render();};L.appendChild(p);});
+  renderMouse();renderKbd();renderMacros();renderEditor();
+  requestAnimationFrame(drawChords);
+}
+/* E9 wireframe: right btn / wheel + 10,11 / left btn / thumb rows 7-8-9, 4-5-6, 0-3 */
+function mregion(id,shape){const m=cfg.mouse_mappings[`${layer},${id}`];
+const src=Object.values(layerSources()).some(s=>s.type==='btn'&&s.id===id);
+return shape.replace('CLS',`region ${m?'mapped':''} ${src?'layerkey':''} ${sel&&sel.type==='btn'&&sel.id===id?'sel':''}`)
+.replace('DID',`data-btn="${id}"`);}
+function renderMouse(){
+  const w=$('mousewrap');
+  let h=`<h2 style="font-size:1rem">SOLAKAKA E9 Pro</h2>
+  <svg id="mousesvg" viewBox="0 0 300 340" width="300">
+  <path d="M40,320 Q20,180 80,80 Q120,25 180,30 Q250,45 270,140 Q285,230 260,300 Q250,325 210,328 L70,328 Q45,328 40,320 Z"
+    fill="rgba(128,128,128,.1)" stroke="var(--line)" stroke-width="2"/>`;
+  h+=mregion(2,`<path class="CLS" DID d="M185,34 Q245,50 264,130 L215,145 Q205,90 180,60 Z"/>`)+`<text x="215" y="105">Right</text>`;
+  h+=mregion(1,`<path class="CLS" DID d="M90,75 Q125,32 178,34 L178,62 Q140,80 118,110 Z"/>`)+`<text x="120" y="62">Left</text>`;
+  h+=mregion(3,`<ellipse class="CLS" DID cx="176" cy="105" rx="13" ry="24"/>`);
+  h+=`<rect class="region ${sel&&sel.type==='wheel'?'sel':''}" data-wheel="1" x="169" y="93" width="14" height="16" rx="4"/><text x="150" y="145">Wheel</text>`;
+  h+=`<path id="scrollup" class="region" data-wheel="1" d="M176,72 L184,84 L168,84 Z"/>`;
+  h+=`<path id="scrolldn" class="region" data-wheel="1" d="M176,130 L184,118 L168,118 Z"/>`;
+  h+=mregion(10,`<rect class="CLS" DID x="196" y="88" width="20" height="14" rx="4"/>`)+`<text x="219" y="99">10</text>`;
+  h+=mregion(11,`<rect class="CLS" DID x="196" y="108" width="20" height="14" rx="4"/>`)+`<text x="219" y="120">11</text>`;
+  const rows=[[7,8,9],[4,5,6],[12,13,14,15]];const labels={12:'0',13:'1',14:'2',15:'3'};
+  rows.forEach((r,ri)=>{r.forEach((b,ci)=>{
+    const x=34+ci*44,y=170+ri*46;
+    h+=mregion(b,`<rect class="CLS" DID x="${x}" y="${y}" width="38" height="34" rx="7"/>`);
+    h+=`<text x="${x+13}" y="${y+21}">${labels[b]||b}</text>`;});});
+  h+=`</svg><div class="muted" id="mchips"></div>`;
+  w.innerHTML=h;
+  // chips summary
+  let chips='';for(const b of[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]){
+    const a=cfg.mouse_mappings[`${layer},${b}`];if(a)chips+=`<div>${btnLabel(b)} → ${actHTML(a)}</div>`;}
+  const wm=cfg.wheel_by_layer[layer];if(wm&&wm[0]!=='pass')chips+=`<div>Wheel → ${wm.join(' ')}</div>`;
+  $('mchips').innerHTML=chips;
+  w.querySelectorAll('[data-btn]').forEach(r=>{
+    r.onclick=()=>{sel={type:'btn',id:+r.dataset.btn};render();};
+    r.setAttribute('draggable','true');
+    r.ondragstart=e=>dragStart(e,{type:'btn',id:+r.dataset.btn});
+    r.ondragover=e=>e.preventDefault();
+    r.ondrop=e=>dropOn(e,{type:'btn',id:+r.dataset.btn});});
+  const wl=w.querySelector('[data-wheel]');
+  wl.onclick=()=>{sel={type:'wheel'};render();};
+}
+const KBD_ROWS=[[0x35,0x1e,0x1f,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x2d,0x2e],
+[0x2b,0x14,0x1a,0x08,0x15,0x17,0x1c,0x18,0x0c,0x12,0x13,0x2f,0x30],
+[0x39,0x04,0x16,0x07,0x09,0x0a,0x0b,0x0d,0x0e,0x0f,0x33,0x34,0x28],
+[0xe1,0x1d,0x1b,0x06,0x19,0x05,0x11,0x10,0x36,0x37,0x38,0xe5,0x29],
+[0xe0,0xe3,0xe2,0x2c,0x2c,0x2c,0x2c,0x2c,0x2c,0x4f,0x51,0x52,0x50]];
+function renderKbd(){
+  const w=$('kbdwrap');
+  w.innerHTML=`<h2 style="font-size:1rem">Keyboard</h2><div class="kb">
+  <div class="half" id="lh" style="grid-template-columns:repeat(6,1fr)"></div>
+  <div class="half" id="rh" style="grid-template-columns:repeat(7,1fr)"></div></div>`;
+  const lh=w.querySelector('#lh'),rh=w.querySelector('#rh');
+  const srcs=layerSources();
+  for(const row of KBD_ROWS)row.forEach((u,i)=>{
+    const d=document.createElement('div');const name=MODS[u]||KEYS[u]||'?';
+    const tgt=cfg.kbd_mappings[`${layer},${u}`];
+    const isSrc=Object.values(srcs).some(s=>s.type==='key'&&s.id===u);
+    d.className='key'+(tgt!==undefined?' mapped':'')+(isSrc?' layerkey':'')
+      +(sel&&sel.type==='key'&&sel.id===u&&sel.i===i?' sel':'');
+    d.dataset.usage=u;d.dataset.i=i;
+    d.innerHTML=name+(tgt!==undefined?`<span class="chip">${tgt===0?'∅':'→'+(KEYS[tgt]||'?')}</span>`:'');
+    if(!MODS[u]&&u!==0x2c){
+      d.onclick=()=>{sel={type:'key',id:u,i};render();};
+      d.setAttribute('draggable','true');
+      d.ondragstart=e=>dragStart(e,{type:'key',id:u});
+      d.ondragover=e=>e.preventDefault();
+      d.ondrop=e=>dropOn(e,{type:'key',id:u});
+    } else if(u===0x39){d.onclick=()=>{sel={type:'key',id:u,i};render();};}
+    else d.style.opacity=.45;
+    (i<6?lh:rh).appendChild(d);});
+}
+
+/* ============ chord lines ============ */
+function elFor(t){ if(t.type==='btn')return document.querySelector(`#mousesvg [data-btn="${t.id}"]`);
+  if(t.type==='key')return document.querySelector(`.key[data-usage="${t.id}"]`);return null;}
+function center(el){const s=$('stage').getBoundingClientRect(),r=el.getBoundingClientRect();
+return[r.left-s.left+r.width/2,r.top-s.top+r.height/2];}
+function drawChords(){
+  const svg=$('chordsvg');const st=$('stage');
+  svg.setAttribute('width',st.clientWidth);svg.setAttribute('height',st.clientHeight);
+  svg.innerHTML='';
+  const srcs=layerSources();
+  for(const[L,srcT]of Object.entries(srcs)){
+    const srcEl=elFor(srcT);if(!srcEl)continue;
+    // mouse mappings on layer L
+    for(const key of Object.keys(cfg.mouse_mappings)){
+      const[l,b]=key.split(',').map(Number);if(l!==+L)continue;
+      const tgtEl=elFor({type:'btn',id:b});if(!tgtEl)continue;
+      addLine(svg,srcEl,tgtEl,+L,{type:'btn',id:b});}
+    for(const key of Object.keys(cfg.kbd_mappings)){
+      const[l,u]=key.split(',').map(Number);if(l!==+L)continue;
+      const tgtEl=elFor({type:'key',id:u});if(!tgtEl)continue;
+      addLine(svg,srcEl,tgtEl,+L,{type:'key',id:u});}
+  }
+}
+function addLine(svg,a,b,L,tgt){
+  const[x1,y1]=center(a),[x2,y2]=center(b);
+  const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+  const isSel=chordSel&&chordSel.layer===L&&chordSel.tgt.type===tgt.type&&chordSel.tgt.id===tgt.id;
+  ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+  ln.setAttribute('stroke',isSel?'var(--warn)':'rgba(184,134,11,.5)');
+  ln.setAttribute('stroke-width',isSel?3:1.6);ln.setAttribute('stroke-dasharray','6 5');
+  ln.style.cursor='pointer';
+  ln.onclick=e=>{e.stopPropagation();selectChord(L,tgt);};
+  svg.appendChild(ln);
+  if(isSel){ // endpoint action chip
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',x2+8);t.setAttribute('y',y2-8);
+    t.setAttribute('fill','var(--warn)');t.style.font='11px system-ui';t.style.cursor='pointer';
+    const act=tgt.type==='btn'?cfg.mouse_mappings[`${L},${tgt.id}`]:['key',cfg.kbd_mappings[`${L},${tgt.id}`]];
+    t.textContent='⮕ '+actShort(act);t.style.pointerEvents='auto';
+    t.onclick=()=>{layer=L;sel=tgt;render();};
+    svg.appendChild(t);}
+}
+function selectChord(L,tgt){
+  chordSel={layer:L,tgt};layer=L;sel=null;
+  $('chordbar').style.display='flex';
+  const src=layerSources()[L];
+  $('chordinfo').innerHTML=`${src.type==='key'?(KEYS[src.id]||'?'):btnLabel(src.id)}
+   (hold) + ${tgt.type==='key'?(KEYS[tgt.id]||'?'):btnLabel(tgt.id)} → editable at endpoint`;
+  render();
+  // highlight chord elements
+  const se=elFor(src),te=elFor(tgt);
+  [se,te].forEach(el=>el&&el.classList.add('chordhl'));
+}
+function clearChordSel(){chordSel=null;$('chordbar').style.display='none';$('popover').style.display='none';render();}
+$('changechord').onclick=()=>{
+  const cur=chordSel;if(!cur)return;
+  $('dragmsg').style.display='block';
+  const txt=prompt('Chord as text: "<layer source>+<input>" e.g. caps+i or right+left\n'+
+    '(+ = held together, order-free; the first named input is the hold/layer key.\n'+
+    'Or just drag a key/button onto either end of the highlighted chord.)');
+  $('dragmsg').style.display='none';
+  if(!txt)return;
+  const parts=txt.toLowerCase().split('+').map(s=>s.trim());
+  if(parts.length!==2){toast('need exactly two inputs',true);return;}
+  const inp=parseInput(parts[1]);if(!inp){toast('unknown input '+parts[1],true);return;}
+  moveChordTarget(cur,inp);
+};
+function parseInput(s){
+  if(NAME2KEY[s]!==undefined)return{type:'key',id:NAME2KEY[s]};
+  if(s.startsWith('btn'))return{type:'btn',id:+s.slice(3)};
+  const m={left:1,right:2,middle:3,wheelclick:3};if(m[s])return{type:'btn',id:m[s]};
+  return null;}
+function moveChordTarget(cur,inp){
+  const L=cur.layer;
+  let act;
+  if(cur.tgt.type==='btn'){act=cfg.mouse_mappings[`${L},${cur.tgt.id}`];delete cfg.mouse_mappings[`${L},${cur.tgt.id}`];}
+  else{act=['key',cfg.kbd_mappings[`${L},${cur.tgt.id}`]];delete cfg.kbd_mappings[`${L},${cur.tgt.id}`];}
+  if(inp.type==='btn')cfg.mouse_mappings[`${L},${inp.id}`]=act[0]==='key'&&cur.tgt.type==='key'?['key',act[1]]:act;
+  else cfg.kbd_mappings[`${L},${inp.id}`]=act[0]==='key'?act[1]:0x28;
+  chordSel={layer:L,tgt:inp};render();toast('chord updated — Save to device to apply');}
+$('chordopts').onclick=e=>{
+  const p=$('popover');const r=e.target.getBoundingClientRect();
+  p.style.left=(r.left+window.scrollX)+'px';p.style.top=(r.bottom+window.scrollY+4)+'px';
+  p.innerHTML=`<b>Chord behavior</b><br>
+  <label><input type="radio" checked> Hold-first layer chord (current engine model)</label>
+  <label style="opacity:.5"><input type="radio" disabled> Simultaneous, order-free
+  <span class="muted">(engine models chords as hold-layers; L+R=Enter is right-hold→layer 2)</span></label>`;
+  p.style.display='block';
+  setTimeout(()=>document.addEventListener('click',function h(ev){
+    if(!p.contains(ev.target)){p.style.display='none';document.removeEventListener('click',h);}}),50);
+};
+/* drag & drop: swap chord elements / plus-pill add */
+let dragPayload=null;
+function dragStart(e,payload){dragPayload=payload;
+  if(chordSel)$('dragmsg').style.display='block';}
+document.addEventListener('dragend',()=>$('dragmsg').style.display='none');
+function dropOn(e,target){
+  e.preventDefault();$('dragmsg').style.display='none';
+  if(e.dataTransfer&&e.dataTransfer.getData('pluspill')==='1'||window._plusDrag){
+    window._plusDrag=false;
+    if(!chordSel)return;
+    const L=chordSel.layer;
+    const act=chordSel.tgt.type==='btn'?cfg.mouse_mappings[`${L},${chordSel.tgt.id}`]:['key',cfg.kbd_mappings[`${L},${chordSel.tgt.id}`]];
+    if(target.type==='btn')cfg.mouse_mappings[`${L},${target.id}`]=act;
+    else cfg.kbd_mappings[`${L},${target.id}`]=(act&&act[0]==='key')?act[1]:0x28;
+    render();toast('added to chord layer '+L);return;}
+  if(!dragPayload||!chordSel)return;
+  // dropping a dragged input onto a chord element replaces that element
+  const c=chordSel;
+  const isTgt=target.type===c.tgt.type&&target.id===c.tgt.id;
+  const src=layerSources()[c.layer];
+  const isSrc=target.type===src.type&&target.id===src.id;
+  if(isTgt)moveChordTarget(c,dragPayload);
+  else if(isSrc){
+    if(src.type==='btn'&&dragPayload.type==='btn'&&cfg.tap_hold[src.id]){
+      cfg.tap_hold[dragPayload.id]=cfg.tap_hold[src.id];delete cfg.tap_hold[src.id];
+      render();toast('layer source moved to '+btnLabel(dragPayload.id));}
+    else toast('CapsLock layer source is fixed in the engine',true);}
+  dragPayload=null;}
+$('pluspill').ondragstart=e=>{window._plusDrag=true;e.dataTransfer.setData('pluspill','1');};
+
+/* ============ editor panel ============ */
+function actionToUI(a){if(!a)return{press:'pass',release:'none'};const k=a[0];
+if(k==='btn')return{press:'btn',pressBtn:a[1],release:'none'};
+if(k==='key')return{press:'key',pressKey:a[1],release:'none'};
+if(k==='macro')return{press:'macro',pressMacro:a[1],release:'none'};
+if(k==='suppress')return{press:'suppress',release:'none'};
+if(k==='dpi_cycle')return{press:'dpi',release:'none'};
+if(k==='macro_up')return{press:'suppress',release:'macro',relMacro:a[1]};
+if(k==='macro_both')return{press:'macro',pressMacro:a[1],release:'macro',relMacro:a[2]};
+return{press:'pass',release:'none'};}
+function uiToAction(u){
+if(u.release==='macro')return u.press==='macro'?['macro_both',+u.pressMacro,+u.relMacro]:['macro_up',+u.relMacro];
+if(u.press==='pass')return null;if(u.press==='suppress')return['suppress'];
+if(u.press==='dpi')return['dpi_cycle'];
+if(u.press==='btn')return['btn',+u.pressBtn];if(u.press==='key')return['key',+u.pressKey];
+if(u.press==='macro')return['macro',+u.pressMacro];return null;}
+function keyOpts(v){return Object.entries(KEYS).map(([u,n])=>`<option value="${u}" ${+u===+v?'selected':''}>${n}</option>`).join('');}
+function macOpts(v){let h='';for(let n=1;n<=30;n++)h+=`<option value="${n}" ${n===+v?'selected':''}>Macro ${n}</option>`;return h;}
+function searchBoxHTML(){return `<label>Search actions</label>
+<input type="text" id="actsearch" placeholder="type: copy, M4, Enter, dpi…">
+<div id="searchres" class="muted"></div>`;}
+function capBoxHTML(){return `<label>Press key(s) to assign (click box first)</label>
+<input type="text" id="keycap" placeholder="click, then press a key or a+b+c combo" readonly>`;}
+function bindEditorCommon(applyAction){
+  const s=$('actsearch');
+  if(s){s.oninput=()=>{
+    const q=s.value.toLowerCase();const out=[];
+    if(!q){$('searchres').innerHTML='';return;}
+    for(const[u,n]of Object.entries(KEYS))if(n.toLowerCase().includes(q))out.push(`<a class="mlink" onclick='applySearch(["key",${u}])'>${n}</a>`);
+    for(let n=1;n<=30;n++)if(('m'+n).includes(q)||('macro '+n).includes(q))out.push(`<a class="mlink" onclick='applySearch(["macro",${n}])'>M${n}</a>`);
+    if('dpi'.includes(q))out.push(`<a class="mlink" onclick='applySearch(["dpi_cycle"])'>DPI cycle</a>`);
+    if('suppress'.includes(q))out.push(`<a class="mlink" onclick='applySearch(["suppress"])'>Suppress</a>`);
+    $('searchres').innerHTML=out.slice(0,12).join(' · ');};}
+  window.applySearch=a=>{applyAction(a);render();};
+  const kc=$('keycap');
+  if(kc){const held=new Set();
+    kc.onclick=()=>kc.focus();
+    kc.onkeydown=e=>{e.preventDefault();
+      const u=EV2HID[e.keyCode]||NAME2KEY[e.key.toLowerCase()];
+      if(u)held.add(u);
+      kc.value=[...held].map(u=>MODS[u]||KEYS[u]||'?').join('+');};
+    kc.onkeyup=e=>{e.preventDefault();
+      if(held.size===1)applyAction(['key',[...held][0]]);
+      else if(held.size>1){ // multi-key: auto-create a macro
+        let n=1;while(cfg.macros[n]&&cfg.macros[n].length)n++;
+        cfg.macros[n]=[[...held].map(u=>0x00070000+ +u)];
+        applyAction(['macro',n]);toast('created Macro '+n+' for combo');}
+      held.clear();render();};}
+  const nm=$('newmacro');
+  if(nm)nm.onclick=()=>{
+    let n=1;while(cfg.macros[n]&&cfg.macros[n].length)n++;
+    cfg.macros[n]=[];applyAction(['macro',n]);
+    $('inlinemacro').innerHTML=`<label>Macro ${n} (one step per line: ctrl+c / btn1 / wheel / .)</label>
+    <textarea id="im" rows="4"></textarea><button onclick="finishInline(${n})">Done</button>`;};
+  window.finishInline=n=>{cfg.macros[n]=textToMacro($('im').value);
+    $('inlinemacro').innerHTML=`Bound to <a class="mlink" onclick="gotoMacro(${n})">Macro ${n}</a>`;render();};
+}
+function renderEditor(){
+  const ed=$('editor');
+  if(!sel){ed.innerHTML=`<h2 style="font-size:1rem">Select an input</h2>
+  <p class="muted">Dark-yellow inputs are layer/chord starters. Dashed lines are chords — click one.</p>`;return;}
+  if(sel.type==='wheel'){return renderWheelEd(ed);}
+  const isBtn=sel.type==='btn';
+  const key=`${layer},${sel.id}`;
+  const cur=isBtn?cfg.mouse_mappings[key]:(cfg.kbd_mappings[key]!==undefined?['key',cfg.kbd_mappings[key]]:null);
+  const ui=actionToUI(cur);
+  ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnLabel(sel.id):(KEYS[sel.id]||'?')} — layer ${layer}</h2>
+  <div class="row"><div>
+    <label>On press</label><select id="press">
+      <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
+      <option value="suppress" ${ui.press==='suppress'?'selected':''}>Suppress</option>
+      ${isBtn?`<option value="btn" ${ui.press==='btn'?'selected':''}>Mouse button…</option>`:''}
+      <option value="key" ${ui.press==='key'?'selected':''}>Key…</option>
+      <option value="macro" ${ui.press==='macro'?'selected':''}>Macro…</option>
+      ${isBtn?`<option value="dpi" ${ui.press==='dpi'?'selected':''}>DPI cycle</option>`:''}
+    </select><div id="pressArg"></div>
+    <label>On release</label><select id="release">
+      <option value="none" ${ui.release==='none'?'selected':''}>Nothing</option>
+      <option value="macro" ${ui.release==='macro'?'selected':''}>Macro…</option>
+    </select><div id="relArg"></div>
+  </div><div>${capBoxHTML()}${searchBoxHTML()}
+    <button id="newmacro" style="margin-top:.5rem">＋ New macro</button>
+    <div id="inlinemacro"></div></div></div>`;
+  const apply=a=>{ if(isBtn){ if(a)cfg.mouse_mappings[key]=a;else delete cfg.mouse_mappings[key]; }
+    else{ if(!a)delete cfg.kbd_mappings[key];
+      else if(a[0]==='key')cfg.kbd_mappings[key]=a[1];
+      else if(a[0]==='suppress')cfg.kbd_mappings[key]=0;
+      else toast('keys can map to keys/suppress; use a macro via a chord layer for more',true);}};
+  const refresh=()=>{const p=$('press').value;
+    $('pressArg').innerHTML=p==='btn'?`<select id="pressBtn">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===+(ui.pressBtn||1)?'selected':''}>${btnLabel(n)}</option>`).join('')}</select>`:
+      p==='key'?`<select id="pressKey">${keyOpts(ui.pressKey||0x28)}</select>`:
+      p==='macro'?`<select id="pressMacro">${macOpts(ui.pressMacro||1)}</select>`:'';
+    const r=$('release').value;
+    $('relArg').innerHTML=r==='macro'?`<select id="relMacro">${macOpts(ui.relMacro||1)}</select>`:'';};
+  refresh();
+  ed.querySelectorAll('#press,#release,#pressArg,#relArg').forEach(x=>x.onchange=()=>{refresh();
+    apply(uiToAction({press:$('press').value,release:$('release').value,
+      pressBtn:$('pressBtn')?.value,pressKey:$('pressKey')?.value,
+      pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value}));
+    render();});
+  bindEditorCommon(apply);
+}
+function renderWheelEd(ed){
+  const cur=cfg.wheel_by_layer[layer]||['pass'];
+  ed.innerHTML=`<h2 style="font-size:1rem">Wheel — layer ${layer}</h2>
+  <select id="wmode">
+    <option value="pass" ${cur[0]==='pass'?'selected':''}>Accelerated passthrough</option>
+    <option value="scale" ${cur[0]==='scale'?'selected':''}>Scaled ×N</option>
+    <option value="pan" ${cur[0]==='pan'?'selected':''}>Horizontal ×N</option>
+    <option value="macro_updown" ${cur[0]==='macro_updown'?'selected':''}>Macros up/down</option>
+    <option value="macro_per" ${cur[0]==='macro_per'?'selected':''}>Macro per N detents</option>
+  </select><div id="warg"></div>`;
+  const refresh=()=>{const m=$('wmode').value,w=$('warg');
+    w.innerHTML=m==='scale'||m==='pan'?`<input id="w1" type="number" step="0.5" value="${cur[1]??(m==='pan'?-0.5:1)}">`:
+    m==='macro_updown'?`<div class="row"><select id="w1">${macOpts(cur[1]||22)}</select><select id="w2">${macOpts(cur[2]||23)}</select></div>`:
+    m==='macro_per'?`<div class="row"><select id="w1">${macOpts(cur[1]||10)}</select><input id="w2" type="number" min="1" value="${cur[2]||2}"></div>`:'';
+    bind();};
+  const bind=()=>ed.querySelectorAll('select,input').forEach(x=>x.onchange=()=>{
+    if(x.id==='wmode')refresh();
+    const m=$('wmode').value,v1=$('w1')?.value,v2=$('w2')?.value;
+    cfg.wheel_by_layer[layer]=m==='pass'?['pass']:m==='scale'?['scale',+v1]:m==='pan'?['pan',+v1]:
+      m==='macro_updown'?['macro_updown',+v1,+v2]:['macro_per',+v1,+v2];});
+  refresh();
+}
+
+/* ============ macros tab ============ */
+function usageName(u){const p=u>>>16,x=u&0xffff;
+if(p===9)return'btn'+x;if(u===0x00010038)return'wheel';
+if(p===7)return(MODS[x]||KEYS[x]||'0x'+x.toString(16)).toLowerCase();return'0x'+u.toString(16);}
+function macroToText(s){return s.map(x=>x.length?x.map(usageName).join('+'):'.').join('\n');}
+function textToMacro(t){const steps=[];
+for(let line of t.split('\n')){line=line.trim().toLowerCase();if(!line)continue;
+if(line==='.'){steps.push([]);continue;}const us=[];
+for(const tok of line.split('+').map(x=>x.trim()).filter(Boolean)){
+if(tok.startsWith('btn'))us.push(0x00090000+ +tok.slice(3));
+else if(tok==='wheel')us.push(0x00010038);
+else if(NAME2MOD[tok]!==undefined)us.push(0x00070000+NAME2MOD[tok]);
+else if(NAME2KEY[tok]!==undefined)us.push(0x00070000+NAME2KEY[tok]);
+else if(tok.startsWith('0x'))us.push(parseInt(tok,16));}
+steps.push(us);}return steps;}
+function renderMacros(){
+  const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)</h2>';
+  for(let n=1;n<=30;n++){const s=(cfg.macros&&cfg.macros[n])||[];
+  h+=`<details class="macro" id="macro-${n}"><summary><b>Macro ${n}</b> — ${s.length?
+  macroToText(s).split('\n').filter(l=>l!=='.').slice(0,3).join(' · '):'<span class="muted">empty</span>'}</summary>
+  <textarea data-m="${n}" rows="${Math.max(3,s.length)}">${macroToText(s)}</textarea></details>`;}
+  el.innerHTML=h;
+  el.querySelectorAll('textarea[data-m]').forEach(t=>t.onchange=()=>{cfg.macros[t.dataset.m]=textToMacro(t.value);});
+}
+function gotoMacro(n){switchTab('macros');const d=$('macro-'+n);
+if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});
+d.classList.add('flashtgt');setTimeout(()=>d.classList.remove('flashtgt'),1600);}}
+window.gotoMacro=gotoMacro;
+
+/* ============ expansions tab ============ */
+function renderExp(){
+  const t=$('exptable');t.innerHTML='<tr><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
+  for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
+function addExpRow(k,v){
+  const t=$('exptable'),tr=document.createElement('tr');
+  tr.innerHTML=`<td><input type="text" class="etrig" value="${k.replace(/"/g,'&quot;')}"></td>
+  <td><input type="text" class="eval" value="${(v||'').replace(/"/g,'&quot;').replace(/\n/g,'\\n')}"></td>`;
+  t.appendChild(tr);}
+function collectExp(){exps={};
+  document.querySelectorAll('#exptable tr').forEach(tr=>{
+    const k=tr.querySelector('.etrig'),v=tr.querySelector('.eval');
+    if(k&&k.value.trim())exps[k.value.trim()]=v.value.replace(/\\n/g,'\n');});}
+window.addExpRow=addExpRow;
+
+/* ============ live highlighting ============ */
+let macroActive=false,expandFlash=0;
+function flash(el,cls){if(!el)return;el.classList.add(cls);setTimeout(()=>el.classList.remove(cls),280);}
+function liveRaw(txt){
+  const m=txt.match(/key code=(\d+) val=([012])/);if(!m)return;
+  const code=+m[1];if(+m[2]===0)return;
+  const u=EV2HID[code];if(u)flash(document.querySelector(`.key[data-usage="${u}"]`),'flash-red');
+  const b=EVBTN[code];if(b)flash(document.querySelector(`#mousesvg [data-btn="${b}"]`),'flash-red');}
+function liveOut(txt){
+  if(txt.startsWith('macro start')){macroActive=true;return;}
+  if(txt.startsWith('macro end')){macroActive=false;return;}
+  if(txt.startsWith('expand')){expandFlash=Date.now()+600;return;}
+  const cls=Date.now()<expandFlash?'flash-blu':macroActive?'flash-grn':'flash-yel';
+  const km=txt.match(/kbd .*keys=\[(.*?)\]/);
+  if(km&&km[1])for(const h of km[1].split(',')){const u=parseInt(h.replace(/['" ]/g,''),16);
+    flash(document.querySelector(`.key[data-usage="${u}"]`),cls);}
+  const wm2=txt.match(/wheel=(-?\d+)/);
+  if(wm2&&+wm2[1]!==0)flash(document.getElementById(+wm2[1]>0?'scrollup':'scrolldn'),
+    Date.now()<expandFlash?'flash-blu':macroActive?'flash-grn':'flash-yel');
+  const bm=txt.match(/mouse btns=0x([0-9a-f]+)/i);
+  if(bm){const bits=parseInt(bm[1],16);
+    for(let b=1;b<=5;b++)if(bits&(1<<(b-1)))flash(document.querySelector(`#mousesvg [data-btn="${b}"]`),cls);}}
+
+/* ============ tabs ============ */
+function switchTab(t){
+  document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
+  for(const p of['map','macros','exp','expr','bt'])$('page-'+p).style.display=p===t?'':'none';
+  if(t==='bt'&&device)btCmd('list');
+  if(t==='map')requestAnimationFrame(drawChords);}
+document.querySelectorAll('#toptabs .tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.t));
+window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
+$('stage').onclick=e=>{if(e.target.id==='chordsvg'||e.target.id==='stage')clearChordSel();};
+</script></body></html>
