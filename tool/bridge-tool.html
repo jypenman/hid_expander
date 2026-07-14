@@ -193,8 +193,8 @@ function onReport(e){
   const d=new Uint8Array(e.data.buffer),t=d[0];
   if(t===PONG)log('← PONG','rx');
   else if(t===EVENT){const n=d[1],txt=new TextDecoder().decode(d.slice(2,2+n));
-    if(txt.startsWith('OUT:')){log(txt.slice(4),'tx','outlog');liveOut(txt.slice(4));}
-    else{log(txt,'ev','log');liveRaw(txt);}}
+    if(txt.startsWith('OUT:')){const raw=txt.slice(4);log(annotate(raw),'tx','outlog');liveOut(raw);}
+    else{log(annotate(txt),'ev','log');liveRaw(txt);}}
   else if(t===CFG_BEGIN){rxTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);rxGot={};}
   else if(t===CFG_CHUNK){rxGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
   else if(t===CFG_END){
@@ -291,6 +291,7 @@ const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:
 0x34:"'",0x35:'`',0x36:',',0x37:'.',0x38:'/',0x39:'Caps',0x4f:'→',0x50:'←',0x51:'↓',0x52:'↑',
 0x4a:'Home',0x4b:'PgUp',0x4c:'Del',0x4d:'End',0x4e:'PgDn',0x49:'Ins'};
 for(let i=0;i<12;i++)KEYS[0x3a+i]='F'+(i+1);
+KEYS[0x73]='F24';
 const MODS={0xe0:'LCtrl',0xe1:'LShift',0xe2:'LAlt',0xe3:'LWin',0xe4:'RCtrl',0xe5:'RShift',0xe6:'RAlt',0xe7:'RWin'};
 const NAME2KEY={};for(const[u,n]of Object.entries(KEYS))NAME2KEY[n.toLowerCase()]=+u;
 const NAME2MOD={ctrl:0xe0,shift:0xe1,alt:0xe2,win:0xe3,cmd:0xe3,rctrl:0xe4,rshift:0xe5,ralt:0xe6,rwin:0xe7};
@@ -302,17 +303,43 @@ const EV2HID={30:0x04,48:0x05,46:0x06,32:0x07,18:0x08,33:0x09,34:0x0a,35:0x0b,23
 27:0x30,43:0x31,39:0x33,40:0x34,41:0x35,51:0x36,52:0x37,53:0x38,58:0x39,105:0x50,106:0x4f,
 103:0x52,108:0x51,29:0xe0,42:0xe1,56:0xe2,125:0xe3,97:0xe4,54:0xe5,100:0xe6,126:0xe7};
 const EVBTN={272:1,273:2,274:3,275:4,276:5,277:6,278:7,279:8,256:9,257:10,258:11,259:12,260:13,261:14,262:15};
+function ev2name(code){const u=EV2HID[code];
+if(u!==undefined)return MODS[u]||KEYS[u]||('0x'+u.toString(16));
+if(EVBTN[code]!==undefined)return'btn'+EVBTN[code];
+return null;}
+function annotate(txt){
+  // RAW: "key code=125 val=1 port2=False" -> append [Name]
+  let m=txt.match(/^key code=(\d+) val=(\d+)/);
+  if(m){const n=ev2name(+m[1]);return txt+(n?` [${n}]`:' [?]');}
+  // SENT kbd: "kbd mods=0x0c keys=['0x73', '0x2c']" -> append readable names
+  m=txt.match(/^kbd mods=(0x[0-9a-f]+) keys=\[(.*?)\]?$/);
+  if(m){
+    const modBits=parseInt(m[1],16);
+    const order=[0xe0,0xe1,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7];
+    const bitNames=[];
+    order.forEach((u,i)=>{if(modBits&(1<<i))bitNames.push(MODS[u]);});
+    const keyHex=[...m[2].matchAll(/0x[0-9a-f]+/g)].map(x=>x[0]);
+    const keyNames=keyHex.map(h=>KEYS[parseInt(h,16)]||h);
+    const parts=[...bitNames,...keyNames];
+    return txt+(parts.length?` [${parts.join('+')}]`:' [release]');
+  }
+  if(txt==='kbd release-all')return txt+' [—]';
+  return txt;
+}
 const LAYER_NAMES=['0 · Base','1 · CapsLock','2 · Right-btn','3 · Back-btn','4 · Fwd-btn','5'];
 function btnLabel(n){return (cfg.button_labels&&cfg.button_labels[n])||({1:'Left',2:'Right',3:'Wheel'}[n]||('B'+n));}
+function macroLabel(n){const nm=(cfg.macro_names||{})[n];return nm?nm:('M'+n);}
 function actShort(a){if(!a)return'';const k=a[0];
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
-if(k==='macro')return'M'+a[1];if(k==='macro_up')return'M'+a[1]+'↑';
-if(k==='macro_both')return'M'+a[1]+'/M'+a[2]+'↑';
+if(k==='macro')return macroLabel(a[1]);if(k==='macro_up')return macroLabel(a[1])+'↑';
+if(k==='macro_both')return macroLabel(a[1])+'/'+macroLabel(a[2])+'↑';
 if(k==='suppress')return'∅';if(k==='dpi_cycle')return'DPI';return k;}
-function actHTML(a){const s=actShort(a);
-if(!s)return'';
-if(s.startsWith('M'))return s.replace(/M(\d+)/g,'<a class="mlink" onclick="gotoMacro($1)">M$1</a>');
-return s;}
+function actHTML(a){if(!a)return'';const k=a[0];
+const link=n=>`<a class="mlink" onclick="gotoMacro(${n})">${macroLabel(n).replace(/</g,'&lt;')}</a>`;
+if(k==='macro')return link(a[1]);
+if(k==='macro_up')return link(a[1])+'↑';
+if(k==='macro_both')return link(a[1])+'/'+link(a[2])+'↑';
+return actShort(a);}
 
 /* ============ layer sources ============ */
 function layerSources(){ // layer -> {type:'key'|'btn', id}
@@ -664,12 +691,18 @@ else if(tok.startsWith('0x'))us.push(parseInt(tok,16));}
 steps.push(us);}return steps;}
 function renderMacros(){
   const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)</h2>';
+  if(!cfg.macro_names)cfg.macro_names={};
   for(let n=1;n<=30;n++){const s=(cfg.macros&&cfg.macros[n])||[];
-  h+=`<details class="macro" id="macro-${n}"><summary><b>Macro ${n}</b> — ${s.length?
+  const nm=cfg.macro_names[n]||'';
+  h+=`<details class="macro" id="macro-${n}"><summary><b>${nm?nm+' (M'+n+')':'Macro '+n}</b> — ${s.length?
   macroToText(s).split('\n').filter(l=>l!=='.').slice(0,3).join(' · '):'<span class="muted">empty</span>'}</summary>
-  <textarea data-m="${n}" rows="${Math.max(3,s.length)}">${macroToText(s)}</textarea></details>`;}
+  <label>Name (optional)</label><input type="text" data-mn="${n}" value="${nm.replace(/"/g,'&quot;')}" placeholder="e.g. Copy">
+  <label>Steps</label><textarea data-m="${n}" rows="${Math.max(3,s.length)}">${macroToText(s)}</textarea></details>`;}
   el.innerHTML=h;
   el.querySelectorAll('textarea[data-m]').forEach(t=>t.onchange=()=>{cfg.macros[t.dataset.m]=textToMacro(t.value);});
+  el.querySelectorAll('input[data-mn]').forEach(i=>i.onchange=()=>{
+    if(i.value.trim())cfg.macro_names[i.dataset.mn]=i.value.trim();
+    else delete cfg.macro_names[i.dataset.mn];});
 }
 function gotoMacro(n){switchTab('macros');const d=$('macro-'+n);
 if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});
@@ -678,17 +711,24 @@ window.gotoMacro=gotoMacro;
 
 /* ============ expansions tab ============ */
 function renderExp(){
-  const t=$('exptable');t.innerHTML='<tr><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
+  if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
+  const t=$('exptable');
+  t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
   for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
 function addExpRow(k,v){
   const t=$('exptable'),tr=document.createElement('tr');
-  tr.innerHTML=`<td><input type="text" class="etrig" value="${k.replace(/"/g,'&quot;')}"></td>
+  const lbl=(cfg&&cfg.exp_names&&cfg.exp_names[k])||'';
+  tr.innerHTML=`<td><input type="text" class="elabel" value="${lbl.replace(/"/g,'&quot;')}" placeholder="e.g. Signature"></td>
+  <td><input type="text" class="etrig" value="${k.replace(/"/g,'&quot;')}"></td>
   <td><input type="text" class="eval" value="${(v||'').replace(/"/g,'&quot;').replace(/\n/g,'\\n')}"></td>`;
   t.appendChild(tr);}
-function collectExp(){exps={};
+function collectExp(){exps={};if(!cfg.exp_names)cfg.exp_names={};
+  const newNames={};
   document.querySelectorAll('#exptable tr').forEach(tr=>{
-    const k=tr.querySelector('.etrig'),v=tr.querySelector('.eval');
-    if(k&&k.value.trim())exps[k.value.trim()]=v.value.replace(/\\n/g,'\n');});}
+    const k=tr.querySelector('.etrig'),v=tr.querySelector('.eval'),l=tr.querySelector('.elabel');
+    if(k&&k.value.trim()){exps[k.value.trim()]=v.value.replace(/\\n/g,'\n');
+      if(l&&l.value.trim())newNames[k.value.trim()]=l.value.trim();}});
+  cfg.exp_names=newNames;}
 window.addExpRow=addExpRow;
 
 /* ============ live highlighting ============ */
