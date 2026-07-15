@@ -1,190 +1,3 @@
-
-/
-Claude finished the response
-Huh, well, right now it no longer sends the left alt+space, that appears to be blocked somehow, it just sends Space.
-
-
-Investigated macro modifier encoding and suspected data corruption
-Investigated macro modifier encoding and suspected data corruption
-Let's not guess blind on this one — I want to see the actual data before touching anything else, especially with my tools still down. Two quick checks, please:
-
-1. Check Macro 2's actual content right now, either via the tool's Macros tab (Read from device → expand "Resize corner (M2)") or by opening bridge_config.json directly and looking at "macros" → "2". What I need to know: does the Alt+Space step still show two entries (an Alt/modifier one plus Space), or has it collapsed to just Space? In the tool's macro editor, that line should literally read lalt+space — if it now reads just space, the macro's data itself got corrupted somewhere.
-
-2. Did you actually edit and re-upload the profile since we last talked, even just to look for winmode_resize_macro? If you opened the downloaded file in Notepad, searched around, and saved/reloaded it back into the tool (even without meaning to change anything), that's the most likely place this crept in — a stray keystroke while scrolling through a long JSON, or the macro editor's textarea getting touched and its onchange firing on a partial edit.
-
-Why I suspect data corruption over a code bug: the macro-step decoder that turns lalt+space into an actual Alt+Space HID report is untouched by anything I patched — my last changes only touched the entry/exit/toggle logic around window mode, not how individual macro steps get encoded or sent. If the code were broken, I'd expect Alt to vanish from every macro that uses it, not just this one moment. A single step silently losing its modifier is a much more common signature of "the JSON got hand-edited and one token got dropped" than "the engine broke."
-
-If Macro 2 does show space alone where lalt+space should be, the fix is simple — either retype that one line in the tool's Macro editor and Save, or I can hand you the corrected macro-2 step array directly to paste back in (["lalt+space"] as line 10 of the macro text, matching the position we traced earlier). Tell me what you find and I'll give you the exact fix rather than another guess.
-
-The issue appears to show up when i edit in the Macros window; I reloaded what I had downloaded, and it sent the right keystrokes but didn't trigger the behavior I wanted.  That often happens when the keystrokes come in too fast for the OS;  so I added extra pauses in the UE, and when I saved to the device, it no longer sent the lAlt+Space, just sends [0x2c' [Space])
-
-
-Diagnosed modifier loss bug and reconstructed correct macro sequence
-Diagnosed modifier loss bug and reconstructed correct macro sequence
-That symptom — Alt specifically vanishing from one step — combined with "I added extra pauses" is the exact signature of a real gotcha in the macro text format, worth knowing regardless of what happened here: a blank line and a . line are not the same thing. Only a literal . on its own line becomes a pause step; a truly empty line gets silently dropped from the sequence entirely (not treated as a zero-length pause). If you added pauses by just pressing Enter for blank lines rather than typing . on each one, those lines vanish on save — and if a stray backspace or cursor-position mistake happened while doing that (very easy in a plain textarea), it's plausible a character got clipped off the lalt+space line in the process.
-
-Rather than dig further into what exactly happened, here's the known-good content for Macro 2 — select all the text in that macro's textarea in the tool and replace it with this exactly:
-
-btn1
-.
-.
-.
-.
-.
-.
-.
-.
-lalt+space
-.
-.
-.
-.
-.
-.
-.
-.
-s
-.
-.
-.
-.
-right+down
-That's the original 24-step, 288ms sequence, byte-for-byte what it was before any edits — click, wait, Alt+Space, wait, S, wait, Right+Down. Save that, restart, and confirm the resize is back to firing correctly.
-
-For adding pauses safely going forward: each . line is exactly one 12ms step, so to add ~100ms of extra delay before a step, insert 8 separate lines, each containing just a single period — not blank lines, and ideally add them all at once rather than interleaving edits with testing, since every extra line shifts the position of everything below it, making it easy to lose track of which line is which in a long macro. If you want, tell me exactly how much extra delay you're trying to add and before which step, and I'll hand you the complete corrected text block the same way — safer than manual edits in a textarea for something this position-sensitive.
-
-The issue appears to show up when i edit in the Macros window; I reloaded what I had downloaded, and it sent the right keystrokes but didn't trigger the behavior I wanted.  That often happens when the keystrokes come in too fast for the OS;  so I added extra pauses in the UE, and when I saved to the device, it no longer sent the lAlt+Space, just sends [0x2c' [Space])
-
-I was able to edit it in the json and then load profile and then save to device, and that worked.  Now, it's just a bit slow compared to my mac where it's instantaneous!  Any tips on which pauses I can trim down without breaking the sequence?
-
-Show more
-
-Strategized incremental pause trimming with empirical testing approach
-Strategized incremental pause trimming with empirical testing approach
-Good news that the restored macro works — now this becomes a tuning question rather than a bug hunt, and it's genuinely temptable to trim, but a couple of things are worth knowing before you do.
-
-First, a fairness note: the Mac comparison isn't quite apples-to-apples. This whole Alt+Space→S→arrows sequence is driving Windows' own animated system menu — there's no equivalent on macOS, so nothing there is racing against real UI animation the way this is. Some of the "slowness" is inherent to Windows actually opening and rendering that menu, not something we can trim away entirely.
-
-Which gaps are safe to cut, in priority order (all three gaps use MACRO_STEP=12ms per . line, so trimming means deleting . lines, never blank lines — a blank line silently disappears from the sequence instead of adding delay, which is what bit you last time):
-
-Safest to cut: S → Right+Down (currently 4 dots, 48ms). By this point Windows is already in keyboard-navigation mode inside the system menu — no new animation has to render, it's just reading an arrow-key press. Try trimming to 1–2 dots.
-Moderately safe: click → Alt+Space (currently 9 dots, 108ms). This is really just "did the click land and focus the window" — normally near-instant on modern Windows, but the click is a real mouse event with its own event-loop latency, so leave a little margin. Try 5–6 dots.
-Leave alone, or trim last and least: Alt+Space → S (currently 10 dots, 120ms). This is waiting for the actual system menu to visually render before Windows will accept "S" as input — this is the step most likely to have been the real reason padding existed in the first place. I'd trim this one last, carefully, and in small steps.
-Two candidate versions to test, in order — paste either directly into Macro 2's textarea:
-
-Moderate trim (saves ~72ms, total ≈204ms):
-
-btn1
-.
-.
-.
-.
-.
-.
-lalt+space
-.
-.
-.
-.
-.
-.
-.
-.
-s
-.
-.
-.
-right+down
-Aggressive trim (saves ~156ms, total ≈120ms) — try only after the moderate version proves reliable across several repeats:
-
-btn1
-.
-.
-.
-lalt+space
-.
-.
-.
-.
-.
-.
-s
-.
-right+down
-Test protocol: trigger it 5–6 times in a row for each version, not just once — intermittent menu-animation timing is exactly the kind of thing that passes on try 1 and fails on try 4. If either version starts flaking, back off to the previous one and stop trimming that particular gap.
-
-If you land on a timing that works reliably, tell me the exact counts and I'll regenerate the full corrected text for you rather than you hand-counting dots again — that's exactly the kind of position-sensitive edit that bit us last time.
-
-Let's go onto Phase 9, and also do a full bug check, make sure the UI is responsive (I.e. button states change to indicate things have happened;  fix the live highlighting as a person types / clicks with the different colors (which have never worked, even though the instructions are there);  ensure that the colors work (currently some of the drop downs appear to have white text on a white background).
-
-
-Fortifying visual feedback with extended flash duration and activity indicators
-Fortifying visual feedback with extended flash duration and activity indicators
-Phase 9 it is. First, let me check whether my sandbox is back:
-
-
-Orchestrated UI refinements and event handling patches for Phase 9 completion
-Orchestrated UI refinements and event handling patches for Phase 9 completion
-Server side tested clean. Now the full GUI pass — all Phase 9 items in one set of surgical patches:
-
-
-Identified and resolved critical modifier parsing asymmetry bug
-Identified and resolved critical modifier parsing asymmetry bug
-The patch's anchor didn't match (file has a different NAME2MOD line than I remembered) — nothing was written. Let me look at the actual line:
-
-
-Ran 3 commands, read a file
-Ran 3 commands, read a file
-Phase 9 done, plus a full bug check that turned up two real bugs — one of which was the answer to a mystery from earlier. Files above: repo zip + the three changed files.
-
-The big finding first — two genuine bugs found during the check:
-
-Live highlighting never worked because of a 30-character truncation. The proof was in your own pasted logs all along: kbd mods=0x0c keys=['0x73' — no closing bracket. Every SENT line got clipped mid-bracket by the HID event payload limit, and my highlight parser required that closing ] to match, so it literally could never fire. Fixed on both ends: hidconfig.py now splits long events across multiple frames with a continuation flag, the tool reassembles them, and the regexes are truncation-tolerant anyway as a fallback. Verified with a simulated split-frame round-trip. (Bonus: your debug logs will no longer show cut-off lines.)
-The bug that ate your lalt+space was mine, not your editing — I owe you a correction. macroToText writes lalt, but textToMacro only recognized alt — so any save from the Macros textarea silently stripped every left-prefixed modifier. My earlier blank-lines explanation was wrong; adding pauses just happened to trigger a save. Fixed and regression-tested with the exact macro-2 sequence.
-Phase 9 items, all in:
-
-Events button turns red with a pulsing ● Recording indicator while active; Stop/Clear give a brief flash on click so you know they registered.
-Chord lines only appear on click — clicking a mapped input shows its chord; clicking a layer-source key (like CapsLock) shows all its chords; clicking empty space clears.
-Esc key fixed: removed from the wrong spot next to RShift (now a spacer), and the top-left `~ key shows a small grey "esc" sub-label reflecting the Fn-layer behavior you described.
-Mouse wireframe redrawn side-on: Left/Right/wheel all face left, matching the thumb rows; separate scroll-up/scroll-down click targets with their own live flashes; grey row labels — "← Thumb top area", "← Natural thumb area", "← Thumb reach area".
-Dropdown colors fixed — selects and options now use explicit system Field/FieldText colors instead of transparent-inherit, which is what caused white-on-white in Edge's dark mode.
-Save with backups + on-device profiles: every ⬆ Save to device now automatically snapshots the outgoing file to ~/expander/backups/bridge_config.json.YYYYMMDD-HHMMSS on the Pi first. And there's a new profile bar in the header: save the current config+expansions as a named profile on the Pi, see the list (auto-loads on connect), and load any one back (engine hot-reloads, editor refreshes). Tested: save → mutate → load restores, list works, names are sanitized server-side.
-Also reconciled the repo with your Pi first — the watchdog and winmode-confirm patches from the outage are now in the canonical expander.py (9/9 applied), so this zip won't regress anything you fixed via the paste scripts.
-
-Deploy:
-
-bash
-scp expander.py hidconfig.py joshpenman@10.55.0.1:/home/joshpenman/expander/
-ssh joshpenman@10.55.0.1 'python3 -m py_compile ~/expander/expander.py ~/expander/hidconfig.py && echo OK && sudo systemctl restart expander hidconfig'
-(expander.py only matters if the paste-script patches didn't fully apply on your side — it's the same content either way, safe to overwrite.) Then swap bridge-tool.html on the PC.
-
-To verify the highlighting fix specifically: Connect → ▶ Events (button should go red) → type on the Targus while watching the keyboard wireframe — red flashes on your raw keys, yellow on what gets sent, green during macros, blue during expansions. If red works but yellow doesn't, tell me — that would mean the daemon didn't get updated (old single-frame events).
-
-Still parked from before: your E9 button-code capture for button_inputs, and the M2 timing-trim verdict.
-
-
-Pi hid bridge
-ZIP 
-
-Hidconfig
-PY 
-
-Bridge tool
-Code · HTML 
-
-Expander
-PY 
-
-
-
-
-
-
-
-Claude is AI and can make mistakes. Please double-check responses.
-
-
-Bridge tool · HTML
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -270,7 +83,7 @@ border-radius:10px;padding:.6rem;font-size:.83rem;box-shadow:0 4px 18px rgba(0,0
 color:#000;font-weight:700;cursor:grab}
 a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
 </style></head><body>
- 
+
 <div class="bar">
   <h1 style="margin:0">🔌 Pi HID Bridge</h1>
   <button class="primary" id="connect">Connect</button>
@@ -291,7 +104,7 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
   <button id="profsave" disabled>Save current as profile</button>
   <span class="muted">Every "Save to device" also makes a timestamped backup on the Pi automatically.</span>
 </div>
- 
+
 <details class="dbg"><summary>🐞 Debug monitors</summary>
   <div style="padding:0 1rem 1rem">
   <div class="bar"><button id="evon" disabled>▶ Events</button>
@@ -302,7 +115,7 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
     <div><div class="muted"><b>➡ SENT</b> to this PC</div><div class="logbox" id="outlog"></div></div>
   </div></div>
 </details>
- 
+
 <div class="tabs" id="toptabs">
   <div class="tab on" data-t="map">Mapping</div>
   <div class="tab" data-t="macros">Macros</div>
@@ -310,7 +123,7 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
   <div class="tab" data-t="expr">Expressions</div>
   <div class="tab" data-t="bt">Bluetooth</div>
 </div>
- 
+
 <div id="page-map">
   <div class="pills" id="layers"></div>
   <div id="chordbar">
@@ -331,9 +144,9 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
   <p class="muted">Click a button or key. Dark-yellow inputs start chords (layers);
   click a dashed line to inspect its chord.</p></div>
 </div>
- 
+
 <div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div></div>
- 
+
 <div id="page-exp" style="display:none"><div class="panel">
   <div class="bar"><button id="expread" disabled>⬇ Read expansions</button>
     <button id="expwrite" class="primary" disabled>⬆ Save expansions</button></div>
@@ -342,7 +155,7 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
   <p class="muted">Triggers like <code>\sig</code>; values may embed chords: <code>{{ctrl+c}}</code>.
   Built-ins: <code>\dt \tm \tdt</code>.</p>
 </div></div>
- 
+
 <div id="page-expr" style="display:none"><div class="panel">
   <h2 style="font-size:1rem">Expressions (implemented in Python on the Pi — documented here)</h2>
   <p><b>Scroll acceleration</b> (layer 0 wheel): momentum <code>v = v·0.98^dt_ms + detents</code>,
@@ -353,7 +166,7 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
   <p><b>DPI cycle</b> (software pointer scale): factors <code>[1.0, 1.5, 2.0, 0.5]</code>
   (<code>DPI_FACTORS</code>), applied with fractional accumulation.</p>
 </div></div>
- 
+
 <div id="page-bt" style="display:none"><div class="panel">
   <div class="bar">
     <button id="btscan" disabled>🔍 Scan (~12 s)</button>
@@ -364,10 +177,10 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
   <div id="btdevices"></div>
   <div class="logbox" id="btout" style="height:150px;margin-top:.6rem"></div>
 </div></div>
- 
+
 <div id="dragmsg">Drag a key/button here onto the input you want to replace it with</div>
 <div id="popover"></div>
- 
+
 <script>
 /* ============ transport ============ */
 const RPT=32,CHUNK=RPT-4;
@@ -521,7 +334,7 @@ $('expread').onclick=()=>getFile(1);
 $('expwrite').onclick=()=>{collectExp();putFile(1,exps);};
 function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wheel_by_layer',
 'port2_kbd','tap_hold','button_inputs','button_labels'])if(!cfg[k])cfg[k]={};}
- 
+
 /* ============ names ============ */
 const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:'H',0x0c:'I',
 0x0d:'J',0x0e:'K',0x0f:'L',0x10:'M',0x11:'N',0x12:'O',0x13:'P',0x14:'Q',0x15:'R',0x16:'S',
@@ -580,13 +393,13 @@ if(k==='macro')return link(a[1]);
 if(k==='macro_up')return link(a[1])+'↑';
 if(k==='macro_both')return link(a[1])+'/'+link(a[2])+'↑';
 return actShort(a);}
- 
+
 /* ============ layer sources ============ */
 function layerSources(){ // layer -> {type:'key'|'btn', id}
   const out={1:{type:'key',id:0x39}};
   for(const[b,v]of Object.entries(cfg.tap_hold||{}))out[v[1]]={type:'btn',id:+b};
   return out;}
- 
+
 /* ============ rendering ============ */
 function render(){
   if(!cfg)return;
@@ -679,7 +492,7 @@ function renderKbd(){
     else d.style.opacity=.45;
     (i<6?lh:rh).appendChild(d);});
 }
- 
+
 /* ============ chord lines ============ */
 function elFor(t){ if(t.type==='btn')return document.querySelector(`#mousesvg [data-btn="${t.id}"]`);
   if(t.type==='key')return document.querySelector(`.key[data-usage="${t.id}"]`);return null;}
@@ -808,7 +621,7 @@ function dropOn(e,target){
     else toast('CapsLock layer source is fixed in the engine',true);}
   dragPayload=null;}
 $('pluspill').ondragstart=e=>{window._plusDrag=true;e.dataTransfer.setData('pluspill','1');};
- 
+
 /* ============ editor panel ============ */
 function actionToUI(a){if(!a)return{press:'pass',release:'none'};const k=a[0];
 if(k==='btn')return{press:'btn',pressBtn:a[1],release:'none'};
@@ -940,7 +753,7 @@ function renderWheelEd(ed){
       m==='macro_updown'?['macro_updown',+v1,+v2]:['macro_per',+v1,+v2];});
   refresh();
 }
- 
+
 /* ============ macros tab ============ */
 function usageName(u){const p=u>>>16,x=u&0xffff;
 if(p===9)return'btn'+x;if(u===0x00010038)return'wheel';
@@ -975,7 +788,7 @@ function gotoMacro(n){switchTab('macros');const d=$('macro-'+n);
 if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});
 d.classList.add('flashtgt');setTimeout(()=>d.classList.remove('flashtgt'),1600);}}
 window.gotoMacro=gotoMacro;
- 
+
 /* ============ expansions tab ============ */
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
@@ -997,7 +810,7 @@ function collectExp(){exps={};if(!cfg.exp_names)cfg.exp_names={};
       if(l&&l.value.trim())newNames[k.value.trim()]=l.value.trim();}});
   cfg.exp_names=newNames;}
 window.addExpRow=addExpRow;
- 
+
 /* ============ live highlighting ============ */
 let macroActive=false,expandFlash=0;
 function flash(el,cls){if(!el)return;el.classList.add(cls);setTimeout(()=>el.classList.remove(cls),280);}
@@ -1020,7 +833,7 @@ function liveOut(txt){
   const bm=txt.match(/mouse btns=0x([0-9a-f]+)/i);
   if(bm){const bits=parseInt(bm[1],16);
     for(let b=1;b<=5;b++)if(bits&(1<<(b-1)))flash(document.querySelector(`#mousesvg [data-btn="${b}"]`),cls);}}
- 
+
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
@@ -1031,13 +844,3 @@ document.querySelectorAll('#toptabs .tab').forEach(t=>t.onclick=()=>switchTab(t.
 window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
 $('stage').onclick=e=>{if(e.target.id==='chordsvg'||e.target.id==='stage')clearChordSel();};
 </script></body></html>
- 
-
-
-
-
-
-
-
-
-
