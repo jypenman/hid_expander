@@ -275,6 +275,11 @@ $('connect').onclick=async()=>{
   setConn(true);getFile(0);
   setTimeout(()=>getFile(1),500);       // expansions load automatically now too
   setTimeout(()=>pfCmd('list'),900);
+  // start the event stream automatically so wireframe highlighting works
+  // all the time, not just while the debug panel is being watched -- the
+  // panel itself can stay collapsed, this only controls whether the Pi
+  // is sending event data at all
+  send([EVENTS_ON]); $('evon').classList.add('rec'); $('evon').textContent='● Recording';
 };
 $('read').onclick=()=>getFile(0);
 $('write').onclick=()=>putFile(0,cfg);
