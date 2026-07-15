@@ -147,14 +147,28 @@ a.mlink{color:var(--hi);cursor:pointer;text-decoration:underline}
 
 <div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div></div>
 
-<div id="page-exp" style="display:none"><div class="panel">
+<div id="page-exp" style="display:none">
+  <div class="panel">
+    <h2 style="font-size:1rem">Date &amp; time triggers</h2>
+    <p class="muted">These are built into the engine (not stored in
+    expansions.json) -- edit the trigger text below, then use the normal
+    <b>⬆ Save to device</b> button at the top to apply.</p>
+    <div class="row">
+      <div><label>Today's date</label><input type="text" id="trigDate"></div>
+      <div><label>Current time</label><input type="text" id="trigTime"></div>
+      <div><label>Date + time</label><input type="text" id="trigDatetime"></div>
+    </div>
+  </div>
+  <div class="panel">
   <div class="bar"><button id="expread" disabled>⬇ Read expansions</button>
-    <button id="expwrite" class="primary" disabled>⬆ Save expansions</button></div>
+    <button id="expwrite" class="primary" disabled>⬆ Save expansions</button>
+    <span class="muted">Expansions now also auto-load when you Connect.</span></div>
   <table style="width:100%" id="exptable"></table>
   <button onclick="addExpRow('','')">+ row</button>
   <p class="muted">Triggers like <code>\sig</code>; values may embed chords: <code>{{ctrl+c}}</code>.
-  Built-ins: <code>\dt \tm \tdt</code>.</p>
-</div></div>
+  Date/time trigger text is set above, not hardcoded to <code>\dt \tm \tdt</code> anymore.</p>
+  </div>
+</div>
 
 <div id="page-expr" style="display:none"><div class="panel">
   <h2 style="font-size:1rem">Expressions (implemented in Python on the Pi — documented here)</h2>
@@ -258,7 +272,9 @@ $('connect').onclick=async()=>{
   if(!ds.length)return;
   device=ds.find(d=>d.collections.some(c=>c.usagePage===0xFF00))||ds[0];
   await device.open();device.addEventListener('inputreport',onReport);
-  setConn(true);getFile(0);setTimeout(()=>pfCmd('list'),600);
+  setConn(true);getFile(0);
+  setTimeout(()=>getFile(1),500);       // expansions load automatically now too
+  setTimeout(()=>pfCmd('list'),900);
 };
 $('read').onclick=()=>getFile(0);
 $('write').onclick=()=>putFile(0,cfg);
@@ -333,7 +349,8 @@ $('btlist').onclick=()=>btCmd('list');
 $('expread').onclick=()=>getFile(1);
 $('expwrite').onclick=()=>{collectExp();putFile(1,exps);};
 function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wheel_by_layer',
-'port2_kbd','tap_hold','button_inputs','button_labels'])if(!cfg[k])cfg[k]={};}
+'port2_kbd','tap_hold','button_inputs','button_labels'])if(!cfg[k])cfg[k]={};
+if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};}
 
 /* ============ names ============ */
 const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:'H',0x0c:'I',
@@ -792,6 +809,18 @@ window.gotoMacro=gotoMacro;
 /* ============ expansions tab ============ */
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
+  if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};
+  const byKind=k=>Object.keys(cfg.dynamic_triggers).find(t=>cfg.dynamic_triggers[t]===k)||'';
+  $('trigDate').value=byKind('date');
+  $('trigTime').value=byKind('time');
+  $('trigDatetime').value=byKind('datetime');
+  const rebind=()=>{
+    const nt={};
+    if($('trigDate').value.trim())nt[$('trigDate').value.trim()]='date';
+    if($('trigTime').value.trim())nt[$('trigTime').value.trim()]='time';
+    if($('trigDatetime').value.trim())nt[$('trigDatetime').value.trim()]='datetime';
+    cfg.dynamic_triggers=nt;};
+  ['trigDate','trigTime','trigDatetime'].forEach(id=>$(id).onchange=rebind);
   const t=$('exptable');
   t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
   for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
