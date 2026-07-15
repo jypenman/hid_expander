@@ -202,6 +202,9 @@ const PING=0x20,GET=0x01,PUT_BEGIN=0x02,PUT_CHUNK=0x03,PUT_END=0x04,EVENTS_ON=0x
 const PONG=0xA0,CFG_BEGIN=0x81,CFG_CHUNK=0x82,CFG_END=0x83,EVENT=0x90,ACK=0xE0,ERR=0xE1;
 const BT_CMD=0x30,BT_BEGIN=0xB0,BT_CHUNK=0xB1,BT_END=0xB2;
 const PROF_CMD=0x50,PF_BEGIN=0xC0,PF_CHUNK=0xC1,PF_END=0xC2;
+const CLOCK_CMD=0x60;
+function syncClock(){const t=String(Date.now());const b=new TextEncoder().encode(t);
+  send([CLOCK_CMD,b.length,...b]);}
 let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let rxTotal=0,rxGot={};
@@ -280,6 +283,7 @@ $('connect').onclick=async()=>{
   // panel itself can stay collapsed, this only controls whether the Pi
   // is sending event data at all
   send([EVENTS_ON]); $('evon').classList.add('rec'); $('evon').textContent='● Recording';
+  syncClock();   // Bug 2: push this browser's clock to the Pi on every connect
 };
 $('read').onclick=()=>getFile(0);
 $('write').onclick=()=>putFile(0,cfg);
@@ -849,10 +853,26 @@ window.addExpRow=addExpRow;
 let macroActive=false,expandFlash=0;
 function flash(el,cls){if(!el)return;el.classList.add(cls);setTimeout(()=>el.classList.remove(cls),280);}
 function liveRaw(txt){
-  const m=txt.match(/key code=(\d+) val=([012])/);if(!m)return;
-  const code=+m[1];if(+m[2]===0)return;
-  const u=EV2HID[code];if(u)flash(document.querySelector(`.key[data-usage="${u}"]`),'flash-red');
-  const b=EVBTN[code];if(b)flash(document.querySelector(`#mousesvg [data-btn="${b}"]`),'flash-red');}
+  // real mouse buttons (BTN_* on the mouse's main interface)
+  const mb=txt.match(/mbtn code=(\d+) val=([012])/);
+  if(mb){ if(+mb[2]===0)return;
+    const b=EVBTN[+mb[1]]; if(b)flash(document.querySelector(`#mousesvg [data-btn="${b}"]`),'flash-red');
+    return; }
+  const m=txt.match(/key code=(\d+) val=([012]) port2=(True|False)/);if(!m)return;
+  const code=+m[1],isPort2=m[3]==='True';if(+m[2]===0)return;
+  if(isPort2){
+    // this key-style event came from the MOUSE's keyboard-emulation
+    // sub-interface, not your real keyboard -- flashing the keyboard
+    // wireframe for this would be actively wrong. Try to resolve it to
+    // a logical mouse button via configured button_inputs; otherwise
+    // don't guess.
+    const u=EV2HID[code];
+    const hexKey=u!==undefined?('kbd:0x'+u.toString(16)):null;
+    const btn=hexKey&&cfg.button_inputs?cfg.button_inputs[hexKey]:null;
+    if(btn)flash(document.querySelector(`#mousesvg [data-btn="${btn}"]`),'flash-red');
+    return;
+  }
+  const u=EV2HID[code];if(u)flash(document.querySelector(`.key[data-usage="${u}"]`),'flash-red');}
 function liveOut(txt){
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
