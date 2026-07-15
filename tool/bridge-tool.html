@@ -35,6 +35,7 @@ svg .region.flash-red{fill:rgba(239,68,68,.55)!important}
 svg .region.flash-yel{fill:rgba(245,158,11,.55)!important}
 svg .region.flash-grn{fill:rgba(34,197,94,.55)!important}
 svg .region.flash-blu{fill:rgba(59,130,246,.6)!important}
+svg .region.opacity-dead{opacity:.35}
 svg text{font:10px system-ui;fill:currentColor;pointer-events:none}
 .kb{display:flex;gap:1.6rem;flex-wrap:wrap}
 .kb .half{display:grid;gap:3px}
@@ -437,9 +438,13 @@ function render(){
   requestAnimationFrame(drawChords);
 }
 /* E9 wireframe: right btn / wheel + 10,11 / left btn / thumb rows 7-8-9, 4-5-6, 0-3 */
-function mregion(id,shape){const m=cfg.mouse_mappings[`${layer},${id}`];
-const src=Object.values(layerSources()).some(s=>s.type==='btn'&&s.id===id);
-return shape.replace('CLS',`region ${m?'mapped':''} ${src?'layerkey':''} ${sel&&sel.type==='btn'&&sel.id===id?'sel':''}`)
+function mregion(id,shape){
+  const tgt=resolveBox(id);
+  const m=tgt!=null&&cfg.mouse_mappings[`${layer},${tgt}`];
+  const src=tgt!=null&&Object.values(layerSources()).some(s=>s.type==='btn'&&s.id===tgt);
+  const isSel=sel&&sel.type==='btn'&&tgt!=null&&sel.id===tgt;
+  const dead=tgt==null?'opacity-dead':'';
+  return shape.replace('CLS',`region ${m?'mapped':''} ${src?'layerkey':''} ${isSel?'sel':''} ${dead}`)
 .replace('DID',`data-btn="${id}"`);}
 function renderMouse(){
   const w=$('mousewrap');
@@ -473,15 +478,23 @@ function renderMouse(){
   h+=`</svg><div class="muted" id="mchips"></div>`;
   w.innerHTML=h;
   let chips='';for(const b of[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]){
-    const a=cfg.mouse_mappings[`${layer},${b}`];if(a)chips+=`<div>${btnLabel(b)} \u2192 ${actHTML(a)}</div>`;}
+    const t=resolveBox(b);
+    const label=b<=3?btnLabel(b):boxTag(b);
+    if(t==null){chips+=`<div class="muted">${label} \u2014 not wired to anything</div>`;continue;}
+    const a=cfg.mouse_mappings[`${layer},${t}`];
+    if(a)chips+=`<div>${label} \u2192 ${actHTML(a)}</div>`;
+    else if(t!==b)chips+=`<div class="muted">${label} (routes to slot ${t}) \u2014 no action on this layer</div>`;}
   const wm=cfg.wheel_by_layer[layer];if(wm&&wm[0]!=='pass')chips+=`<div>Wheel \u2192 ${wm.join(' ')}</div>`;
   $('mchips').innerHTML=chips;
   w.querySelectorAll('[data-btn]').forEach(r=>{
-    r.onclick=()=>{sel={type:'btn',id:+r.dataset.btn};render();};
+    const boxId=+r.dataset.btn;
+    r.onclick=()=>{const t=resolveBox(boxId);
+      if(t==null){toast(boxTag(boxId)+' isn\'t routed to anything yet (no button_inputs entry)',true);return;}
+      sel={type:'btn',id:t,physical:boxId};render();};
     r.setAttribute('draggable','true');
-    r.ondragstart=e=>dragStart(e,{type:'btn',id:+r.dataset.btn});
+    r.ondragstart=e=>{const t=resolveBox(boxId);if(t!=null)dragStart(e,{type:'btn',id:t});};
     r.ondragover=e=>e.preventDefault();
-    r.ondrop=e=>dropOn(e,{type:'btn',id:+r.dataset.btn});});
+    r.ondrop=e=>{const t=resolveBox(boxId);if(t!=null)dropOn(e,{type:'btn',id:t});};});
   w.querySelectorAll('[data-scroll]').forEach(r=>{
     r.onclick=()=>{sel={type:'wheel'};render();};});
 }
@@ -714,7 +727,8 @@ function renderEditor(){
   const key=`${layer},${sel.id}`;
   const cur=isBtn?cfg.mouse_mappings[key]:(cfg.kbd_mappings[key]!==undefined?['key',cfg.kbd_mappings[key]]:null);
   const ui=actionToUI(cur);
-  ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnLabel(sel.id):(KEYS[sel.id]||'?')} — layer ${layer}</h2>
+  const physTag=isBtn&&sel.physical!==undefined&&sel.physical!==sel.id?` <span class="muted">(${boxTag(sel.physical)})</span>`:'';
+  ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnLabel(sel.id):(KEYS[sel.id]||'?')}${physTag} — layer ${layer}</h2>
   <div class="row"><div>
     <label>On press</label><select id="press">
       <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
@@ -857,6 +871,25 @@ function flash(el,cls){if(!el)return;el.classList.add(cls);setTimeout(()=>el.cla
 // button currently DOES and change often. This describes where a
 // physical press shows up on the wireframe, which never changes just
 // because we reassigned the button's function.
+const PHYSICAL_RAW = {
+  12:{kind:'kbd',usage:0x27}, 13:{kind:'kbd',usage:0x1e}, 14:{kind:'kbd',usage:0x1f}, 15:{kind:'kbd',usage:0x20},
+  4:{kind:'kbd',usage:0x21}, 5:{kind:'kbd',usage:0x22}, 6:{kind:'kbd',usage:0x23},
+  7:{kind:'mbtn',code:276}, 8:{kind:'mbtn',code:275}, 9:{kind:'kbd',usage:0xe3},
+  10:null, 11:null,
+  1:{kind:'mbtn',code:272}, 2:{kind:'mbtn',code:273}, 3:{kind:'mbtn',code:274}};
+const DEFAULT_MBTN = {272:1,273:2,274:3,275:4,276:5};   // engine's BTN_CODES default
+function resolveBox(boxId){
+  const raw=PHYSICAL_RAW[boxId]; if(!raw)return null;
+  const bi=cfg&&cfg.button_inputs||{};
+  if(raw.kind==='mbtn'){
+    const ov=bi['btn:'+raw.code]; return ov!==undefined?ov:(DEFAULT_MBTN[raw.code]??null);
+  }
+  const key='kbd:0x'+raw.usage.toString(16);
+  return bi[key]!==undefined?bi[key]:null;
+}
+function boxTag(boxId){
+  return boxId>=12?('physical '+({12:'0',13:'1',14:'2',15:'3'}[boxId])):('physical '+boxId);
+}
 const RAW_DIGITBTN_BOX = {11:12, 2:13, 3:14, 4:15, 5:4, 6:5, 7:6};  // port2 digit keys (0-6)
 const RAW_MBTN_BOX     = {276:7, 275:8};                            // real BTN_* codes (7, 8)
 const RAW_PORT2_CHORD_BOX = {125:9};                                // LWin half of button 9's Win+D
