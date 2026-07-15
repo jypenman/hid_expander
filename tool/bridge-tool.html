@@ -852,20 +852,35 @@ window.addExpRow=addExpRow;
 /* ============ live highlighting ============ */
 let macroActive=false,expandFlash=0;
 function flash(el,cls){if(!el)return;el.classList.add(cls);setTimeout(()=>el.classList.remove(cls),280);}
+// Fixed PHYSICAL POSITION map for RAW highlighting -- deliberately
+// independent of button_inputs/mouse_mappings, which describe what a
+// button currently DOES and change often. This describes where a
+// physical press shows up on the wireframe, which never changes just
+// because we reassigned the button's function.
+const RAW_DIGITBTN_BOX = {11:12, 2:13, 3:14, 4:15, 5:4, 6:5, 7:6};  // port2 digit keys (0-6)
+const RAW_MBTN_BOX     = {276:7, 275:8};                            // real BTN_* codes (7, 8)
+const RAW_PORT2_CHORD_BOX = {125:9};                                // LWin half of button 9's Win+D
+
 function liveRaw(txt){
-  // real mouse buttons (BTN_* on the mouse's main interface)
   const mb=txt.match(/mbtn code=(\d+) val=([012])/);
   if(mb){ if(+mb[2]===0)return;
-    const b=EVBTN[+mb[1]]; if(b)flash(document.querySelector(`#mousesvg [data-btn="${b}"]`),'flash-red');
+    const code=+mb[1];
+    const box = RAW_MBTN_BOX[code] !== undefined ? RAW_MBTN_BOX[code] : EVBTN[code];
+    if(box)flash(document.querySelector(`#mousesvg [data-btn="${box}"]`),'flash-red');
     return; }
   const m=txt.match(/key code=(\d+) val=([012]) port2=(True|False)/);if(!m)return;
   const code=+m[1],isPort2=m[3]==='True';if(+m[2]===0)return;
   if(isPort2){
-    // this key-style event came from the MOUSE's keyboard-emulation
-    // sub-interface, not your real keyboard -- flashing the keyboard
-    // wireframe for this would be actively wrong. Try to resolve it to
-    // a logical mouse button via configured button_inputs; otherwise
-    // don't guess.
+    if(RAW_DIGITBTN_BOX[code]!==undefined){
+      flash(document.querySelector(`#mousesvg [data-btn="${RAW_DIGITBTN_BOX[code]}"]`),'flash-red');
+      return;
+    }
+    if(RAW_PORT2_CHORD_BOX[code]!==undefined){
+      flash(document.querySelector(`#mousesvg [data-btn="${RAW_PORT2_CHORD_BOX[code]}"]`),'flash-red');
+      return;
+    }
+    // fallback for a genuinely new/unmapped port2 usage: try to resolve
+    // via configured button_inputs rather than showing nothing
     const u=EV2HID[code];
     const hexKey=u!==undefined?('kbd:0x'+u.toString(16)):null;
     const btn=hexKey&&cfg.button_inputs?cfg.button_inputs[hexKey]:null;
