@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 18 Bugfix 6.5</title>
+<title>HID Config 17.7</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -48,7 +48,8 @@ font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12)
 .key.mapped{border-color:var(--ok);border-width:2px}
 .key.layerkey{background:rgba(184,134,11,.45)}
 .key.chordhl{outline:2px dashed var(--warn);outline-offset:1px}
-.key.flash-red{background:rgba(239,68,68,.55)!important}
+.key.held,.key.flash-red{background:rgba(239,68,68,.55)!important}
+svg .region.held{fill:rgba(239,68,68,.55)!important}
 .key.flash-yel{background:rgba(245,158,11,.55)!important}
 .key.flash-grn{background:rgba(34,197,94,.55)!important}
 .key.flash-blu{background:rgba(59,130,246,.6)!important}
@@ -224,7 +225,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <span class="muted" id="showkeysinfo"></span>
     <details id="legend" open style="margin-left:auto"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
       <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
-        <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red flash</span> raw key from a device ·
+        <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
         <span style="background:rgba(245,158,11,.55);padding:0 .3rem;border-radius:3px">yellow flash</span> key sent to the PC ·
         <span style="background:rgba(34,197,94,.55);padding:0 .3rem;border-radius:3px">green flash</span> macro output ·
         <span style="background:rgba(59,130,246,.6);padding:0 .3rem;border-radius:3px">blue flash</span> expansion output<br>
@@ -419,6 +420,7 @@ let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
 let _showGroups=true,_groupsCollapsed=false;   // 6.9 master highlight toggle + collapse
+const _heldKeys=new Set(),_heldBtns=new Set();  // 6.10 keys/buttons currently held down
 let expSets=null,curSet=null;
 function esc(x){return String(x??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));}
 function slug(x){return (String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''))||('dev'+Math.floor(Math.random()*1e4));}
@@ -574,7 +576,7 @@ let _showKeysState=0;
 $('showkeys').onclick=()=>{
   _showKeysState=(_showKeysState+1)%3;
   if(_showKeysState===1){eventsOn(60);$('showkeys').textContent='⏱ Showing 60 s (click: keep on)';
-    $('showkeysinfo').textContent='wireframes flash as you type';}
+    $('showkeysinfo').textContent='keys stay lit while held; outputs flash';}
   else if(_showKeysState===2){eventsOn(0);$('showkeys').textContent='● Showing until stopped (click: stop)';}
   else{send([EVENTS_OFF]);$('evon').classList.remove('rec');$('evon').textContent='▶ Events';
     $('showkeys').textContent='▶ Show key presses';$('showkeysinfo').textContent='';}};
@@ -994,7 +996,21 @@ function renderStage(){
   window._supSet=suppressedMembers();
   renderGroupsCard(c);
   c.querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>toggleEdit(b.dataset.ed));
-  updateConStat();}
+  updateConStat();reapplyHeld();}
+// 6.10: re-apply the persistent "held" highlight after a re-render so a key
+// held down across a render keeps its highlight.
+function reapplyHeld(){
+  _heldKeys.forEach(u=>document.querySelectorAll(`.key[data-usage="${u}"]`).forEach(e=>e.classList.add('held')));
+  _heldBtns.forEach(box=>{
+    const r=document.querySelector(`#mousesvg [data-btn="${box}"]`);if(r)r.classList.add('held');
+    document.querySelectorAll(`.key[data-btn-lay="${box}"]`).forEach(e=>e.classList.add('held'));});}
+function holdKey(u,on){
+  if(on)_heldKeys.add(u);else _heldKeys.delete(u);
+  document.querySelectorAll(`.key[data-usage="${u}"]`).forEach(e=>e.classList.toggle('held',on));}
+function holdBtn(box,on){
+  if(on)_heldBtns.add(box);else _heldBtns.delete(box);
+  const r=document.querySelector(`#mousesvg [data-btn="${box}"]`);if(r)r.classList.toggle('held',on);
+  document.querySelectorAll(`.key[data-btn-lay="${box}"]`).forEach(e=>e.classList.toggle('held',on));}
 function groupActive(g){return g&&g.active!==false;}
 function groupMembersVisible(){
   const out={};
@@ -2194,40 +2210,27 @@ const RAW_MBTN_BOX     = {276:7, 275:8};                            // real BTN_
 const RAW_PORT2_CHORD_BOX = {125:9};                                // LWin half of button 9's Win+D
 
 function liveRaw(txt){
+  // 6.10: press (val 1/2) = hold the highlight on; release (val 0) = turn it off.
   const mb=txt.match(/mbtn code=(\d+) val=([012])/);
-  if(mb){ if(+mb[2]===0)return;
-    const code=+mb[1];
+  if(mb){
+    const code=+mb[1],down=+mb[2]!==0;
     const box = RAW_MBTN_BOX[code] !== undefined ? RAW_MBTN_BOX[code] : EVBTN[code];
-    if(box){flash(document.querySelector(`#mousesvg [data-btn="${box}"]`),'flash-red');
-      document.querySelectorAll(`.key[data-btn-lay="${box}"]`).forEach(e2=>flash(e2,'flash-red'));}
+    if(box)holdBtn(box,down);
     return; }
   const m=txt.match(/key code=(\d+) val=([012]) port2=(True|False)/);if(!m)return;
-  const code=+m[1],isPort2=m[3]==='True';if(+m[2]===0)return;
+  const code=+m[1],isPort2=m[3]==='True',down=+m[2]!==0;
   if(isPort2){
-    if(RAW_DIGITBTN_BOX[code]!==undefined){
-      flash(document.querySelector(`#mousesvg [data-btn="${RAW_DIGITBTN_BOX[code]}"]`),'flash-red');
-      return;
-    }
-    if(RAW_PORT2_CHORD_BOX[code]!==undefined){
-      flash(document.querySelector(`#mousesvg [data-btn="${RAW_PORT2_CHORD_BOX[code]}"]`),'flash-red');
-      return;
-    }
-    // fallback for a genuinely new/unmapped port2 usage: try to resolve
-    // via configured button_inputs rather than showing nothing
-    const u=EV2HID[code];
-    const hexKey=u!==undefined?('kbd:0x'+u.toString(16)):null;
+    if(RAW_DIGITBTN_BOX[code]!==undefined){holdBtn(RAW_DIGITBTN_BOX[code],down);return;}
+    if(RAW_PORT2_CHORD_BOX[code]!==undefined){holdBtn(RAW_PORT2_CHORD_BOX[code],down);return;}
+    // fallback for a genuinely new/unmapped port2 usage: resolve via button_inputs
+    const u2=EV2HID[code];
+    const hexKey=u2!==undefined?('kbd:0x'+u2.toString(16)):null;
     const btn=hexKey&&cfg.button_inputs?cfg.button_inputs[hexKey]:null;
-    if(btn)flash(document.querySelector(`#mousesvg [data-btn="${btn}"]`),'flash-red');
+    if(btn)holdBtn(btn,down);
     return;
   }
   const u=EV2HID[code];if(!u)return;
-  const dm=txt.match(/ dev=(\S+)/);
-  const el=(dm&&document.querySelector(`.key[data-usage="${u}"][data-dev="${dm[1]}"]`))
-    ||document.querySelector(`.key[data-usage="${u}"]`);
-  // passthrough keys: raw + immediate output hit the SAME element and the
-  // yellow OUT flash painted over the red -- use the combined style (red
-  // fill, thick yellow outline) so passthrough is readable at a glance
-  flash(el,el&&!el.classList.contains('mapped')?'flash-pass':'flash-red');}
+  holdKey(u,down);}
 function liveOut(txt){
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
