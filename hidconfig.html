@@ -135,6 +135,14 @@ padding:.8rem .9rem;width:250px;display:none}
 #rightcol{flex:0 0 300px;position:sticky;top:.5rem;max-height:calc(100vh - 1rem);
 overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 #rightcol .panel{margin:0}
+#editor{position:fixed;z-index:80;width:355px;max-width:94vw;max-height:82vh;overflow:auto;
+  background:Canvas;color:CanvasText;border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 10px 40px rgba(0,0,0,.4);padding:0;display:none}
+#editorhead{display:flex;align-items:center;gap:.4rem;padding:.45rem .6rem;
+  border-bottom:1px solid var(--line);cursor:move;user-select:none;
+  background:var(--panel);border-radius:12px 12px 0 0;font-weight:600;font-size:.9rem}
+#editorhead button{padding:.1rem .5rem;font-size:.78rem}
+#editorbody{padding:.7rem .8rem}
 #btlogpane{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-top:.5rem}
 #btlogpane>summary{cursor:pointer;padding:.55rem .8rem;font-weight:600;white-space:nowrap;font-size:.85rem}
 @media(max-width:1000px){#maprow{flex-direction:column}
@@ -167,14 +175,26 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </div>
 <div class="bar" id="profbar">
   <span class="muted"><b>On-device profiles:</b></span>
+  <span id="curprof" class="status" title="the profile this config was last saved as / loaded from">working config (unsaved)</span>
   <select id="proflist" style="width:auto;min-width:160px" disabled><option>(connect first)</option></select>
   <button id="profload" disabled>Load selected</button>
   <input type="text" id="profname" placeholder="new profile name" style="width:170px">
   <button id="profsave" disabled>Save current as profile</button>
   <span class="muted">Every "Save to device" also makes a timestamped backup on the Pi automatically.</span>
+  <span style="flex:1"></span>
+  <label style="margin:0;display:inline">🕓 <select id="tzsel" style="width:auto"></select></label>
 </div>
 
-<details class="dbg"><summary>🐞 Debug monitors</summary>
+<div class="tabs" id="toptabs">
+  <div class="tab on" data-t="map">Mapping</div>
+  <div class="tab" data-t="macros">Macros</div>
+  <div class="tab" data-t="exp">Expansions</div>
+  <div class="tab" data-t="expr">Expressions</div>
+  <div class="tab" data-t="os">OS</div>
+  <div class="tab" data-t="bt">Bluetooth</div>
+</div>
+
+<details class="dbg" id="debugmon"><summary>🐞 Debug monitors</summary>
   <div style="padding:0 1rem 1rem">
   <div class="bar"><button id="evon" disabled>▶ Events</button>
     <button id="evoff" disabled>⏸ Stop</button><button id="clear" disabled>Clear</button>
@@ -189,14 +209,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div><div class="muted"><b>➡ SENT</b> to this PC</div><div class="logbox" id="outlog"></div></div>
   </div></div>
 </details>
-
-<div class="tabs" id="toptabs">
-  <div class="tab on" data-t="map">Mapping</div>
-  <div class="tab" data-t="macros">Macros</div>
-  <div class="tab" data-t="exp">Expansions</div>
-  <div class="tab" data-t="expr">Expressions</div>
-  <div class="tab" data-t="bt">Bluetooth</div>
-</div>
 
 <div id="page-map">
  <div id="maprow">
@@ -219,19 +231,18 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <svg id="chordsvg"></svg>
     <div class="devrow" id="devcards"></div>
   </div>
-  <details class="dbg" open><summary>📋 All Custom Remappings</summary>
+  <details class="dbg" id="remappanel" open><summary>📋 All Custom Remappings</summary>
     <div style="padding:0 1rem 1rem">
-      <div id="mtlayers" class="muted" style="margin:.3rem 0"></div>
-      <table style="width:100%;font-size:.82rem" id="maptbl"></table>
-      <div class="muted" id="mtcombos" style="margin-top:.4rem"></div>
-      <h3 style="font-size:.95rem;margin:.9rem 0 .2rem">🎛 Assignments</h3>
-      <div class="bar" style="margin:.2rem 0">
-        <select id="asgnewtype" style="width:auto"><option value="key">Key</option><option value="btn">Button</option></select>
-        <select id="asgnewitem" style="width:auto;min-width:120px"></select>
-        <button id="asgnewadd">＋ Add row</button>
-        <span class="muted">Output opens a search on click · layer boxes place the output on that layer</span>
-      </div>
-      <table style="width:100%;font-size:.82rem" id="asgtbl"></table>
+      <details id="ovpanel" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Overview</summary>
+        <div id="mtlayers" class="muted" style="margin:.3rem 0"></div>
+        <table style="width:100%;font-size:.82rem" id="maptbl"></table>
+        <div class="muted" id="mtcombos" style="margin-top:.4rem"></div>
+      </details>
+      <details id="asgpanel" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Assignments (add / edit / remove)</summary>
+        <p class="muted" style="font-size:.78rem;margin:.3rem 0">Each row is one input. Pick its Input and Output; the layer columns show what fires on each layer (click to change). Group is optional. ✕ removes the row.</p>
+        <table style="width:100%;font-size:.82rem" id="asgtbl"></table>
+        <button id="asgnewadd" style="margin-top:.4rem">＋ Add mapping</button>
+      </details>
     </div>
   </details>
   <div class="panel">
@@ -251,10 +262,14 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
  <details id="btlogpane"><summary>&#128732; Bluetooth Logging</summary>
    <div style="padding:0 .6rem .6rem"><div class="logbox" id="btout2" style="height:220px"></div></div>
  </details>
- <div class="panel" id="editor"><h2 style="font-size:1rem">Select an input</h2>
-  <p class="muted">Click a button or key. Dark-yellow inputs start chords (layers);
-  click a dashed line to inspect its chord. Shift-click keys to build a combo;
-  Alt-click keys to build a typed sequence.</p></div>
+ </div>
+ <div class="panel" id="editor">
+   <div id="editorhead"><span id="editortitle">Mapping editor</span>
+     <span style="flex:1"></span>
+     <button id="editorrevert" title="Discard changes to this input since it was opened">↺ Revert</button>
+     <button id="editorclose" title="Close (Esc). Changes stay pending until you Save to device.">✕</button>
+   </div>
+   <div id="editorbody"></div>
  </div>
  </div>
 </div>
@@ -316,6 +331,38 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   (<code>DPI_FACTORS</code>), applied with fractional accumulation.</p>
 </div></div>
 
+<div id="page-os" style="display:none">
+  <div class="panel">
+    <div class="bar">
+      <b>Active OS:</b> <span id="osactive" class="status on">win</span>
+      <span id="osdetected" class="muted"></span>
+      <label style="margin:0;display:inline"><input type="checkbox" id="osautoswitch"> follow this browser's OS</label>
+      <span style="flex:1"></span>
+      <button id="osadd">＋ Add OS</button>
+    </div>
+    <p class="muted" style="font-size:.8rem">One profile, many OSes. The
+    <b>base</b> columns are what runs by default; each OS column holds only the
+    <i>differences</i> for that OS (a blank cell = same as base). Click a cell
+    to set an OS-specific override; the ⇄ reorders which OS is base.</p>
+    <div id="ostabs" class="pills"></div>
+  </div>
+  <div class="panel">
+    <h3 style="font-size:.95rem;margin:.2rem 0">Per-device scrolling</h3>
+    <p class="muted" style="font-size:.78rem">Tick to invert scroll direction for a device on the selected OS (e.g. natural on Mac, reversed on PC).</p>
+    <table style="width:100%;font-size:.84rem" id="osscroll"></table>
+  </div>
+  <div class="panel">
+    <h3 style="font-size:.95rem;margin:.2rem 0">Unicode typing method <span class="muted">(how ☑ / Δ are typed)</span></h3>
+    <table style="width:100%;font-size:.84rem" id="osuni"></table>
+    <p class="muted" style="font-size:.76rem">macOS needs the <b>“Unicode Hex Input”</b> source enabled &amp; selected for <code>mac_option_hex</code>. Windows <code>win_alt_hex</code> needs the EnableHexNumpad registry setting + Num Lock.</p>
+  </div>
+  <div class="panel">
+    <h3 style="font-size:.95rem;margin:.2rem 0">Macro / mapping differences</h3>
+    <p class="muted" style="font-size:.78rem">Rows are macros &amp; layer mappings that differ (or can differ) per OS. Base is the default; set an OS cell to override just for that OS. Empty = inherits base.</p>
+    <table style="width:100%;font-size:.82rem" id="osgrid"></table>
+  </div>
+</div>
+
 <div id="page-bt" style="display:none"><div class="panel">
   <div class="bar">
     <button id="btscan" disabled>🔍 Scan (~12 s)</button>
@@ -339,7 +386,8 @@ const PONG=0xA0,CFG_BEGIN=0x81,CFG_CHUNK=0x82,CFG_END=0x83,EVENT=0x90,ACK=0xE0,E
 const BT_CMD=0x30,BT_BEGIN=0xB0,BT_CHUNK=0xB1,BT_END=0xB2;
 const PROF_CMD=0x50,PF_BEGIN=0xC0,PF_CHUNK=0xC1,PF_END=0xC2;
 const CLOCK_CMD=0x60;
-function syncClock(){const t=String(Date.now());const b=new TextEncoder().encode(t);
+function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
+  const b=new TextEncoder().encode(t);
   send([CLOCK_CMD,b.length,...b]);}
 let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
@@ -385,7 +433,7 @@ function onReport(e){
     for(const p of parts){buf.set(p,o);o+=p.length;}
     if(buf.length!==rxTotal){toast('short read — try again',true);return;}
     const obj=JSON.parse(new TextDecoder().decode(buf));
-    if(curFile===0){cfg=obj;normalize();render();toast('✓ config read');
+    if(curFile===0){cfg=obj;normalize();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
       $('svcwarn').style.display='none';}
     else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
     else if(curFile===3){
@@ -394,7 +442,8 @@ function onReport(e){
     else if(curFile===4){
       expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
       $('setsave').disabled=false;renderSets();}
-    else{exps=obj;renderExp();toast('✓ expansions read');}}
+    else{exps=obj&&typeof obj==='object'?obj:{};renderExp();toast('✓ expansions read');}
+    _readDone();}
   else if(t===PF_BEGIN){pfGot={};}
   else if(t===PF_CHUNK){pfGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
   else if(t===PF_END){
@@ -410,9 +459,16 @@ function onReport(e){
     for(const p of parts){buf.set(p,o);o+=p.length;}
     btResult(new TextDecoder().decode(buf));}
   else if(t===ACK)toast('✓ saved (hot-reloads ~2s)');
-  else if(t===ERR)toast('✗ '+new TextDecoder().decode(d.slice(1)).replace(/\0+$/,''),true);
+  else if(t===ERR){toast('✗ '+new TextDecoder().decode(d.slice(1)).replace(/\0+$/,''),true);_readDone();}
 }
-async function getFile(fid){curFile=fid;rxGot={};await send([GET,fid]);}
+let _readQ=[],_reading=false,_readTimer=null,_setsChannelOk=false;
+function getFile(fid){_readQ.push(fid);_drainReads();}
+async function _drainReads(){
+  if(_reading||!_readQ.length||!device)return;
+  _reading=true;curFile=_readQ.shift();rxGot={};
+  await send([GET,curFile]);
+  clearTimeout(_readTimer);_readTimer=setTimeout(_readDone,4000);}
+function _readDone(){clearTimeout(_readTimer);_reading=false;_drainReads();}
 async function putFile(fid,obj){
   const data=new TextEncoder().encode(JSON.stringify(obj));
   await send([PUT_BEGIN,data.length&255,(data.length>>8)&255,(data.length>>16)&255,(data.length>>24)&255,fid]);
@@ -435,6 +491,7 @@ $('connect').onclick=async()=>{
   setTimeout(()=>btCmd('list',true),1500);   // primes MAC dropdowns + status chips
   setTimeout(()=>getFile(3),1900);           // engine status -> adopt built-ins
   setTimeout(()=>getFile(4),2300);           // expansion sets bundle
+  setTimeout(applyBrowserOS,2600);           // this browser's OS == the host OS
   // config-read watchdog: if the Pi never answers, say so instead of
   // letting the page sit half-dead
   clearInterval(window._cfgT);window._cfgTries=0;
@@ -453,15 +510,18 @@ $('connect').onclick=async()=>{
 };
 function updateOsBtn(){
   const b=$('ostoggle');if(!b||!cfg)return;
-  const ui=cfg.active_os==='mac'?'mac':'win';
+  const ui=cfg.active_os||'win';
   const eng=lastEng&&lastEng.active_os;
-  b.textContent=(ui==='mac'?' Mac':'🪟 Win')+(eng&&eng!==ui?' ⚠':'');
+  const icon=ui==='win'?'🪟':ui==='mac'?'':'💻';
+  b.textContent=`${icon} ${ui}`+(eng&&eng!==ui?' ⚠':'');
   b.title=(eng&&eng!==ui)?`UI has ${ui} but the engine is running ${eng} — ⬆ Save to device`:
-    'Which OS profile the engine applies. Click to switch, then ⬆ Save to device to apply & persist.';}
+    'Active OS profile. Click to cycle; full control in the OS tab.';}
 $('ostoggle').onclick=()=>{
   if(!cfg){toast('connect first',true);return;}
-  cfg.active_os=cfg.active_os==='mac'?'win':'mac';
-  updateOsBtn();toast('OS set to '+cfg.active_os+' — ⬆ Save to device to apply');};
+  const oses=osKnown();const i=oses.indexOf(cfg.active_os||'win');
+  cfg.active_os=oses[(i+1)%oses.length];
+  updateOsBtn();if($('page-os').style.display!=='none')renderOsTab();
+  toast('OS set to '+cfg.active_os+' — ⬆ Save to device to apply');};
 $('read').onclick=()=>getFile(0);
 $('write').onclick=()=>putFile(0,cfg);
 $('dl').onclick=()=>{const a=document.createElement('a');
@@ -480,6 +540,12 @@ $('clear').onclick=e=>{$('log').innerHTML='';$('outlog').innerHTML='';clickFx(e.
 async function pfCmd(c){
   const b=new TextEncoder().encode(c);
   await send([PROF_CMD,b.length,...b]);}
+function fmtWhen(iso){try{const d=new Date(iso);return d.toLocaleString([], {dateStyle:'medium',timeStyle:'short'});}catch(e){return iso;}}
+function updateCurProf(){
+  const el=$('curprof');if(!el||!cfg)return;
+  const nm=cfg._profile_name,when=cfg._profile_saved;
+  el.textContent=nm?`${nm}${when?' · '+fmtWhen(when):''}`:'working config (unsaved)';
+  el.className='status'+(nm?' on':'');}
 function pfResult(text){
   if(text.startsWith('saved')||text.startsWith('loaded')){
     toast('\u2713 '+text); pfCmd('list');
@@ -494,6 +560,9 @@ function pfResult(text){
 $('profload').onclick=()=>{const n=$('proflist').value;
   if(n&&!n.startsWith('('))pfCmd('load '+n);};
 $('profsave').onclick=()=>{const n=$('profname').value.trim();
+  if(n&&cfg){cfg._profile_name=n;cfg._profile_saved=new Date().toISOString();
+    updateCurProf();putFile(0,cfg);setTimeout(()=>pfCmd('save '+n),400);
+    toast('saving profile "'+n+'"…');return;}
   if(!n){toast('name the profile first',true);return;}
   pfCmd('save '+n);};
 function btLog(t){for(const id of['btout','btout2']){const el=$(id);
@@ -648,7 +717,7 @@ $('expwrite').onclick=()=>{collectExp();putFile(1,exps);};
 function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wheel_by_layer',
 'port2_kbd','tap_hold','button_inputs','button_labels',
 'baseline','combos','mapping_groups','stepper_by_layer',
-'kbd_mappings_by_device'])if(!cfg[k])cfg[k]={};
+'kbd_mappings_by_device','os_profiles'])if(!cfg[k])cfg[k]={};
 migrateDevices();migrateByDevice();
 if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};}
 
@@ -959,7 +1028,9 @@ function renderLayoutKbd(d,w){
     el.dataset.usage=u;el.dataset.canon=eff.canon;el.dataset.i=idx;el.dataset.dev=d.id;
     let chip='';
     if(eff.base)chip+=`≡${MODS[eff.canon]||KEYS[eff.canon]||(eff.canon===0?'∅':'?')}`;
-    if(eff.v!==undefined)chip+=`${chip?' ':''}${eff.v===0?'∅':'→'+(KEYS[eff.v]||'?')}`;
+    if(eff.v!==undefined)chip+=`${chip?' ':''}${
+      Array.isArray(eff.v)?'→'+esc(actShort(eff.v)):
+      eff.v===0?'∅':'→'+(KEYS[eff.v]||MODS[eff.v]||'?')}`;
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
       +name+(chip?`<span class="chip">${chip}</span>`:'');
@@ -1211,7 +1282,7 @@ function asgApply(inp,L,act){
   else{
     if(act===null)delete cfg.mouse_mappings[k];
     else cfg.mouse_mappings[k]=act;}}
-function asgOpenSearch(cell,inp,mode){
+function asgOpenSearch(cell,inp,mode,onPick){
   document.querySelectorAll('.asgsearch').forEach(x=>x.remove());
   const box=document.createElement('div');box.className='asgsearch';
   box.innerHTML=`<input type="text" placeholder="search keys${inp.type==='btn'?' / macros / actions':''}…" style="width:100%">
@@ -1221,12 +1292,17 @@ function asgOpenSearch(cell,inp,mode){
   box.style.left=(r.left+window.scrollX)+'px';box.style.top=(r.bottom+window.scrollY+2)+'px';
   const inpEl=box.querySelector('input'),res=box.querySelector('.res');
   inpEl.focus();
+  const clearLink=()=>{const a=document.createElement('a');a.className='mlink';
+    a.textContent='\u2715 clear (no mapping)';a.style.color='var(--err)';
+    a.onclick=()=>{box.remove();if(onPick)onPick(null);else asgChoose(inp,mode,null);};return a;};
+  res.appendChild(clearLink());
   inpEl.oninput=()=>{
     const hits=asgSearchResults(inpEl.value,inp.type==='btn');
-    res.innerHTML=hits.length?'':'<span class="muted">no matches</span>';
+    res.innerHTML='';res.appendChild(clearLink());
+    if(!hits.length&&inpEl.value)res.insertAdjacentHTML('beforeend',' <span class="muted">no matches</span>');
     hits.forEach(h=>{const a=document.createElement('a');
       a.className='mlink';a.textContent=h.label;
-      a.onclick=()=>{box.remove();asgChoose(inp,mode,h.act);};
+      a.onclick=()=>{box.remove();if(onPick)onPick(h.act);else asgChoose(inp,mode,h.act);};
       res.appendChild(a);});};
   inpEl.onkeydown=e=>{if(e.key==='Escape')box.remove();};
   setTimeout(()=>document.addEventListener('click',function h(ev){
@@ -1249,80 +1325,94 @@ function asgChoose(inp,mode,act){
   window._asgLast=window._asgLast||{};window._asgLast[inp.type+':'+inp.id]=act;
   for(const L of layers)asgApply(inp,L,act);
   render();toast((act===null?'cleared':'assigned')+' on layer '+layers.join(', ')+' — ⬆ Save to device');}
+function asgAllInputs(){
+  const out=[];
+  for(const[u,n]of Object.entries(KEYS))out.push({v:'key:'+u,label:'\u2328 '+n});
+  for(const[u,n]of Object.entries(MODS))out.push({v:'key:'+u,label:'\u2328 '+n});
+  for(let b=1;b<=15;b++)out.push({v:'btn:'+b,label:'\uD83D\uDDB1 '+btnLabel(b)});
+  return out;}
+function asgRows(){
+  const seen={},rows=[];
+  const add=(type,id)=>{const k=type+':'+id;if(!seen[k]){seen[k]=1;rows.push({type,id});}};
+  for(const k of Object.keys(cfg.kbd_mappings||{}))add('key',+k.split(',')[1]);
+  for(const dev of Object.values(cfg.kbd_mappings_by_device||{}))
+    for(const k of Object.keys(dev))add('key',+k.split(',')[1]);
+  for(const k of Object.keys(cfg.mouse_mappings||{}))add('btn',+k.split(',')[1]);
+  for(const b of Object.keys(cfg.tap_hold||{}))add('btn',+b);
+  for(const r of (window._asgPending||[]))add(r.type,r.id);
+  return rows;}
+function asgCellVal(inp,L){
+  const key=`${L},${inp.id}`;
+  return inp.type==='key'?cfg.kbd_mappings[key]:cfg.mouse_mappings[key];}
+function asgSetLayer(inp,L,act){
+  const key=`${L},${inp.id}`;
+  const tbl=inp.type==='key'?cfg.kbd_mappings:cfg.mouse_mappings;
+  if(act===null||act===undefined)delete tbl[key];
+  else tbl[key]=act;
+  render();toast(`layer ${L} updated \u2014 \u2b06 Save to device`);}
+window.asgOpenCell=(td,type,id,L)=>{
+  const inp={type,id:+id};
+  asgOpenSearch(td,inp,'assign-cell',act=>asgSetLayer(inp,L,act===null?null:
+    (inp.type==='key'? (Array.isArray(act)?act:act) : act)));};
 function renderAssignTable(){
   const t=$('asgtbl');if(!t||!cfg)return;
-  // add-row pickers
-  const it=$('asgnewitem'),ty=$('asgnewtype');
-  if(it&&!it.dataset.init){it.dataset.init=1;
-    const fill=()=>{it.innerHTML=ty.value==='key'
-      ?Object.entries(KEYS).map(([u,n])=>`<option value="${u}">${n}</option>`).join('')
-      :Array.from({length:15},(_,i)=>`<option value="${i+1}">${btnLabel(i+1)}</option>`).join('');};
-    ty.onchange=fill;fill();
-    $('asgnewadd').onclick=()=>{
-      window._asgPending=window._asgPending||[];
-      window._asgPending.push({type:ty.value,id:+it.value});
-      render();};}
-  const devsK=allDevices().filter(d=>d.kind==='kbd');
-  let h=`<tr><td><b>Input</b></td><td><b>Mode</b></td><td><b>Output</b></td>
-    ${[0,1,2,3,4,5].map(L=>`<td><b>L${L}</b></td>`).join('')}<td><b>Group</b></td></tr>`;
-  const rows=asgInputs();
-  window._asgMode=window._asgMode||{};
+  const rows=asgRows();
+  let h=`<tr><td><b>Input</b></td>${LAYER_NAMES.map((n,L)=>`<td title="layer ${L}"><b>${esc(n)}</b></td>`).join('')}<td><b>Group</b></td><td></td></tr>`;
   for(const inp of rows){
     const key=inp.type+':'+inp.id;
-    const mode=window._asgMode[key]||'custom';
-    const vals=asgRowVals(inp);
-    const th=inp.type==='btn'?cfg.tap_hold[inp.id]:null;
-    let outLabel='';
-    if(mode==='taphold')outLabel=th?`tap ${actShort(th[0])} · hold→L${th[1]}`:'—';
-    else if(mode.startsWith('baseline:')){
-      const bv=(cfg.baseline[mode.slice(9)]||{})[inp.id];
-      outLabel=bv===undefined?'(itself)':bv===0?'∅':asgKeyName(bv);}
-    else{
-      const uniq=[...new Set(Object.values(vals).map(v=>JSON.stringify(v)))];
-      outLabel=uniq.length===0?'—':uniq.length===1?asgActLabel(JSON.parse(uniq[0])):'(mixed)';}
-    let modeOpts=`<option value="custom" ${mode==='custom'?'selected':''}>Custom</option>`;
-    if(inp.type==='btn')modeOpts+=`<option value="taphold" ${mode==='taphold'?'selected':''}>Tap-Hold</option>`;
-    if(inp.type==='key')for(const d of devsK)
-      modeOpts+=`<option value="baseline:${esc(d.id)}" ${mode==='baseline:'+d.id?'selected':''}>Baseline · ${esc(d.name)}</option>`;
     const member=(inp.type==='key'?'kbd:*,':'mouse:*,')+inp.id;
     const inGroups=Object.keys(cfg.mapping_groups||{})
       .filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
+    const inputSel=`<select data-asginput="${key}" style="width:auto;max-width:150px">`
+      +asgAllInputs().map(o=>`<option value="${o.v}" ${o.v===key?'selected':''}>${esc(o.label)}</option>`).join('')
+      +`</select>`;
+    let cells='';
+    for(let L=0;L<6;L++){
+      const v=asgCellVal(inp,L);
+      const lbl=v===undefined?'<span class="muted" style="opacity:.4">\u2013</span>':esc(asgActLabel(v));
+      cells+=`<td class="asgcell" data-asgcell="${key}" data-l="${L}" style="cursor:pointer" title="click to set layer ${L}">${lbl}</td>`;}
     h+=`<tr>
-      <td>${inp.type==='key'?'⌨ '+asgKeyName(inp.id):'🖱 '+btnLabel(inp.id)}</td>
-      <td><select data-asgmode="${key}" style="width:auto">${modeOpts}</select></td>
-      <td style="cursor:pointer" data-asgout="${key}"><a class="mlink">${esc(outLabel)||'—'}</a>
-        ${mode==='taphold'&&th?`<select data-asghl="${key}" style="width:auto">${[1,2,3,4,5].map(L=>`<option ${th[1]===L?'selected':''}>${L}</option>`).join('')}</select>`:''}</td>
-      ${[0,1,2,3,4,5].map(L=>`<td><input type="checkbox" data-asg="${key}" data-l="${L}"
-        ${vals[L]!==undefined?'checked':''} ${mode!=='custom'?'disabled':''}></td>`).join('')}
-      <td><input type="text" data-asggrp="${key}" list="grouplist" placeholder="nav.arrows"
-        value="" style="width:110px" maxlength="60">
-        ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}</td>
+      <td>${inputSel}</td>${cells}
+      <td><input type="text" data-asggrp="${key}" list="grouplist" placeholder="group" value="" style="width:90px" maxlength="60">
+        ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} \u2715</span>`).join('')}</td>
+      <td><button data-asgdel="${key}" title="remove this mapping">\u2715</button></td>
     </tr>`;}
   t.innerHTML=h;
-  t.querySelectorAll('[data-asgmode]').forEach(sl=>sl.onchange=()=>{
-    window._asgMode[sl.dataset.asgmode]=sl.value;render();});
-  t.querySelectorAll('[data-asgout]').forEach(td=>td.onclick=e=>{
-    if(e.target.tagName==='SELECT')return;
-    const[type,id]=td.dataset.asgout.split(':');
-    asgOpenSearch(td,{type,id:+id},window._asgMode[td.dataset.asgout]||'custom');});
-  t.querySelectorAll('[data-asghl]').forEach(sl=>sl.onchange=()=>{
-    const[_,id]=sl.dataset.asghl.split(':');
-    const th=cfg.tap_hold[+id];if(th){th[1]=+sl.value;render();}});
-  t.querySelectorAll('input[data-asg]').forEach(cb=>cb.onchange=()=>{
-    const[type,id]=cb.dataset.asg.split(':');
-    const inp={type,id:+id},L=+cb.dataset.l;
-    if(cb.checked){
-      const vals=asgRowVals(inp);
-      const src=Object.values(vals)[0]??(window._asgLast||{})[cb.dataset.asg];
-      if(src===undefined){cb.checked=false;
-        toast('set an Output first (click the row output), then tick layers',true);return;}
-      asgApply(inp,L,src);}
-    else asgApply(inp,L,null);
-    render();toast('layer '+L+' updated — ⬆ Save to device');});
+  t.querySelectorAll('[data-asgcell]').forEach(td=>td.onclick=()=>{
+    const[type,id]=td.dataset.asgcell.split(':');
+    asgOpenCell(td,type,id,+td.dataset.l);});
+  t.querySelectorAll('[data-asginput]').forEach(sl=>sl.onchange=()=>{
+    // rebind: move this input's mappings to the newly chosen input
+    const[ot,oid]=sl.dataset.asginput.split(':');
+    const[nt,nid]=sl.value.split(':');
+    if(ot===nt&&oid===nid)return;
+    const oldInp={type:ot,id:+oid},newInp={type:nt,id:+nid};
+    for(let L=0;L<6;L++){const v=asgCellVal(oldInp,L);
+      if(v!==undefined){asgSetLayerSilent(newInp,L,v);asgSetLayerSilent(oldInp,L,null);}}
+    if(window._asgPending)window._asgPending=window._asgPending
+      .filter(r=>!(r.type===ot&&r.id===+oid));
+    render();toast('input rebound \u2014 \u2b06 Save to device');});
+  t.querySelectorAll('[data-asgdel]').forEach(b=>b.onclick=()=>{
+    const[type,id]=b.dataset.asgdel.split(':');const inp={type,id:+id};
+    for(let L=0;L<6;L++)asgSetLayerSilent(inp,L,null);
+    if(inp.type==='key')for(const dev of Object.values(cfg.kbd_mappings_by_device||{}))
+      for(let L=0;L<6;L++)delete dev[`${L},${inp.id}`];
+    if(window._asgPending)window._asgPending=window._asgPending
+      .filter(r=>!(r.type===type&&r.id===+id));
+    render();toast('mapping removed \u2014 \u2b06 Save to device');});
   t.querySelectorAll('input[data-asggrp]').forEach(gi=>gi.onkeydown=e=>{
     if(e.key!=='Enter')return;
     const[type,id]=gi.dataset.asggrp.split(':');
-    addToGroup(gi.value,(type==='key'?'kbd:*,':'mouse:*,')+id);});}
+    addToGroup(gi.value,(type==='key'?'kbd:*,':'mouse:*,')+id);});
+  const add=$('asgnewadd');
+  if(add)add.onclick=()=>{
+    window._asgPending=window._asgPending||[];
+    window._asgPending.push({type:'key',id:0x04});   // a blank-ish row to configure
+    render();};}
+function asgSetLayerSilent(inp,L,act){
+  const key=`${L},${inp.id}`;
+  const tbl=inp.type==='key'?cfg.kbd_mappings:cfg.mouse_mappings;
+  if(act===null||act===undefined)delete tbl[key];else tbl[key]=act;}
 
 /* ============ chord lines ============ */
 function elsFor(t){
@@ -1477,7 +1567,8 @@ if(u.press==='dpi')return['dpi_cycle'];
 if(u.press==='btn')return['btn',+u.pressBtn];if(u.press==='key')return['key',+u.pressKey];
 if(u.press==='macro')return['macro',+u.pressMacro];return null;}
 function keyOpts(v){return Object.entries(KEYS).map(([u,n])=>`<option value="${u}" ${+u===+v?'selected':''}>${n}</option>`).join('');}
-function macOpts(v){let h='';for(let n=1;n<=30;n++)h+=`<option value="${n}" ${n===+v?'selected':''}>Macro ${n}</option>`;return h;}
+function macOpts(v){let h='';for(let n=1;n<=30;n++){const nm=(cfg.macro_names||{})[n];
+  h+=`<option value="${n}" ${n===+v?'selected':''}>${nm?nm+' (M'+n+')':'Macro '+n}</option>`;}return h;}
 function searchBoxHTML(){return `<label>Search actions</label>
 <input type="text" id="actsearch" placeholder="type: copy, M4, Enter, dpi…">
 <div id="searchres" class="muted"></div>`;}
@@ -1489,7 +1580,9 @@ function bindEditorCommon(applyAction){
     const q=s.value.toLowerCase();const out=[];
     if(!q){$('searchres').innerHTML='';return;}
     for(const[u,n]of Object.entries(KEYS))if(n.toLowerCase().includes(q))out.push(`<a class="mlink" onclick='applySearch(["key",${u}])'>${n}</a>`);
-    for(let n=1;n<=30;n++)if(('m'+n).includes(q)||('macro '+n).includes(q))out.push(`<a class="mlink" onclick='applySearch(["macro",${n}])'>M${n}</a>`);
+    for(let n=1;n<=30;n++){const nm=(cfg.macro_names||{})[n]||'';
+      if(('m'+n).includes(q)||('macro '+n).includes(q)||(nm&&nm.toLowerCase().includes(q)))
+        out.push(`<a class="mlink" onclick='applySearch(["macro",${n}])'>${nm?esc(nm)+' (M'+n+')':'M'+n}</a>`);}
     if('dpi'.includes(q))out.push(`<a class="mlink" onclick='applySearch(["dpi_cycle"])'>DPI cycle</a>`);
     if('suppress'.includes(q))out.push(`<a class="mlink" onclick='applySearch(["suppress"])'>Suppress</a>`);
     $('searchres').innerHTML=out.slice(0,12).join(' · ');};}
@@ -1596,9 +1689,38 @@ function scopeTabsHTML(selDev,active){
     <div class="pill ${active==='devcustom'?'on':''}" onclick="setScope('devcustom')">Custom · ${esc(devName(selDev))} only</div>
     <div class="pill ${active==='baseline'?'on':''}" onclick="setScope('baseline')">Baseline · ${esc(devName(selDev))}</div></div>
   <p class="muted" style="margin:.1rem 0 .5rem;font-size:.76rem">${blurb}</p>`;}
+function editorKey(){return sel?JSON.stringify([sel.type,sel.id,sel.dev,sel.physical]):null;}
+let _edSnap=null,_edSnapKey=null;
+function snapshotForRevert(){
+  // deep-copy the config slices this input can touch, so Revert restores it
+  _edSnapKey=editorKey();
+  _edSnap=JSON.stringify({km:cfg.kbd_mappings,mm:cfg.mouse_mappings,
+    bd:cfg.kbd_mappings_by_device,bl:cfg.baseline,p2:cfg.port2_kbd,
+    th:cfg.tap_hold,co:cfg.combos,gr:cfg.mapping_groups,
+    wl:cfg.wheel_by_layer,st:cfg.stepper_by_layer});}
+window.revertEditor=()=>{
+  if(!_edSnap)return;const o=JSON.parse(_edSnap);
+  cfg.kbd_mappings=o.km;cfg.mouse_mappings=o.mm;cfg.kbd_mappings_by_device=o.bd;
+  cfg.baseline=o.bl;cfg.port2_kbd=o.p2;cfg.tap_hold=o.th;cfg.combos=o.co;
+  cfg.mapping_groups=o.gr;cfg.wheel_by_layer=o.wl;cfg.stepper_by_layer=o.st;
+  render();toast('reverted');};
+window.closeEditor=()=>{sel=null;chordSel&&clearChordSel();$('editor').style.display='none';render();};
+function positionEditor(){
+  const e=$('editor');
+  const k=editorKey();
+  if(k!==_edSnapKey)snapshotForRevert();
+  if(e.dataset.k===k&&e.style.display==='block')return;   // keep drag pos on re-render
+  e.dataset.k=k;e.style.display='block';
+  const a=window._edAnchor||{x:innerWidth/2,y:120};
+  const w=Math.min(355,innerWidth*0.94),eh=Math.min(e.offsetHeight||400,innerHeight*0.82);
+  let x=a.x+30,y=a.y-10;
+  if(x+w>innerWidth-8)x=Math.max(8,a.x-w-20);
+  if(y+eh>innerHeight-8)y=Math.max(8,innerHeight-eh-8);
+  e.style.left=Math.max(8,x)+'px';e.style.top=Math.max(8,y)+'px';}
 function renderEditor(){
-  const ed=$('editor');
-  if(!sel){ed.innerHTML=`<h2 style="font-size:1rem">Mapping editor</h2>
+  const ed=$('editorbody');
+  if(!sel){$('editor').style.display='none';_edSnapKey=null;
+  {const _drop=`<h2 style="font-size:1rem">Mapping editor</h2>
   <p class="muted">Click any key or button on a wireframe to edit it. There are two kinds of edit:</p>
   <p style="font-size:.85rem"><b>Baseline</b> — per-device. Defines what each physical key
   <i>is</i>. Set once when you add a keyboard (e.g. reshaping the Fintie to your
@@ -1607,7 +1729,9 @@ function renderEditor(){
   canonical keys — the same on every device (Caps+IJKL etc.). Chip: <b>→Y</b>.</p>
   <p class="muted" style="font-size:.78rem">Gold keys start layers · dashed lines are chords (click one) ·
   Shift-click keys = combo · Alt-click = typed sequence · ✎ Layout edits only the
-  wireframe drawing, never the mapping.</p>`;return;}
+  wireframe drawing, never the mapping.</p>`;}return;}
+  positionEditor();
+  $('editortitle').textContent=sel.type==='wheel'?'Wheel':sel.type==='stepper'?'E9 stepper':sel.type==='combo'?'Combo':'Mapping editor';
   if(sel.type==='wheel'){return renderWheelEd(ed);}
   if(sel.type==='stepper'){return renderStepperEd(ed);}
   if(sel.type==='combo'){return renderComboEd(ed);}
@@ -1644,7 +1768,9 @@ function renderEditor(){
   const kmap=devScoped
     ?(cfg.kbd_mappings_by_device[selDev]=cfg.kbd_mappings_by_device[selDev]||{})
     :cfg.kbd_mappings;
-  const cur=isBtn?cfg.mouse_mappings[key]:(kmap[key]!==undefined?['key',kmap[key]]:null);
+  const rawk=isBtn?undefined:kmap[key];
+  const cur=isBtn?cfg.mouse_mappings[key]
+    :(rawk===undefined?null:Array.isArray(rawk)?rawk:rawk===0?['suppress']:['key',rawk]);
   const ui=actionToUI(cur);
   const physTag=(isBtn&&sel.physical!==undefined&&sel.physical!==sel.id)
     ?` <span class="muted">(${boxTag(sel.physical)})</span>`
@@ -1673,7 +1799,8 @@ function renderEditor(){
     else{ if(!a)delete kmap[key];
       else if(a[0]==='key')kmap[key]=a[1];
       else if(a[0]==='suppress')kmap[key]=0;
-      else toast('keys can map to keys/suppress; use a macro via a chord layer for more',true);}};
+      else if(a[0]==='macro')kmap[key]=['macro',+a[1]];
+      else kmap[key]=a; }};
   const refresh=()=>{const p=$('press').value;
     $('pressArg').innerHTML=p==='btn'?`<select id="pressBtn">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===+(ui.pressBtn||1)?'selected':''}>${btnLabel(n)}</option>`).join('')}</select>`:
       p==='key'?`<select id="pressKey">${keyOpts(ui.pressKey||0x28)}</select>`:
@@ -1979,7 +2106,13 @@ function liveOut(txt){
 /* ============ expansion sets manager ============ */
 function renderSets(){
   const list=$('setlist');if(!list)return;
-  if(!expSets){list.innerHTML='<span class="muted">connect to load sets</span>';return;}
+  if(!device){list.innerHTML='<span class="muted">connect to load sets</span>';return;}
+  if(!expSets){list.innerHTML='<span class="muted">loading sets…</span>';return;}
+  if(!Object.keys(expSets).length){
+    list.innerHTML=_setsChannelOk
+      ?'<span class="muted">No expansion sets on the Pi yet. Import a Typinator .txt or create one below.</span>'
+      :'<span class="muted">⚠ Sets channel not answering — update <code>s0_hidconfig.py</code> on the Pi (needs the fid-4 handler), then reconnect.</span>';
+    renderSetTable();return;}
   list.innerHTML='';
   for(const name of Object.keys(expSets).sort()){
     const st=expSets[name];
@@ -2066,12 +2199,148 @@ $('setimport').onchange=async e=>{
   toast(`imported ${items.length} items into "${name}"`+(skipped?` (${skipped} skipped)`:'')+' — ⬆ Save sets');
   e.target.value='';};
 
+/* ============ OS profiles tab ============ */
+function detectBrowserOS(){
+  // WebHID requires the browser to be on the SAME machine the Pi is plugged
+  // into, so this browser's OS == the host OS the Pi types to.
+  let p='';
+  try{p=(navigator.userAgentData&&navigator.userAgentData.platform)||'';}catch(e){}
+  const s=((p||'')+' '+(navigator.platform||'')+' '+(navigator.userAgent||'')).toLowerCase();
+  if(/win/.test(s))return'win';
+  if(/mac|iphone|ipad|ipod/.test(s))return'mac';
+  if(/linux|cros|android/.test(s))return'linux';
+  return null;}
+function osKnown(){
+  const set=new Set(['win','mac']);
+  for(const o of Object.keys(cfg.os_profiles||{}))set.add(o);
+  for(const o of ((lastEng&&lastEng.known_oses)||[]))set.add(o);
+  const order=(cfg.os_order&&cfg.os_order.length?cfg.os_order:['win','mac']).slice();
+  for(const o of set)if(!order.includes(o))order.push(o);
+  return order.filter(o=>set.has(o));}
+function osProf(os){cfg.os_profiles=cfg.os_profiles||{};
+  return cfg.os_profiles[os]=cfg.os_profiles[os]||{};}
+function applyBrowserOS(){
+  if(!cfg)return;
+  const b=detectBrowserOS();if(!b)return;
+  // default ON (follow) unless explicitly disabled; add the OS if unknown
+  if(cfg.os_follow_browser===false)return;
+  if(!osKnown().includes(b))osProf(b);
+  if(cfg.active_os!==b){cfg.active_os=b;updateOsBtn();
+    if($('page-os').style.display!=='none')renderOsTab();
+    toast('detected host OS = '+b+' (this browser) — ⬆ Save to device to apply');}}
+let osView=null;
+function setActiveOs(os){cfg.active_os=os;updateOsBtn();renderOsTab();
+  toast('active OS = '+os+' — ⬆ Save to device to apply');}
+window.setActiveOs=setActiveOs;
+function renderOsTab(){
+  if(!cfg)return;
+  const oses=osKnown();
+  if(!osView||!oses.includes(osView))osView=(cfg.active_os&&oses.includes(cfg.active_os))?cfg.active_os:oses[0];
+  $('osactive').textContent=cfg.active_os||'win';
+  const bos=detectBrowserOS();
+  const netdet=lastEng&&lastEng.detected_os;
+  $('osdetected').innerHTML=`· this browser: <b>${esc(bos||'?')}</b>`
+    +(bos?` <a class="mlink" onclick="setActiveOs('${esc(bos)}')">use</a>`:'')
+    +(netdet?` · network-sniff: <b>${esc(netdet)}</b>`:'');
+  // repurpose the checkbox as "follow this browser's OS on connect"
+  $('osautoswitch').checked=cfg.os_follow_browser!==false;
+  $('osautoswitch').onchange=()=>{cfg.os_follow_browser=$('osautoswitch').checked;
+    toast(($('osautoswitch').checked?'will':'will not')+' follow this browser\'s OS');};
+  // OS selector pills: click = edit that OS column; ★ = default/active
+  const tb=$('ostabs');tb.innerHTML='';
+  for(const o of oses){
+    const p=document.createElement('span');p.className='pill'+(o===osView?' on':'');
+    p.innerHTML=`${esc(o)} ${o===cfg.active_os?'★':''} <a class="mlink" title="make active" onclick="event.stopPropagation();setActiveOs('${esc(o)}')">▶</a>`
+      +(o!=='win'?` <a class="mlink" title="remove this OS" onclick="event.stopPropagation();osRemove('${esc(o)}')">✕</a>`:'');
+    p.onclick=()=>{osView=o;renderOsTab();};tb.appendChild(p);}
+  // per-device scrolling
+  const devs=allDevices();
+  let sh=`<tr><td><b>Device</b></td>${oses.map(o=>`<td><b>${esc(o)}${o===osView?' ◀':''}</b></td>`).join('')}</tr>`;
+  for(const d of devs){
+    sh+=`<tr><td>${esc(d.name)}</td>`+oses.map(o=>{
+      const inv=((cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].scroll_invert)||{})[d.id];
+      return `<td><label style="display:inline"><input type="checkbox" ${inv?'checked':''}
+        onchange="osScrollSet('${esc(o)}','${d.id}',this.checked)"> invert</label></td>`;}).join('')+'</tr>';}
+  $('osscroll').innerHTML=sh;
+  // unicode method
+  const methods=['','none','mac_option_hex','win_alt_hex','win_alt_dec','linux_ctrl_shift_u'];
+  let uh=`<tr><td><b>OS</b></td><td><b>Unicode method</b></td></tr>`;
+  for(const o of oses){
+    const cur=(cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].unicode_method)||'';
+    uh+=`<tr><td>${esc(o)}</td><td><select onchange="osUniSet('${esc(o)}',this.value)">`
+      +methods.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m||'(default for '+esc(o)+')'}</option>`).join('')
+      +`</select></td></tr>`;}
+  $('osuni').innerHTML=uh;
+  // macro differences grid: base (win macros) vs each OS override
+  const baseM=cfg.macros||{}, names=cfg.macro_names||{};
+  let gh=`<tr><td><b>Macro</b></td><td><b>base</b></td>${oses.filter(o=>o!=='win').map(o=>`<td><b>${esc(o)}${o===osView?' ◀':''}</b></td>`).join('')}</tr>`;
+  for(let n=1;n<=26;n++){
+    if(!baseM[n]||!baseM[n].length)continue;
+    const nm=names[n]?names[n]+' (M'+n+')':'M'+n;
+    gh+=`<tr><td>${esc(nm)}</td><td class="muted">${esc(macroToText(baseM[n]).replace(/\n/g,' · ').slice(0,26))}</td>`;
+    gh+=oses.filter(o=>o!=='win').map(o=>{
+      const ov=cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].macros&&cfg.os_profiles[o].macros[n];
+      const same=!ov;
+      return `<td style="cursor:pointer" onclick="osMacroEdit('${esc(o)}',${n})">${
+        same?'<span class="muted" style="opacity:.5">= base</span>':esc(macroToText(ov).replace(/\n/g,' · ').slice(0,26))}</td>`;}).join('');
+    gh+='</tr>';}
+  $('osgrid').innerHTML=gh;}
+window.osScrollSet=(o,dev,on)=>{const p=osProf(o);p.scroll_invert=p.scroll_invert||{};
+  if(on)p.scroll_invert[dev]=true;else delete p.scroll_invert[dev];
+  toast('⬆ Save to device to apply');};
+window.osUniSet=(o,m)=>{const p=osProf(o);if(m)p.unicode_method=m;else delete p.unicode_method;
+  toast('⬆ Save to device to apply');};
+window.osMacroEdit=(o,n)=>{const p=osProf(o);p.macros=p.macros||{};
+  const cur=p.macros[n]?macroToText(p.macros[n]):macroToText(cfg.macros[n]||[]);
+  const v=prompt(`${o} override for Macro ${n}\n(one step per line: ctrl+c / btn1 / wheel / . ; blank = inherit base)`,cur);
+  if(v===null)return;
+  if(v.trim()===''||v===macroToText(cfg.macros[n]||[]))delete p.macros[n];
+  else p.macros[n]=textToMacro(v);
+  renderOsTab();toast('⬆ Save to device to apply');};
+window.osRemove=(o)=>{if(o==='win'||o==='mac'){toast('win/mac are built-in',true);return;}
+  if(!confirm('Remove OS "'+o+'" and its overrides?'))return;
+  if(cfg.os_profiles)delete cfg.os_profiles[o];
+  if(cfg.os_order)cfg.os_order=cfg.os_order.filter(x=>x!==o);
+  if(cfg.active_os===o)cfg.active_os='win';
+  osView=null;renderOsTab();};
+$('osadd').onclick=()=>{
+  const n=(prompt('New OS name (e.g. linux, ipados):')||'').trim().toLowerCase();
+  if(!n||!/^[a-z0-9_-]{1,16}$/.test(n)){if(n)toast('lowercase letters/digits only',true);return;}
+  osProf(n);cfg.os_order=osKnown();if(!cfg.os_order.includes(n))cfg.os_order.push(n);
+  osView=n;renderOsTab();toast('added OS "'+n+'" — set its differences, then ⬆ Save');};
+/* ---- manual timezone selector ---- */
+function initTz(){
+  const sel=$('tzsel');if(!sel)return;
+  const opts=[['auto (from browser)','auto']];
+  for(let h=-12;h<=14;h++)opts.push([`UTC${h>=0?'+':''}${h}`,String(h*60)]);
+  sel.innerHTML=opts.map(([l,v])=>`<option value="${v}">${l}</option>`).join('');
+  const cur=(cfg&&typeof cfg.tz_offset_min==='number')?String(cfg.tz_offset_min):'auto';
+  sel.value=cur;
+  sel.onchange=()=>{
+    if(sel.value==='auto'){if(cfg)delete cfg.tz_offset_min;syncClock();}
+    else if(cfg)cfg.tz_offset_min=+sel.value;
+    toast('timezone set — ⬆ Save to device to persist');};}
+
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','bt'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt'])$('page-'+p).style.display=p===t?'':'none';
+  if(t==='os')renderOsTab();
   if(t==='bt'&&device)btCmd('list');
+  if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map')requestAnimationFrame(drawChords);}
+$('editorclose').onclick=closeEditor;
+$('editorrevert').onclick=revertEditor;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('editor').style.display==='block')closeEditor();});
+// capture where the user clicked so the popover appears next to it
+document.addEventListener('click',e=>{
+  if(e.target.closest('#editor'))return;
+  window._edAnchor={x:e.pageX-scrollX,y:e.pageY-scrollY};},true);
+(function(){const h=$('editorhead'),e=$('editor');let dx=0,dy=0,drag=false;
+  h.addEventListener('mousedown',ev=>{drag=true;dx=ev.clientX-e.offsetLeft;dy=ev.clientY-e.offsetTop;ev.preventDefault();});
+  document.addEventListener('mousemove',ev=>{if(!drag)return;
+    e.style.left=Math.max(0,ev.clientX-dx)+'px';e.style.top=Math.max(0,ev.clientY-dy)+'px';});
+  document.addEventListener('mouseup',()=>drag=false);})();
 document.querySelectorAll('#toptabs .tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.t));
 window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
 $('stage').onclick=e=>{if(e.target.id==='chordsvg'||e.target.id==='stage')clearChordSel();};
