@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config</title>
+<title>HID Config 18 Bugfix 6.5</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -59,6 +59,11 @@ stroke:var(--warn)!important;stroke-width:3!important}
 .chip{position:absolute;right:1px;bottom:-1px;font-size:.56rem;color:var(--ok);max-width:100%;
 overflow:hidden;white-space:nowrap}
 .chip a{color:var(--ok);text-decoration:underline;cursor:pointer}
+.chipbase{position:absolute;left:1px;top:-1px;font-size:.5rem;line-height:1;color:var(--err);
+opacity:.85;max-width:100%;overflow:hidden;white-space:nowrap;pointer-events:none}
+.chiplayer{position:absolute;right:1px;top:-1px;font-size:.52rem;line-height:1;font-weight:700;
+color:#000;background:var(--layer);border-radius:3px;padding:0 .15rem;pointer-events:none}
+.kcenter{pointer-events:none}
 label{display:block;margin:.45rem 0 .1rem;font-size:.84rem;opacity:.85}
 select,input[type=text],input[type=number],textarea{width:100%;padding:.35rem;border-radius:6px;
 border:1px solid var(--line);background:Field;color:FieldText}
@@ -124,6 +129,7 @@ border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:.82rem
 .kabs .key{position:absolute;margin:0;height:33px;padding:.15rem 2px;display:flex;
 align-items:center;justify-content:center}
 .kabs .key .chip{bottom:0}
+.kabs .key{overflow:visible}
 .key.editsel{outline:2px solid var(--warn);outline-offset:1px;z-index:3}
 .wfbody.editing .key{cursor:grab;touch-action:none}
 #palette{position:fixed;right:1.1rem;bottom:1.1rem;z-index:60;background:Canvas;color:CanvasText;
@@ -183,6 +189,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <span class="muted">Every "Save to device" also makes a timestamped backup on the Pi automatically.</span>
   <span style="flex:1"></span>
   <label style="margin:0;display:inline">🕓 <select id="tzsel" style="width:auto"></select></label>
+  <label style="margin:0;display:inline" title="How an expansion removes the trigger text. Shift+Left selects (safer outside text fields); Backspace deletes.">⌫ <select id="erasesel" style="width:auto"><option value="backspace">Backspace</option><option value="shift_left">Shift+Left select</option></select></label>
 </div>
 
 <div class="tabs" id="toptabs">
@@ -199,8 +206,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="bar"><button id="evon" disabled>▶ Events</button>
     <button id="evoff" disabled>⏸ Stop</button><button id="clear" disabled>Clear</button>
     <button id="engstat" disabled>🩺 Engine status</button>
-    <span class="muted"><span id="evcount">0</span> events received ·
-    red=raw, yellow=mapped output, green=macro, blue=expansion</span></div>
+    <span class="muted"><span id="evcount">0</span> events · auto-stops after 60 s to save resources</span></div>
   <div id="engpane" class="muted" style="display:none;border:1px solid var(--line);
     border-radius:8px;padding:.6rem;margin:.5rem 0;font-size:.8rem;white-space:pre-wrap;
     font-family:ui-monospace,monospace"></div>
@@ -213,13 +219,24 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 <div id="page-map">
  <div id="maprow">
  <div style="flex:1;min-width:0">
-  <div class="pills" id="layers"></div>
-  <div id="capturebar">
-    <b id="capmode"></b><span id="capinfo"></span>
-    <button id="capassign" class="primary">Assign…</button>
-    <button onclick="clearCapture()">✕ Cancel</button>
-    <span class="muted" id="caphint"></span>
+  <div class="bar" style="margin:.2rem 0;align-items:flex-start">
+    <button id="showkeys">▶ Show key presses</button>
+    <span class="muted" id="showkeysinfo"></span>
+    <details id="legend" open style="margin-left:auto"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
+      <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
+        <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red flash</span> raw key from a device ·
+        <span style="background:rgba(245,158,11,.55);padding:0 .3rem;border-radius:3px">yellow flash</span> key sent to the PC ·
+        <span style="background:rgba(34,197,94,.55);padding:0 .3rem;border-radius:3px">green flash</span> macro output ·
+        <span style="background:rgba(59,130,246,.6);padding:0 .3rem;border-radius:3px">blue flash</span> expansion output<br>
+        <span style="border:2px solid var(--ok);padding:0 .3rem;border-radius:3px">green outline</span> has a custom mapping on this layer ·
+        <span style="background:rgba(184,134,11,.45);padding:0 .3rem;border-radius:3px">gold key</span> starts a layer (its layer # is shown) ·
+        <span style="outline:2px solid var(--warn);padding:0 .3rem;border-radius:3px">dashed line</span> a chord (click to inspect) ·
+        <span style="outline:2px solid #a855f7;padding:0 .3rem;border-radius:3px">purple outline</span> belongs to a highlighted <b>group</b> (toggle groups in the 🗂 Groups card)<br>
+        corners on each key: <span style="color:var(--err)">red top-left</span> = original before this device's Baseline · grey center = current identity · <span style="color:var(--ok)">green bottom-right</span> = custom output on this layer · <span style="color:#000;background:var(--layer);border-radius:3px;padding:0 .2rem">L#</span> top-right = triggers that layer
+      </div>
+    </details>
   </div>
+  <div class="pills" id="layers"></div>
   <div id="chordbar">
     <b>Chord:</b><span id="chordinfo"></span>
     <span class="pluspill" id="pluspill" draggable="true" title="Drag onto a key/button to add it to this layer">＋</span>
@@ -227,6 +244,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <button id="chordopts">Options ▾</button>
     <button onclick="clearChordSel()">✕</button>
   </div>
+  <div id="groupshost" style="margin:.3rem 0"></div>
   <div class="panel" id="stage">
     <svg id="chordsvg"></svg>
     <div class="devrow" id="devcards"></div>
@@ -257,11 +275,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <button onclick="addDeviceEntry()">+ Add device</button>
     <span class="muted">Then ⬆ Save to device; the engine picks up new devices on service restart.</span>
   </div>
- </div>
- <div id="rightcol">
- <details id="btlogpane"><summary>&#128732; Bluetooth Logging</summary>
-   <div style="padding:0 .6rem .6rem"><div class="logbox" id="btout2" style="height:220px"></div></div>
- </details>
  </div>
  <div class="panel" id="editor">
    <div id="editorhead"><span id="editortitle">Mapping editor</span>
@@ -300,6 +313,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   </div>
   <div class="panel">
     <h2 style="font-size:1rem">Date &amp; time triggers</h2>
+    <p class="muted" style="font-size:.76rem">Include a trailing space if you want it to fire only after a space (e.g. <code>dt </code>). These save with the top <b>⬆ Save to device</b>, not "Save expansions".</p>
     <p class="muted">These are built into the engine (not stored in
     expansions.json) -- edit the trigger text below, then use the normal
     <b>⬆ Save to device</b> button at the top to apply.</p>
@@ -337,6 +351,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <b>Active OS:</b> <span id="osactive" class="status on">win</span>
       <span id="osdetected" class="muted"></span>
       <label style="margin:0;display:inline"><input type="checkbox" id="osautoswitch"> follow this browser's OS</label>
+      <label style="margin:0;display:inline"><input type="checkbox" id="osauto2"> engine auto-switch (no browser)</label>
+      <label style="margin:0;display:inline">default: <select id="osdefault" style="width:auto"></select></label>
       <span style="flex:1"></span>
       <button id="osadd">＋ Add OS</button>
     </div>
@@ -361,6 +377,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <p class="muted" style="font-size:.78rem">Rows are macros &amp; layer mappings that differ (or can differ) per OS. Base is the default; set an OS cell to override just for that OS. Empty = inherits base.</p>
     <table style="width:100%;font-size:.82rem" id="osgrid"></table>
   </div>
+  <div class="panel">
+    <h3 style="font-size:.95rem;margin:.2rem 0">Per-OS custom-mapping overrides <span class="muted" id="osmaphdr"></span></h3>
+    <p class="muted" style="font-size:.78rem">Override a custom key/button mapping just for the selected OS — e.g. pass <b>Cmd+Option</b> through untouched on mac while it runs a macro on win. Click a cell to change it; <b>= base</b> means it inherits. <b>Passthrough</b> clears the mapping for that OS only.</p>
+    <table style="width:100%;font-size:.82rem" id="osmap"></table>
+    <p class="muted" style="font-size:.76rem;margin-top:.3rem">Only inputs that have a base custom mapping appear here. Add base mappings in the <b>Mapping</b> tab first.</p>
+  </div>
 </div>
 
 <div id="page-bt" style="display:none"><div class="panel">
@@ -371,7 +393,10 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     on that keyboard and press Enter there.</span>
   </div>
   <div id="btdevices"></div>
-  <div class="logbox" id="btout" style="height:150px;margin-top:.6rem"></div>
+  <details open style="margin-top:.6rem"><summary style="cursor:pointer;font-weight:600">📡 Bluetooth logging</summary>
+    <div class="logbox" id="btout" style="height:150px;margin-top:.4rem"></div>
+  </details>
+  <div class="logbox" id="btout2" style="display:none"></div>
 </div></div>
 
 <div id="dragmsg">Drag a key/button here onto the input you want to replace it with</div>
@@ -393,6 +418,7 @@ let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
+let _showGroups=true,_groupsCollapsed=false;   // 6.9 master highlight toggle + collapse
 let expSets=null,curSet=null;
 function esc(x){return String(x??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));}
 function slug(x){return (String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''))||('dev'+Math.floor(Math.random()*1e4));}
@@ -428,22 +454,26 @@ function onReport(e){
   else if(t===CFG_BEGIN){rxTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);rxGot={};}
   else if(t===CFG_CHUNK){rxGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
   else if(t===CFG_END){
-    const parts=Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
-    const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
-    for(const p of parts){buf.set(p,o);o+=p.length;}
-    if(buf.length!==rxTotal){toast('short read — try again',true);return;}
-    const obj=JSON.parse(new TextDecoder().decode(buf));
-    if(curFile===0){cfg=obj;normalize();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
-      $('svcwarn').style.display='none';}
-    else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
-    else if(curFile===3){
-      lastEng=obj;adoptEffective(obj);updateConStat();
-      if($('engpane').style.display!=='none'||obj.config_error)renderEngineStatus(obj);}
-    else if(curFile===4){
-      expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
-      $('setsave').disabled=false;renderSets();}
-    else{exps=obj&&typeof obj==='object'?obj:{};renderExp();toast('✓ expansions read');}
-    _readDone();}
+    try{
+      const parts=Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
+      const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
+      for(const p of parts){buf.set(p,o);o+=p.length;}
+      if(buf.length!==rxTotal){toast('short read — try again',true);return;}
+      const obj=JSON.parse(new TextDecoder().decode(buf));
+      if(curFile===0){cfg=obj;normalize();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
+        $('svcwarn').style.display='none';}
+      else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
+      else if(curFile===3){
+        lastEng=obj;adoptEffective(obj);updateConStat();
+        if($('engpane').style.display!=='none'||obj.config_error)renderEngineStatus(obj);}
+      else if(curFile===4){
+        expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
+        _setsChannelOk=!!(obj&&'sets'in obj);
+        $('setsave').disabled=false;renderSets();}
+      else{exps=obj&&typeof obj==='object'?obj:{};renderExp();toast('✓ expansions read');}
+    }catch(err){toast('read error: '+err.message,true);
+      try{log('read error @ fid '+curFile+': '+err.message,'er','log');}catch(_){}}
+    finally{_readDone();}}   // never wedge the read queue on an error
   else if(t===PF_BEGIN){pfGot={};}
   else if(t===PF_CHUNK){pfGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
   else if(t===PF_END){
@@ -505,7 +535,7 @@ $('connect').onclick=async()=>{
   // all the time, not just while the debug panel is being watched -- the
   // panel itself can stay collapsed, this only controls whether the Pi
   // is sending event data at all
-  send([EVENTS_ON]); $('evon').classList.add('rec'); $('evon').textContent='● Recording';
+  eventsOn(60);
   syncClock();   // Bug 2: push this browser's clock to the Pi on every connect
 };
 function updateOsBtn(){
@@ -532,8 +562,22 @@ const o=JSON.parse(await f.text());
 if(o.config){cfg=o.config;if(o.expansions)exps=o.expansions;if(o.layouts)layouts=o.layouts;}else cfg=o;
 normalize();render();toast('profile loaded — Save to device to apply');};
 function clickFx(el){el.classList.remove('clicked');void el.offsetWidth;el.classList.add('clicked');}
-$('evon').onclick=e=>{send([EVENTS_ON]);$('evon').classList.add('rec');
-  $('evon').textContent='● Recording';clickFx(e.target);};
+let _evAutoStop=null;
+function eventsOn(seconds){
+  send([EVENTS_ON]);$('evon').classList.add('rec');$('evon').textContent='● Recording';
+  clearTimeout(_evAutoStop);
+  if(seconds)_evAutoStop=setTimeout(()=>{$('evoff').click();
+    toast('event monitor auto-stopped after '+seconds+'s');},seconds*1000);}
+$('evon').onclick=e=>{eventsOn(60);clickFx(e.target);};
+// show-keys 3-state: 60s -> indefinite -> off
+let _showKeysState=0;
+$('showkeys').onclick=()=>{
+  _showKeysState=(_showKeysState+1)%3;
+  if(_showKeysState===1){eventsOn(60);$('showkeys').textContent='⏱ Showing 60 s (click: keep on)';
+    $('showkeysinfo').textContent='wireframes flash as you type';}
+  else if(_showKeysState===2){eventsOn(0);$('showkeys').textContent='● Showing until stopped (click: stop)';}
+  else{send([EVENTS_OFF]);$('evon').classList.remove('rec');$('evon').textContent='▶ Events';
+    $('showkeys').textContent='▶ Show key presses';$('showkeysinfo').textContent='';}};
 $('evoff').onclick=e=>{send([EVENTS_OFF]);$('evon').classList.remove('rec');
   $('evon').textContent='▶ Events';clickFx(e.target);};
 $('clear').onclick=e=>{$('log').innerHTML='';$('outlog').innerHTML='';clickFx(e.target);};
@@ -629,7 +673,7 @@ window.btConnectDev=mac=>{
   btCmd('connect '+mac);
   [6000,12000,20000].forEach(t=>setTimeout(()=>btCmd('status '+mac,true),t));};
 window.btDiag=mac=>{               // chip click: dump why into the BT log
-  $('btlogpane').open=true;btCmd('info '+mac);};
+  switchTab('bt');btCmd('info '+mac);};
 window.bindMac=(id,mac)=>{
   const dd=(cfg.devices||[]).find(x=>x.id===id);
   if(!dd)return;dd.mac=mac;render();
@@ -717,7 +761,7 @@ $('expwrite').onclick=()=>{collectExp();putFile(1,exps);};
 function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wheel_by_layer',
 'port2_kbd','tap_hold','button_inputs','button_labels',
 'baseline','combos','mapping_groups','stepper_by_layer',
-'kbd_mappings_by_device','os_profiles'])if(!cfg[k])cfg[k]={};
+'kbd_mappings_by_device','os_profiles','layer_keys'])if(!cfg[k])cfg[k]={};
 migrateDevices();migrateByDevice();
 if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};}
 
@@ -783,8 +827,19 @@ return actShort(a);}
 /* ============ layer sources ============ */
 function layerSources(){ // layer -> {type:'key'|'btn', id}
   const out={1:{type:'key',id:0x39}};
+  for(const[u,L]of Object.entries(cfg.layer_keys||{}))out[+L]={type:'key',id:+u};
   for(const[b,v]of Object.entries(cfg.tap_hold||{}))out[v[1]]={type:'btn',id:+b};
   return out;}
+function layerOfSource(type,id){
+  if(type==='key'){
+    if(id===0x39&&!(cfg.layer_keys&&0x39 in cfg.layer_keys))return 1;   // built-in CapsLock
+    const v=cfg.layer_keys&&cfg.layer_keys[id];return v!=null?+v:null;}
+  const th=cfg.tap_hold&&cfg.tap_hold[id];return th?th[1]:null;}
+function allLayers(){
+  const set=new Set([0,1,2,3,4,5]);
+  for(const L of Object.values(cfg.layer_keys||{}))set.add(+L);
+  for(const v of Object.values(cfg.tap_hold||{}))set.add(v[1]);
+  return[...set].sort((a,b)=>a-b);}
 
 /* ============ device model: everything is just a Bluetooth device ============ */
 function migrateDevices(){
@@ -829,8 +884,17 @@ function effKey(dev,L,u){const canon=baselineOf(dev,u);
   return{canon,base:canon!==u,
     v:dv!==undefined?dv:cfg.kbd_mappings[`${L},${canon}`],
     devScoped:dv!==undefined};}
+function effMouse(dev,L,b){return (cfg.mouse_mappings||{})[`${L},${b}`];}
 
 /* ============ wireframe layouts ============ */
+// Split-keyboard physical rows (HID usages). -1 = blank spacer; 0x2c repeated
+// = a wide space bar.  Consumed by splitLayout().
+const KBD_ROWS=[
+[0x35,0x1e,0x1f,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x2d,0x2e],
+[0x2b,0x14,0x1a,0x08,0x15,0x17,0x1c,0x18,0x0c,0x12,0x13,0x2f,0x30],
+[0x39,0x04,0x16,0x07,0x09,0x0a,0x0b,0x0d,0x0e,0x0f,0x33,0x34,0x28],
+[0xe1,0x1d,0x1b,0x06,0x19,0x05,0x11,0x10,0x36,0x37,0x38,0xe5,-1],
+[0xe0,0xe3,0xe2,0x2c,0x2c,0x2c,0x2c,0x2c,0x2c,0x4f,0x51,0x52,0x50]];
 function splitLayout(){
   const keys=[];
   KBD_ROWS.forEach((row,r)=>{
@@ -844,6 +908,8 @@ function splitLayout(){
 function ansiLayout(){
   const keys=[];const R=(y,row)=>{let x=0;
     for(const[u,w]of row){keys.push({u,x,y:y*1.12,w});x+=w;}};
+  // function row: Esc, F1..F12
+  R(-1.3,[[0x29,1],[0x3a,1],[0x3b,1],[0x3c,1],[0x3d,1],[0x3e,1],[0x3f,1],[0x40,1],[0x41,1],[0x42,1],[0x43,1],[0x44,1],[0x45,1]]);
   R(0,[[0x35,1],[0x1e,1],[0x1f,1],[0x20,1],[0x21,1],[0x22,1],[0x23,1],[0x24,1],[0x25,1],[0x26,1],[0x27,1],[0x2d,1],[0x2e,1],[0x2a,2]]);
   R(1,[[0x2b,1.5],[0x14,1],[0x1a,1],[0x08,1],[0x15,1],[0x17,1],[0x1c,1],[0x18,1],[0x0c,1],[0x12,1],[0x13,1],[0x2f,1],[0x30,1],[0x31,1.5]]);
   R(2,[[0x39,1.75],[0x04,1],[0x16,1],[0x07,1],[0x09,1],[0x0a,1],[0x0b,1],[0x0d,1],[0x0e,1],[0x0f,1],[0x33,1],[0x34,1],[0x28,2.25]]);
@@ -852,9 +918,30 @@ function ansiLayout(){
   keys.push({u:0x52,x:14.1,y:3*1.12,w:1},{u:0x50,x:13.05,y:4*1.12,w:1},
             {u:0x51,x:14.1,y:4*1.12,w:1},{u:0x4f,x:15.15,y:4*1.12,w:1});
   return{unit:38,keys};}
+function e9Layout(){
+  // Typed elements: btn (mouse button), key (gesture-node usage), wheel,
+  // stepper.  Physical labels match what's printed on the mouse; identity /
+  // mappings show in the corner chips.  rot supported for future side views.
+  const keys=[
+    {btn:1,x:0,y:0,w:1.5,label:'Left'},
+    {wheel:1,x:1.6,y:0,w:0.9},
+    {btn:2,x:2.6,y:0,w:1.5,label:'Right'},
+    {btn:3,x:1.6,y:1.2,w:0.9,label:'Whl'},
+    {stepper:1,x:2.7,y:1.2,w:1.4,label:'10▲ 11▼'},
+    {btn:5,x:0,y:2.5,w:1,label:'7'},
+    {btn:4,x:1.1,y:2.5,w:1,label:'8'},
+    {u:0xe3,x:2.2,y:2.5,w:1,label:'9'},
+    {u:0x21,x:0,y:3.6,w:1,label:'4'},
+    {u:0x22,x:1.1,y:3.6,w:1,label:'5'},
+    {u:0x23,x:2.2,y:3.6,w:1,label:'6'},
+    {u:0x27,x:0,y:4.7,w:1,label:'0'},
+    {u:0x1e,x:1.1,y:4.7,w:1,label:'1'},
+    {u:0x1f,x:2.2,y:4.7,w:1,label:'2'},
+    {u:0x20,x:3.3,y:4.7,w:1,label:'3'}];
+  return{unit:42,keys};}
 function layoutFor(d){
   if(layouts&&layouts[d.id])return layouts[d.id];
-  return d.wireframe==='split'?splitLayout():ansiLayout();}
+  return d.wireframe==='split'?splitLayout():d.wireframe==='e9'?e9Layout():ansiLayout();}
 function editableLayout(d){
   layouts=layouts||{};
   if(!layouts[d.id])layouts[d.id]=JSON.parse(JSON.stringify(layoutFor(d)));
@@ -881,74 +968,8 @@ function mregion(id,shape){
   const grp=tgt!=null&&(gmv[`mouse:${layer},${tgt}`]||gmv[`mouse:*,${tgt}`]);
   return shape.replace('CLS',`region ${m?'mapped':''} ${src?'layerkey':''} ${isSel?'sel':''} ${grp?'grouphl':''} ${dead}`)
 .replace('DID',`data-btn="${id}"`);}
-function renderMouse(w,devid){
-  // Side-on view: you're looking at the mouse from its left side.
-  let h=`<div class="muted" style="margin-bottom:.2rem">(side view, buttons face left)</div>
-  <svg id="mousesvg" viewBox="0 0 340 340" width="330">
-  <path d="M60,40 Q20,60 18,120 Q16,200 50,280 Q70,322 150,326 Q260,330 300,280 Q322,240 318,150 Q314,70 260,42 Q180,20 60,40 Z"
-    fill="rgba(128,128,128,.1)" stroke="var(--line)" stroke-width="2"/>`;
-  h+=mregion(1,`<path class="CLS" DID d="M24,110 Q22,74 58,50 L104,72 Q80,92 74,120 Z"/>`)+`<text x="46" y="92">Left</text>`;
-  h+=mregion(2,`<path class="CLS" DID d="M22,128 L72,132 Q68,162 74,190 L28,196 Q18,162 22,128 Z"/>`)+`<text x="34" y="166">Right</text>`;
-  h+=mregion(3,`<ellipse class="CLS" DID cx="96" cy="126" rx="22" ry="13"/>`)+`<text x="82" y="130">wheel</text>`;
-  h+=`<path id="scrollup" class="region" data-scroll="up" d="M96,102 L106,112 L86,112 Z"/><text x="112" y="112">up</text>`;
-  h+=`<path id="scrolldn" class="region" data-scroll="down" d="M96,150 L106,140 L86,140 Z"/><text x="112" y="150">down</text>`;
-  // Buttons 10/11 are one coupled counter (firmware), so they render as a
-  // single bidirectional STEPPER rocker -- 10 = step up, 11 = step down --
-  // not two independently-mappable buttons.
-  {const st=cfg.stepper_by_layer&&cfg.stepper_by_layer[layer];
-   const mapped=st&&st[0]!=='pass'?' mapped':'';
-   h+=`<rect class="region stepper${mapped}" data-stepper="up" x="128" y="104" width="26" height="16" rx="4"/><text x="158" y="116">10 ▲</text>`;
-   h+=`<rect class="region stepper${mapped}" data-stepper="down" x="128" y="128" width="26" height="16" rx="4"/><text x="158" y="141">11 ▼</text>`;}
-  const rows=[
-    {btns:[7,8,9],  y:186, label:'\u2190 Thumb top area'},
-    {btns:[4,5,6],  y:232, label:'\u2190 Natural thumb area'},
-    {btns:[12,13,14,15], y:278, label:'\u2190 Thumb reach area'}];
-  const labels={12:'0',13:'1',14:'2',15:'3'};
-  for(const r of rows){
-    r.btns.forEach((b,ci)=>{
-      const x=30+ci*46;
-      h+=mregion(b,`<rect class="CLS" DID x="${x}" y="${r.y}" width="40" height="34" rx="7"/>`);
-      h+=`<text x="${x+14}" y="${r.y+21}">${labels[b]||b}</text>`;});
-    const lx=30+r.btns.length*46+6;
-    h+=`<text x="${lx}" y="${r.y+21}" style="opacity:.55">${r.label}</text>`;
-  }
-  h+=`</svg><div class="muted" id="mchips"></div>`;
-  w.innerHTML=h;
-  let chips='';for(const b of[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]){
-    const t=resolveBox(b);
-    const label=b<=3?btnLabel(b):boxTag(b);
-    if(t==null){chips+=`<div class="muted">${label} \u2014 not wired to anything</div>`;continue;}
-    const a=cfg.mouse_mappings[`${layer},${t}`];
-    if(a)chips+=`<div>${label} \u2192 ${actHTML(a)}</div>`;
-    else if(t!==b)chips+=`<div class="muted">${label} (routes to slot ${t}) \u2014 no action on this layer</div>`;}
-  const wm=cfg.wheel_by_layer[layer];if(wm&&wm[0]!=='pass')chips+=`<div>Wheel \u2192 ${wm.join(' ')}</div>`;
-  $('mchips').innerHTML=chips;
-  w.querySelectorAll('[data-btn]').forEach(r=>{
-    const boxId=+r.dataset.btn;
-    r.onclick=()=>{
-      // E9 thumb keys that arrive as KEYBOARD usages on the port-2 node
-      // (digits, and button 9's LWin) open the KEY editor, keyed on the
-      // usage + origin device -- so Baseline and port-scoped Custom apply.
-      const raw=PHYSICAL_RAW[boxId];
-      if(raw&&raw.kind==='kbd'){
-        sel={type:'key',id:raw.usage,physical:boxId,dev:devid};render();return;}
-      const t=resolveBox(boxId);
-      if(t==null){toast(boxTag(boxId)+' isn\'t routed to anything yet (no button_inputs entry)',true);return;}
-      sel={type:'btn',id:t,physical:boxId,dev:devid};render();};
-    r.setAttribute('draggable','true');
-    r.ondragstart=e=>{const t=resolveBox(boxId);if(t!=null)dragStart(e,{type:'btn',id:t});};
-    r.ondragover=e=>e.preventDefault();
-    r.ondrop=e=>{const t=resolveBox(boxId);if(t!=null)dropOn(e,{type:'btn',id:t});};});
-  w.querySelectorAll('[data-scroll]').forEach(r=>{
-    r.onclick=()=>{sel={type:'wheel'};render();};});
-  w.querySelectorAll('[data-stepper]').forEach(r=>{
-    r.onclick=()=>{sel={type:'stepper'};render();};});
-}
-const KBD_ROWS=[[0x35,0x1e,0x1f,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x2d,0x2e],
-[0x2b,0x14,0x1a,0x08,0x15,0x17,0x1c,0x18,0x0c,0x12,0x13,0x2f,0x30],
-[0x39,0x04,0x16,0x07,0x09,0x0a,0x0b,0x0d,0x0e,0x0f,0x33,0x34,0x28],
-[0xe1,0x1d,0x1b,0x06,0x19,0x05,0x11,0x10,0x36,0x37,0x38,0xe5,-1],
-[0xe0,0xe3,0xe2,0x2c,0x2c,0x2c,0x2c,0x2c,0x2c,0x4f,0x51,0x52,0x50]];
+function renderMouse(w,devid){   // retired: E9 now uses the unified renderLayoutKbd engine
+  const d=allDevices().find(x=>x.id===devid);if(d)renderLayoutKbd(d,w);}
 function renderStage(){
   const c=$('devcards');if(!c)return;c.innerHTML='';
   const devs=allDevices();
@@ -956,7 +977,7 @@ function renderStage(){
   for(const d of devs){
     if(d.kind==='port2kbd')continue;
     const editing=editDev===d.id;
-    const canEdit=d.wireframe!=='e9';
+    const canEdit=true;   // 6.1: mice edit like keyboards (typed elements)
     const card=document.createElement('div');
     card.className='devcard';card.dataset.dev=d.id;
     card.innerHTML=`<div class="devhead">
@@ -969,72 +990,98 @@ function renderStage(){
       <span class="constat" data-constat="${d.id}"></span></div>
       <div class="wfbody ${editing?'editing':''}" id="wrap-${d.id}"></div>`;
     c.appendChild(card);
-    if(d.wireframe==='e9')renderMouse($('wrap-'+d.id),d.id);
-    else renderLayoutKbd(d,$('wrap-'+d.id));}
+    renderLayoutKbd(d,$('wrap-'+d.id));}
+  window._supSet=suppressedMembers();
   renderGroupsCard(c);
   c.querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>toggleEdit(b.dataset.ed));
   updateConStat();}
+function groupActive(g){return g&&g.active!==false;}
 function groupMembersVisible(){
   const out={};
+  if(!_showGroups)return out;                              // 6.9 master toggle off
   for(const[name,g]of Object.entries(cfg.mapping_groups||{})){
-    if(groupOn[name]===false)continue;
+    if(!groupActive(g)||groupOn[name]===false)continue;   // disabled or hidden
     for(const m of (g.members||[]))out[m]=g.color||'#a855f7';}
   return out;}
+// member-ids in DISABLED groups: the UI dims them and the engine drops them
+function suppressedMembers(){
+  const out=new Set();
+  for(const g of Object.values(cfg.mapping_groups||{}))
+    if(g&&g.active===false)for(const m of (g.members||[]))out.add(m);
+  return out;}
+function isSuppressed(prefix,L,id){const s=window._supSet||(window._supSet=suppressedMembers());
+  return s.has(`${prefix}:${L},${id}`)||s.has(`${prefix}:*,${id}`);}
+function elLayerBadge(type,id){const L=layerOfSource(type,id);
+  return L!=null?`<span class="chiplayer" title="triggers layer ${L}">L${L}</span>`:'';}
 function renderLayoutKbd(d,w){
   const lay=layoutFor(d),unit=lay.unit||40,srcs=layerSources();
   const ghl=groupMembersVisible();
-  let maxx=0,maxy=0;
-  for(const k of lay.keys){maxx=Math.max(maxx,k.x+(k.w||1));maxy=Math.max(maxy,k.y+1);}
+  let minx=0,miny=0,maxx=0,maxy=0;
+  for(const k of lay.keys){minx=Math.min(minx,k.x);miny=Math.min(miny,k.y);
+    maxx=Math.max(maxx,k.x+(k.w||1));maxy=Math.max(maxy,k.y+(k.h||1));}
+  const offx=-Math.min(0,minx),offy=-Math.min(0,miny);   // fit negative rows (F-row)
   const div=document.createElement('div');div.className='kabs';
-  div.style.width=(maxx*unit+6)+'px';div.style.height=(maxy*unit+12)+'px';
+  div.style.width=((maxx+offx)*unit+6)+'px';div.style.height=((maxy+offy)*unit+12)+'px';
   w.innerHTML='';w.appendChild(div);
   lay.keys.forEach((k,idx)=>{
     const el=document.createElement('div');
-    if(k.pad||k.wheel||k.btn){       // trackpad cluster on a keyboard wireframe
-      el.style.left=(k.x*unit)+'px';el.style.top=(k.y*unit)+'px';
-      el.style.width=((k.w||1)*unit-4)+'px';
-      if(k.pad){el.className='key';el.style.opacity=.35;
-        el.style.height=((k.h||1.6)*unit)+'px';el.textContent=k.label||'trackpad';}
-      else if(k.wheel){el.className='key';el.textContent='⇅';el.title='scroll wheel';
-        el.onclick=()=>{sel={type:'wheel'};render();};}
-      else{
-        const m=cfg.mouse_mappings[`${layer},${k.btn}`];
-        const src=Object.values(srcs).some(s2=>s2.type==='btn'&&s2.id===k.btn);
-        el.className='key'+(m?' mapped':'')+(src?' layerkey':'')
-          +(sel&&sel.type==='btn'&&sel.id===k.btn&&(sel.dev||'')===d.id?' sel':'')
-          +(editDev===d.id&&editSel===idx?' editsel':'');
-        el.dataset.btnLay=k.btn;el.dataset.dev=d.id;
-        el.innerHTML=(k.label||btnLabel(k.btn))
-          +(m?`<span class="chip">${actHTML(m)}</span>`:'');
-        el.onclick=()=>{sel={type:'btn',id:k.btn,dev:d.id};render();};}
-      if(editDev===d.id)bindEditKey(el,d,idx);
+    const kind=k.wheel?'wheel':k.stepper?'stepper':k.pad?'pad':(k.btn!=null?'btn':'key');
+    el.style.left=((k.x+offx)*unit)+'px';el.style.top=((k.y+offy)*unit)+'px';
+    el.style.width=((k.w||1)*unit-4)+'px';
+    if(k.h)el.style.height=(k.h*unit-4)+'px';
+    if(k.rot)el.style.transform=`rotate(${k.rot}deg)`;
+    const editing=editDev===d.id;
+    // ---- special element kinds ----
+    if(kind==='pad'){el.className='key';el.style.opacity=.35;
+      el.style.height=((k.h||1.6)*unit)+'px';el.textContent=k.label||'trackpad';
+      if(editing)bindEditKey(el,d,idx);div.appendChild(el);return;}
+    if(kind==='wheel'){el.className='key';el.innerHTML=(k.label||'⇅')
+        +(cfg.wheel_by_layer&&cfg.wheel_by_layer[layer]&&cfg.wheel_by_layer[layer][0]!=='pass'?`<span class="chip">${esc((cfg.wheel_by_layer[layer]||[]).join(' '))}</span>`:'');
+      el.title='scroll wheel';
+      if(editing)bindEditKey(el,d,idx);else el.onclick=()=>{sel={type:'wheel'};render();};
       div.appendChild(el);return;}
-    const u=k.u;
-    let name=k.label||MODS[u]||KEYS[u]||'?';
-    const eff=effKey(d.id,layer,u);
-    // layer keys highlight by CANONICAL identity, on every device, and the
-    // CSS keeps them lit even when the device is disconnected
+    if(kind==='stepper'){el.className='key';el.innerHTML=(k.label||'10▲ 11▼')
+        +(cfg.stepper_by_layer&&cfg.stepper_by_layer[layer]&&cfg.stepper_by_layer[layer][0]!=='pass'?`<span class="chip">${esc((cfg.stepper_by_layer[layer]||[]).join(' '))}</span>`:'');
+      el.title='E9 10/11 stepper';
+      if(editing)bindEditKey(el,d,idx);else el.onclick=()=>{sel={type:'stepper'};render();};
+      div.appendChild(el);return;}
+    if(kind==='btn'){
+      const b=k.btn,eff=effMouse(d.id,layer,b);
+      const src=Object.values(srcs).some(s2=>s2.type==='btn'&&s2.id===b);
+      const gcol=ghl[`mouse:${layer},${b}`]||ghl[`mouse:*,${b}`];
+      el.className='key'+(eff!==undefined?' mapped':'')+(src?' layerkey':'')+(gcol?' grouphl':'')
+        +(sel&&sel.type==='btn'&&sel.id===b&&(sel.dev||'')===d.id?' sel':'')
+        +(editing&&editSel===idx?' editsel':'');
+      if(gcol)el.style.setProperty('--grpc',gcol);
+      el.dataset.btnLay=b;el.dataset.dev=d.id;
+      el.innerHTML=(k.label||btnLabel(b))
+        +(eff!==undefined?`<span class="chip">→${esc(actShort(eff))}</span>`:'')
+        +elLayerBadge('btn',b);
+      if(editing)bindEditKey(el,d,idx);
+      else el.onclick=e=>{if(e.shiftKey||e.altKey)return;sel={type:'btn',id:b,dev:d.id};render();};
+      div.appendChild(el);return;}
+    // ---- keyboard usage element (incl. E9 gesture digits) ----
+    const u=k.u,eff=effKey(d.id,layer,u);
     const isSrc=Object.values(srcs).some(s=>s.type==='key'&&s.id===eff.canon);
     const gcol=ghl[`kbd:${layer},${eff.canon}`]||ghl[`kbd:*,${eff.canon}`];
-    el.className='key'+(eff.v!==undefined?' mapped':'')+(isSrc?' layerkey':'')
-      +(gcol?' grouphl':'')
+    el.className='key'+(eff.v!==undefined?' mapped':'')+(isSrc?' layerkey':'')+(gcol?' grouphl':'')
       +(sel&&sel.type==='key'&&sel.id===u&&(sel.dev||'')===d.id&&sel.i===idx?' sel':'')
-      +(editDev===d.id&&editSel===idx?' editsel':'')
+      +(editing&&editSel===idx?' editsel':'')
       +(comboSel.some(x=>x.dev===d.id&&x.u===u)?' combosel':'')
       +(seqSel.some(x=>x.dev===d.id&&x.u===u)?' seqsel':'');
     if(gcol)el.style.setProperty('--grpc',gcol);
-    el.style.left=(k.x*unit)+'px';el.style.top=(k.y*unit)+'px';
-    el.style.width=((k.w||1)*unit-4)+'px';
     el.dataset.usage=u;el.dataset.canon=eff.canon;el.dataset.i=idx;el.dataset.dev=d.id;
-    let chip='';
-    if(eff.base)chip+=`≡${MODS[eff.canon]||KEYS[eff.canon]||(eff.canon===0?'∅':'?')}`;
-    if(eff.v!==undefined)chip+=`${chip?' ':''}${
+    // corner scheme: red top-left = ORIGINAL (only if baseline changed it);
+    // grey center = current identity; green bottom-right = custom output.
+    const centerName=k.label||MODS[eff.canon]||KEYS[eff.canon]||'?';
+    const baseChip=eff.base?`<span class="chipbase" title="original ${esc(KEYS[u]||MODS[u]||'?')} before this device's Baseline">${esc(KEYS[u]||MODS[u]||'?')}</span>`:'';
+    const custChip=eff.v!==undefined?`<span class="chip">${
       Array.isArray(eff.v)?'→'+esc(actShort(eff.v)):
-      eff.v===0?'∅':'→'+(KEYS[eff.v]||MODS[eff.v]||'?')}`;
+      eff.v===0?'∅':'→'+esc(KEYS[eff.v]||MODS[eff.v]||'?')}</span>`:'';
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
-      +name+(chip?`<span class="chip">${chip}</span>`:'');
-    if(editDev===d.id)bindEditKey(el,d,idx);
+      +baseChip+`<span class="kcenter">${centerName}</span>`+custChip+elLayerBadge('key',eff.canon);
+    if(editing)bindEditKey(el,d,idx);
     else{
       el.onmousedown=e=>{if(e.shiftKey||e.altKey)e.preventDefault();};
       el.onclick=e=>{
@@ -1050,6 +1097,7 @@ function renderLayoutKbd(d,w){
 /* ---- groups pseudo-device card ---- */
 const GROUP_COLORS=['#a855f7','#06b6d4','#f97316','#84cc16','#ec4899','#eab308'];
 function renderGroupsCard(c){
+  const host=$('groupshost');if(!host)return;
   const names=Object.keys(cfg.mapping_groups||{});
   const card=document.createElement('div');
   card.className='devcard';card.id='groupscard';
@@ -1057,16 +1105,30 @@ function renderGroupsCard(c){
   names.forEach((n,i)=>{
     const g=cfg.mapping_groups[n];
     const col=g.color||GROUP_COLORS[i%GROUP_COLORS.length];
-    const on=groupOn[n]!==false;
-    pills+=`<span class="grouppill ${on?'':'off'}" data-g="${esc(n)}">
+    const active=groupActive(g);
+    pills+=`<span class="grouppill ${active?'':'off'}" data-g="${esc(n)}" style="cursor:default">
+      <input type="checkbox" ${active?'checked':''} data-gact="${esc(n)}" title="enable/disable this group's mappings">
       <span class="sw" style="background:${col}"></span>${esc(n)}
-      <span class="muted">(${(g.members||[]).length})</span></span>`;});
-  card.innerHTML=`<div class="devhead"><h2>🗂 Groups</h2></div>
-    ${names.length?pills:'<span class="muted">No groups yet — assign one from the mapping editor below.</span>'}
-    <div class="muted" style="font-size:.75rem;margin-top:.3rem">Click a group to show/hide its member highlights on the wireframes.</div>`;
-  c.appendChild(card);
-  card.querySelectorAll('.grouppill').forEach(p=>p.onclick=()=>{
-    const n=p.dataset.g;groupOn[n]=groupOn[n]===false;render();});}
+      <span class="muted">(${(g.members||[]).length})</span>
+      <a class="mlink" data-geye="${esc(n)}" title="show/hide highlights">${groupOn[n]===false?'🙈':'👁'}</a></span>`;});
+  card.innerHTML=`<div class="devhead" style="align-items:center;gap:.5rem">
+      <a class="mlink" id="grpcollapse" title="collapse/expand" style="font-weight:600">${_groupsCollapsed?'▸':'▾'}</a>
+      <h2 style="margin:0">🗂 Groups</h2>
+      <label style="display:flex;align-items:center;gap:.3rem;font-weight:600;margin-left:.4rem;cursor:pointer">
+        <input type="checkbox" id="grpshow" ${_showGroups?'checked':''}> Show Groups</label></div>
+    <div id="grpbody" style="${_groupsCollapsed?'display:none':''}">
+      ${names.length?pills:'<span class="muted">No groups yet — assign one from the mapping editor below.</span>'}
+      <div class="muted" style="font-size:.75rem;margin-top:.3rem">“Show Groups” toggles all highlight coloring. Per-group checkbox = enable/disable that group's mappings (stays in the config; ⬆ Save to device to apply). 👁 toggles one group's highlight.</div>
+    </div>`;
+  host.innerHTML='';host.appendChild(card);
+  $('grpshow').onchange=()=>{_showGroups=$('grpshow').checked;render();};
+  $('grpcollapse').onclick=()=>{_groupsCollapsed=!_groupsCollapsed;render();};
+  card.querySelectorAll('[data-gact]').forEach(cb=>cb.onchange=()=>{
+    const n=cb.dataset.gact,g=cfg.mapping_groups[n];if(!g)return;
+    g.active=cb.checked;render();
+    toast((cb.checked?'enabled':'disabled')+' group "'+n+'" — ⬆ Save to device to apply');});
+  card.querySelectorAll('[data-geye]').forEach(a=>a.onclick=()=>{
+    const n=a.dataset.geye;groupOn[n]=groupOn[n]===false;render();});}
 function addTrackpadCluster(lay){
   const maxy=lay.keys.length?Math.max(...lay.keys.map(k=>k.y)):0;
   const y=Math.round((maxy+1.3)*4)/4;
@@ -1086,18 +1148,36 @@ window.addTrackpadTo=id=>{
 function bindEditKey(el,d,idx){
   el.style.opacity='';
   el.onpointerdown=e=>{
-    e.preventDefault();el.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    try{el.setPointerCapture(e.pointerId);}catch(_){}
     const lay=editableLayout(d),unit=lay.unit||40,k=lay.keys[idx];
     const sx=e.clientX,sy=e.clientY,ox=k.x,oy=k.y;let moved=false;
-    el.onpointermove=ev=>{
-      const dx=(ev.clientX-sx)/unit,dy=(ev.clientY-sy)/unit;
-      if(Math.abs(dx)>0.12||Math.abs(dy)>0.12)moved=true;
-      k.x=Math.max(0,Math.round((ox+dx)*4)/4);
-      k.y=Math.max(0,Math.round((oy+dy)*4)/4);
-      el.style.left=(k.x*unit)+'px';el.style.top=(k.y*unit)+'px';};
-    el.onpointerup=()=>{el.onpointermove=null;el.onpointerup=null;
-      if(!moved)editSel=editSel===idx?null:idx;
-      render();};};}
+    // 6.7: DON'T re-render during the drag — a full render() rebuilds the
+    // wireframe DOM and destroys `el` mid-gesture, which drops pointer capture
+    // and freezes the drag after a few px. Instead translate `el` visually and
+    // commit + re-render (with the drag-above normalize) only on pointerup.
+    const move=ev=>{
+      const rawx=ev.clientX-sx,rawy=ev.clientY-sy;
+      if(Math.abs(rawx)>5||Math.abs(rawy)>5)moved=true;
+      const dx=Math.round((rawx/unit)*4)/4*unit;   // ¼-unit snap, in px
+      const dy=Math.round((rawy/unit)*4)/4*unit;
+      el.style.transform=`translate(${dx}px,${dy}px)`+(k.rot?` rotate(${k.rot}deg)`:'');
+      el.style.zIndex='90';};
+    const up=ev=>{
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',up);
+      el.style.transform='';el.style.zIndex='';
+      if(moved){
+        const dx=(ev.clientX-sx)/unit,dy=(ev.clientY-sy)/unit;
+        k.x=Math.round((ox+dx)*4)/4;   // allow negative (drag above/left of grid)
+        k.y=Math.round((oy+dy)*4)/4;
+        const mnx=Math.min(...lay.keys.map(q=>q.x));   // 6.2: dragged-above
+        const mny=Math.min(...lay.keys.map(q=>q.y));   // pushes the rest down/right
+        if(mnx<0||mny<0)lay.keys.forEach(q=>{q.x-=Math.min(0,mnx);q.y-=Math.min(0,mny);});
+      }else editSel=editSel===idx?null:idx;
+      render();};
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up);};}
 function toggleEdit(id){
   if(editDev===id){
     editDev=null;editSel=null;
@@ -1114,34 +1194,60 @@ function renderPalette(){
   if(!d){p.style.display='none';return;}
   const lay=editableLayout(d);
   const selk=editSel!=null?lay.keys[editSel]:null;
-  let opts='';
-  for(const[u,n]of[...Object.entries(KEYS),...Object.entries(MODS)])
-    opts+=`<option value="${u}">${n}</option>`;
+  const keyOptsHtml=[...Object.entries(KEYS),...Object.entries(MODS)]
+    .map(([u,n])=>`<option value="${u}">${esc(n)}</option>`).join('');
+  const selKind=selk?(selk.wheel?'wheel':selk.stepper?'stepper':selk.pad?'pad':(selk.btn!=null?'btn':'key')):null;
+  const selLabel=selk?(selk.label||MODS[selk.u]||KEYS[selk.u]||selKind):'';
   p.innerHTML=`<h3>✎ ${esc(d.name)}</h3>
-  <div class="muted" style="font-size:.76rem;margin-bottom:.3rem">Drag keys to
-  reposition (snaps to ¼ unit) · click a key to select it</div>
-  <label>Add key</label>
-  <div style="display:flex;gap:.4rem"><select id="palkey" style="flex:1">${opts}</select>
-  <input type="number" id="palw" value="1" step="0.25" min="0.5" style="width:64px" title="width in key units"></div>
-  <button id="paladd" class="primary" style="margin-top:.4rem;width:100%">＋ Add key</button>
-  <button id="paltp" style="margin-top:.4rem;width:100%">＋ Trackpad cluster</button>
-  ${selk?`<hr><b>Selected:</b> ${MODS[selk.u]||KEYS[selk.u]||'?'}
-   <label>Width (units)</label><input type="number" id="palsw" value="${selk.w||1}" step="0.25" min="0.5">
-   <button id="paldel" style="margin-top:.4rem;width:100%">🗑 Remove key</button>`:''}
+  <div class="muted" style="font-size:.74rem;margin-bottom:.3rem">Drag to reposition
+  (¼-unit snap; drag above the top to push the rest down) · click to select</div>
+  <label>Add element</label>
+  <div style="display:flex;gap:.4rem">
+    <select id="palkind" style="flex:1">
+      <option value="key">Key</option>
+      <option value="btn">Mouse button</option>
+      <option value="wheel">Scroll wheel</option>
+      <option value="stepper">Stepper</option></select></div>
+  <div id="palvalwrap" style="margin-top:.3rem"></div>
+  <div style="display:flex;gap:.4rem;margin-top:.3rem">
+    <label style="flex:1;margin:0">W<input type="number" id="palw" value="1" step="0.25" min="0.5"></label>
+    <label style="flex:1;margin:0">H<input type="number" id="palh" value="1" step="0.25" min="0.5"></label></div>
+  <button id="paladd" class="primary" style="margin-top:.4rem;width:100%">＋ Add element</button>
+  <button id="paltp" style="margin-top:.35rem;width:100%">＋ Trackpad cluster</button>
+  ${selk?`<hr><b>Selected:</b> ${esc(selLabel)} <span class="muted">(${selKind})</span>
+   <div style="display:flex;gap:.4rem;margin-top:.3rem">
+     <label style="flex:1;margin:0">W<input type="number" id="palsw" value="${selk.w||1}" step="0.25" min="0.5"></label>
+     <label style="flex:1;margin:0">H<input type="number" id="palsh" value="${selk.h||1}" step="0.25" min="0.5"></label>
+     <label style="flex:1;margin:0">↻°<input type="number" id="palsr" value="${selk.rot||0}" step="15"></label></div>
+   <button id="paldel" style="margin-top:.4rem;width:100%">🗑 Remove element</button>`:''}
   <hr><label>Start over from template</label>
   <div style="display:flex;gap:.4rem"><button id="palansi" style="flex:1">ANSI</button>
-  <button id="palsplit" style="flex:1">Split</button></div>`;
+  <button id="palsplit" style="flex:1">Split</button>
+  <button id="pale9" style="flex:1">E9 mouse</button></div>`;
   p.style.display='block';
+  const valRefresh=()=>{const kind=$('palkind').value;
+    $('palvalwrap').innerHTML=kind==='key'?`<select id="palkey" style="width:100%">${keyOptsHtml}</select>`:
+      kind==='btn'?`<div style="display:flex;gap:.4rem"><select id="palbtn" style="flex:1">${Array.from({length:15},(_,i)=>`<option value="${i+1}">${esc(btnLabel(i+1))}</option>`).join('')}</select><input type="text" id="pallbl" placeholder="label" style="width:70px"></div>`:
+      '';};
+  $('palkind').onchange=valRefresh;valRefresh();
   $('paladd').onclick=()=>{
-    const maxy=lay.keys.length?Math.max(...lay.keys.map(k=>k.y)):0;
-    lay.keys.push({u:+$('palkey').value,x:0,y:Math.round((maxy+1.12)*4)/4,w:+$('palw').value||1});
-    editSel=lay.keys.length-1;render();};
+    const kind=$('palkind').value;
+    const maxy=lay.keys.length?Math.max(...lay.keys.map(k=>k.y+(k.h||1))):0;
+    const base={x:0,y:Math.round(maxy*4)/4,w:+$('palw').value||1,h:+$('palh').value||1};
+    if(kind==='key')base.u=+$('palkey').value;
+    else if(kind==='btn'){base.btn=+$('palbtn').value;const l=$('pallbl').value.trim();if(l)base.label=l;}
+    else if(kind==='wheel')base.wheel=1;
+    else if(kind==='stepper')base.stepper=1;
+    lay.keys.push(base);editSel=lay.keys.length-1;render();};
   $('paltp').onclick=()=>{addTrackpadCluster(lay);render();};
   if(selk){
     $('palsw').onchange=()=>{selk.w=+$('palsw').value||1;render();};
+    $('palsh').onchange=()=>{selk.h=+$('palsh').value||1;render();};
+    $('palsr').onchange=()=>{selk.rot=+$('palsr').value||0;render();};
     $('paldel').onclick=()=>{lay.keys.splice(editSel,1);editSel=null;render();};}
   $('palansi').onclick=()=>{if(confirm('Replace this layout with the ANSI template?')){layouts[d.id]=ansiLayout();editSel=null;render();}};
-  $('palsplit').onclick=()=>{if(confirm('Replace this layout with the split template?')){layouts[d.id]=splitLayout();editSel=null;render();}};}
+  $('palsplit').onclick=()=>{if(confirm('Replace this layout with the split template?')){layouts[d.id]=splitLayout();editSel=null;render();}};
+  $('pale9').onclick=()=>{if(confirm('Replace this layout with the E9 mouse template?')){layouts[d.id]=e9Layout();editSel=null;render();}};}
 /* ---- Shift = combo capture, Alt = sequence capture ---- */
 function addComboSel(dev,u){
   if(seqSel.length){toast('finish or cancel the sequence first',true);return;}
@@ -1153,35 +1259,13 @@ function addSeqSel(dev,u){
   if(comboSel.length){toast('finish or cancel the combo first',true);return;}
   seqSel.push({dev,u,canon:baselineOf(dev,u)});
   render();}
-function clearCapture(){comboSel=[];seqSel=[];render();}
+function clearCapture(){comboSel=[];seqSel=[];window._comboDraft=null;window._seqDraft=null;
+  if(sel&&sel.type==='combo')sel=null;
+  $('editor').style.display='none';render();}
 function charForUsage(u){const n=KEYS[u];
   return n&&n.length===1?n.toLowerCase():(u===0x2c?' ':null);}
-function renderCapture(){
-  const bar=$('capturebar');if(!bar)return;
-  if(comboSel.length){
-    bar.style.display='flex';
-    $('capmode').textContent='Combo (pressed together): ';
-    $('capinfo').textContent=comboSel.map(x=>KEYS[x.canon]||'?').join(' + ');
-    $('caphint').textContent='Shift-click more keys to extend';
-    $('capassign').onclick=()=>{
-      if(comboSel.length<2){toast('a combo needs at least 2 keys',true);return;}
-      const id='combo-'+comboSel.map(x=>x.canon).join('-');
-      cfg.combos[id]={keys:comboSel.map(x=>x.canon),action:['suppress'],window_ms:60};
-      sel={type:'combo',id};comboSel=[];render();
-      document.getElementById('editor').scrollIntoView({behavior:'smooth'});};
-  }else if(seqSel.length){
-    bar.style.display='flex';
-    $('capmode').textContent='Sequence (typed in order): ';
-    const trig=seqSel.map(x=>charForUsage(x.canon)||'?').join('');
-    $('capinfo').textContent=seqSel.map(x=>KEYS[x.canon]||'?').join(' , ')+`  →  trigger "${trig}"`;
-    $('caphint').textContent='Alt-click more keys to extend';
-    $('capassign').onclick=()=>{
-      if(seqSel.some(x=>!charForUsage(x.canon))){toast('sequences need character keys only',true);return;}
-      const value=prompt(`Expansion for "${trig}" — text to type (may embed {{ctrl+c}} chords):`);
-      if(value==null){return;}
-      exps=exps||{};exps[trig]=value;seqSel=[];render();renderExp();
-      toast(`expansion "${trig}" added — ⬆ Save expansions to apply`);};
-  }else bar.style.display='none';}
+function renderCapture(){   // legacy bar retired; capture now lives in the editor popover
+  /* capture now lives in the editor popover */}
 
 /* ============ all-remappings overview (HID-Remapper style) ============ */
 function renderMapTable(){
@@ -1209,17 +1293,16 @@ function renderMapTable(){
     for(const[u,v]of Object.entries(t))
       add(`≡ ${esc(devName(dev))}: ${MODS[u]||KEYS[u]||u}`,null,null,null)
         .hold='baseline → '+(v===0?'∅':(MODS[v]||KEYS[v]||v));
-  const shown=window._mtL||(window._mtL=[true,true,true,true,true,true]);
   let h='<tr><td><b>Input</b></td><td><b>Tap / Hold / Baseline</b></td>';
-  for(let L=0;L<6;L++)if(shown[L])h+=`<td><b>L${L}</b></td>`;
+  for(let L=0;L<6;L++)h+=`<td><b>${esc(LAYER_NAMES[L]||('L'+L))}</b></td>`;
   h+='</tr>';
   for(const lbl of Object.keys(rows).sort()){
     const r=rows[lbl];
     h+=`<tr><td>${lbl}</td><td class="muted">${r.hold||''}</td>`;
-    for(let L=0;L<6;L++){if(!shown[L])continue;
+    for(let L=0;L<6;L++){
       const a=r.acts[L];
       h+=`<td style="cursor:pointer" data-l="${L}" data-lbl="${esc(lbl)}">${
-        a?'☑ '+a:'<span class="muted" style="opacity:.4">☐</span>'}</td>`;}
+        a?esc(a):'<span class="muted" style="opacity:.35">·</span>'}</td>`;}
     h+='</tr>';}
   el.innerHTML=h;
   el._rows=rows;
@@ -1227,13 +1310,7 @@ function renderMapTable(){
     const r=el._rows[td.dataset.lbl];if(!r||!r.sel)return;
     layer=+td.dataset.l;sel={...r.sel};render();
     $('editor').scrollIntoView({behavior:'smooth',block:'center'});});
-  const lf=$('mtlayers');
-  lf.innerHTML='Show layers: '+[0,1,2,3,4,5].map(L=>
-    `<label style="display:inline;margin-right:.7rem;opacity:.9">
-     <input type="checkbox" ${shown[L]?'checked':''} data-l="${L}"> ${LAYER_NAMES[L]||('L'+L)}</label>`).join('')
-    +' <span style="opacity:.6">· ☑ = mapping exists (click to open in editor)</span>';
-  lf.querySelectorAll('input').forEach(cb=>cb.onchange=()=>{
-    shown[+cb.dataset.l]=cb.checked;renderMapTable();});
+  $('mtlayers').innerHTML='<span style="opacity:.6">Layer columns show the output on each layer; click a cell to edit it.</span>';
   const cb=$('mtcombos');let ch='';
   for(const[id,c]of Object.entries(cfg.combos||{}))
     ch+=`<div>⧉ combo ${c.keys.map(u=>KEYS[u]||'?').join('+')} → ${actShort(c.action)||'(swallow)'} <a class="mlink" onclick='sel={type:"combo",id:"${id}"};render()'>edit</a></div>`;
@@ -1332,87 +1409,72 @@ function asgAllInputs(){
   for(let b=1;b<=15;b++)out.push({v:'btn:'+b,label:'\uD83D\uDDB1 '+btnLabel(b)});
   return out;}
 function asgRows(){
-  const seen={},rows=[];
-  const add=(type,id)=>{const k=type+':'+id;if(!seen[k]){seen[k]=1;rows.push({type,id});}};
-  for(const k of Object.keys(cfg.kbd_mappings||{}))add('key',+k.split(',')[1]);
-  for(const dev of Object.values(cfg.kbd_mappings_by_device||{}))
-    for(const k of Object.keys(dev))add('key',+k.split(',')[1]);
-  for(const k of Object.keys(cfg.mouse_mappings||{}))add('btn',+k.split(',')[1]);
-  for(const b of Object.keys(cfg.tap_hold||{}))add('btn',+b);
-  for(const r of (window._asgPending||[]))add(r.type,r.id);
+  // ONE ROW PER (input, distinct output); layers set = where that output fires.
+  // An input with different outputs on different layers appears on several rows.
+  const map={};
+  const addRow=(type,id,L,v)=>{const ok=type+':'+id+'|'+JSON.stringify(v);
+    (map[ok]=map[ok]||{type,id,out:v,layers:new Set()}).layers.add(L);};
+  for(const[k,v]of Object.entries(cfg.kbd_mappings||{})){const p=k.split(',').map(Number);addRow('key',p[1],p[0],v);}
+  for(const[k,v]of Object.entries(cfg.mouse_mappings||{})){const p=k.split(',').map(Number);addRow('btn',p[1],p[0],v);}
+  const rows=Object.values(map);
+  for(const r of (window._asgPending||[]))
+    rows.push({type:r.type,id:r.id,out:undefined,layers:new Set(),pending:true,__p:r});
   return rows;}
-function asgCellVal(inp,L){
-  const key=`${L},${inp.id}`;
-  return inp.type==='key'?cfg.kbd_mappings[key]:cfg.mouse_mappings[key];}
-function asgSetLayer(inp,L,act){
-  const key=`${L},${inp.id}`;
-  const tbl=inp.type==='key'?cfg.kbd_mappings:cfg.mouse_mappings;
-  if(act===null||act===undefined)delete tbl[key];
-  else tbl[key]=act;
-  render();toast(`layer ${L} updated \u2014 \u2b06 Save to device`);}
-window.asgOpenCell=(td,type,id,L)=>{
-  const inp={type,id:+id};
-  asgOpenSearch(td,inp,'assign-cell',act=>asgSetLayer(inp,L,act===null?null:
-    (inp.type==='key'? (Array.isArray(act)?act:act) : act)));};
+function asgApply(inp,L,act){
+  const key=`${L},${inp.id}`,tbl=inp.type==='key'?cfg.kbd_mappings:cfg.mouse_mappings;
+  if(act===null||act===undefined)delete tbl[key];else tbl[key]=act;}
 function renderAssignTable(){
   const t=$('asgtbl');if(!t||!cfg)return;
   const rows=asgRows();
-  let h=`<tr><td><b>Input</b></td>${LAYER_NAMES.map((n,L)=>`<td title="layer ${L}"><b>${esc(n)}</b></td>`).join('')}<td><b>Group</b></td><td></td></tr>`;
-  for(const inp of rows){
-    const key=inp.type+':'+inp.id;
-    const member=(inp.type==='key'?'kbd:*,':'mouse:*,')+inp.id;
-    const inGroups=Object.keys(cfg.mapping_groups||{})
-      .filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
-    const inputSel=`<select data-asginput="${key}" style="width:auto;max-width:150px">`
-      +asgAllInputs().map(o=>`<option value="${o.v}" ${o.v===key?'selected':''}>${esc(o.label)}</option>`).join('')
-      +`</select>`;
+  let h=`<tr><td><b>Input</b></td><td><b>Output</b></td>${LAYER_NAMES.map((n,L)=>`<td title="layer ${L}" style="text-align:center"><b>${esc(n)}</b></td>`).join('')}<td><b>Group</b></td><td></td></tr>`;
+  rows.forEach((r,ri)=>{
+    const key=r.type+':'+r.id;
+    const member=(r.type==='key'?'kbd:*,':'mouse:*,')+r.id;
+    const inGroups=Object.keys(cfg.mapping_groups||{}).filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
+    const inputSel=`<select data-asginput="${ri}" style="width:auto;max-width:140px">`
+      +asgAllInputs().map(o=>`<option value="${o.v}" ${o.v===key?'selected':''}>${esc(o.label)}</option>`).join('')+`</select>`;
+    const outLbl=r.out===undefined?'<span class="muted">(set…)</span>':esc(asgActLabel(r.out));
     let cells='';
-    for(let L=0;L<6;L++){
-      const v=asgCellVal(inp,L);
-      const lbl=v===undefined?'<span class="muted" style="opacity:.4">\u2013</span>':esc(asgActLabel(v));
-      cells+=`<td class="asgcell" data-asgcell="${key}" data-l="${L}" style="cursor:pointer" title="click to set layer ${L}">${lbl}</td>`;}
+    for(let L=0;L<6;L++)cells+=`<td style="text-align:center"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
     h+=`<tr>
-      <td>${inputSel}</td>${cells}
-      <td><input type="text" data-asggrp="${key}" list="grouplist" placeholder="group" value="" style="width:90px" maxlength="60">
-        ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} \u2715</span>`).join('')}</td>
-      <td><button data-asgdel="${key}" title="remove this mapping">\u2715</button></td>
-    </tr>`;}
+      <td>${inputSel}</td>
+      <td data-asgout="${ri}" style="cursor:pointer"><a class="mlink">${outLbl}</a></td>
+      ${cells}
+      <td><input type="text" data-asggrp="${key}" list="grouplist" placeholder="group" value="" style="width:80px" maxlength="60">
+        ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}</td>
+      <td><button data-asgdel="${ri}" title="remove this Input→Output">✕</button></td></tr>`;});
   t.innerHTML=h;
-  t.querySelectorAll('[data-asgcell]').forEach(td=>td.onclick=()=>{
-    const[type,id]=td.dataset.asgcell.split(':');
-    asgOpenCell(td,type,id,+td.dataset.l);});
+  const R=ri=>rows[+ri];
   t.querySelectorAll('[data-asginput]').forEach(sl=>sl.onchange=()=>{
-    // rebind: move this input's mappings to the newly chosen input
-    const[ot,oid]=sl.dataset.asginput.split(':');
-    const[nt,nid]=sl.value.split(':');
-    if(ot===nt&&oid===nid)return;
-    const oldInp={type:ot,id:+oid},newInp={type:nt,id:+nid};
-    for(let L=0;L<6;L++){const v=asgCellVal(oldInp,L);
-      if(v!==undefined){asgSetLayerSilent(newInp,L,v);asgSetLayerSilent(oldInp,L,null);}}
-    if(window._asgPending)window._asgPending=window._asgPending
-      .filter(r=>!(r.type===ot&&r.id===+oid));
-    render();toast('input rebound \u2014 \u2b06 Save to device');});
+    const r=R(sl.dataset.asginput),[nt,nid]=sl.value.split(':');
+    if(r.out!==undefined)for(const L of r.layers){asgApply({type:r.type,id:r.id},L,null);asgApply({type:nt,id:+nid},L,r.out);}
+    if(r.pending&&r.__p){r.__p.type=nt;r.__p.id=+nid;}
+    render();toast('input changed — ⬆ Save to device');});
+  t.querySelectorAll('[data-asgout]').forEach(td=>td.onclick=()=>{
+    const r=R(td.dataset.asgout);
+    asgOpenSearch(td,{type:r.type,id:r.id},'row',act=>{
+      const targets=r.layers.size?[...r.layers]:[layer];
+      if(r.out!==undefined)for(const L of r.layers)asgApply({type:r.type,id:r.id},L,null);
+      if(act!==null)for(const L of targets)asgApply({type:r.type,id:r.id},L,act);
+      if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
+      render();toast('output set — ⬆ Save to device');});});
+  t.querySelectorAll('[data-asgchk]').forEach(cb=>cb.onchange=()=>{
+    const r=R(cb.dataset.asgchk),L=+cb.dataset.l;
+    if(r.out===undefined){cb.checked=false;toast('set an Output first',true);return;}
+    asgApply({type:r.type,id:r.id},L,cb.checked?r.out:null);
+    render();toast('layer '+L+(cb.checked?' on':' off')+' — ⬆ Save to device');});
   t.querySelectorAll('[data-asgdel]').forEach(b=>b.onclick=()=>{
-    const[type,id]=b.dataset.asgdel.split(':');const inp={type,id:+id};
-    for(let L=0;L<6;L++)asgSetLayerSilent(inp,L,null);
-    if(inp.type==='key')for(const dev of Object.values(cfg.kbd_mappings_by_device||{}))
-      for(let L=0;L<6;L++)delete dev[`${L},${inp.id}`];
-    if(window._asgPending)window._asgPending=window._asgPending
-      .filter(r=>!(r.type===type&&r.id===+id));
-    render();toast('mapping removed \u2014 \u2b06 Save to device');});
-  t.querySelectorAll('input[data-asggrp]').forEach(gi=>gi.onkeydown=e=>{
-    if(e.key!=='Enter')return;
-    const[type,id]=gi.dataset.asggrp.split(':');
-    addToGroup(gi.value,(type==='key'?'kbd:*,':'mouse:*,')+id);});
+    const r=R(b.dataset.asgdel);
+    if(r.out!==undefined)for(const L of r.layers)asgApply({type:r.type,id:r.id},L,null);
+    if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
+    render();toast('mapping removed — ⬆ Save to device');});
+  t.querySelectorAll('input[data-asggrp]').forEach(gi=>{
+    const commit=()=>{if(!gi.value.trim())return;const[type,id]=gi.dataset.asggrp.split(':');
+      addToGroup(gi.value,(type==='key'?'kbd:*,':'mouse:*,')+id);gi.value='';};
+    gi.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commit();}};gi.onblur=commit;});
   const add=$('asgnewadd');
-  if(add)add.onclick=()=>{
-    window._asgPending=window._asgPending||[];
-    window._asgPending.push({type:'key',id:0x04});   // a blank-ish row to configure
-    render();};}
-function asgSetLayerSilent(inp,L,act){
-  const key=`${L},${inp.id}`;
-  const tbl=inp.type==='key'?cfg.kbd_mappings:cfg.mouse_mappings;
-  if(act===null||act===undefined)delete tbl[key];else tbl[key]=act;}
+  if(add)add.onclick=()=>{window._asgPending=window._asgPending||[];
+    window._asgPending.push({type:'key',id:0x04});render();};}
 
 /* ============ chord lines ============ */
 function elsFor(t){
@@ -1689,7 +1751,10 @@ function scopeTabsHTML(selDev,active){
     <div class="pill ${active==='devcustom'?'on':''}" onclick="setScope('devcustom')">Custom · ${esc(devName(selDev))} only</div>
     <div class="pill ${active==='baseline'?'on':''}" onclick="setScope('baseline')">Baseline · ${esc(devName(selDev))}</div></div>
   <p class="muted" style="margin:.1rem 0 .5rem;font-size:.76rem">${blurb}</p>`;}
-function editorKey(){return sel?JSON.stringify([sel.type,sel.id,sel.dev,sel.physical]):null;}
+function editorKey(){
+  if(comboSel.length)return 'combo:'+comboSel.map(x=>x.dev+'/'+x.u).join(',');
+  if(seqSel.length)return 'seq:'+seqSel.map(x=>x.dev+'/'+x.u).join(',');
+  return sel?JSON.stringify([sel.type,sel.id,sel.dev,sel.physical]):null;}
 let _edSnap=null,_edSnapKey=null;
 function snapshotForRevert(){
   // deep-copy the config slices this input can touch, so Revert restores it
@@ -1717,8 +1782,64 @@ function positionEditor(){
   if(x+w>innerWidth-8)x=Math.max(8,a.x-w-20);
   if(y+eh>innerHeight-8)y=Math.max(8,innerHeight-eh-8);
   e.style.left=Math.max(8,x)+'px';e.style.top=Math.max(8,y)+'px';}
+function actionPickerHTML(idPfx,a){
+  a=a||['suppress'];
+  return `<select id="${idPfx}mode">
+      <option value="suppress" ${a[0]==='suppress'?'selected':''}>Nothing (swallow)</option>
+      <option value="key" ${a[0]==='key'?'selected':''}>Key…</option>
+      <option value="macro" ${a[0]==='macro'?'selected':''}>Macro…</option>
+      <option value="text" ${a[0]==='text'?'selected':''}>Type text…</option>
+      <option value="os" ${a[0]==='os'?'selected':''}>Switch OS</option>
+    </select><div id="${idPfx}arg"></div>`;}
+function actionPickerBind(idPfx,a,onChange){
+  const refresh=()=>{const k=$(idPfx+'mode').value,w=$(idPfx+'arg');
+    w.innerHTML=k==='key'?`<select id="${idPfx}v">${keyOpts(a[1]||0x28)}</select>`:
+      k==='macro'?`<select id="${idPfx}v">${macOpts(a[1]||1)}</select>`:
+      k==='text'?`<input type="text" id="${idPfx}v" value="${a[0]==='text'?esc(a[1]||''):''}" placeholder="text (may embed {{ctrl+c}})">`:'';
+    bind();};
+  const bind=()=>document.querySelectorAll(`#${idPfx}mode,#${idPfx}arg select,#${idPfx}arg input`).forEach(x=>x.onchange=()=>{
+    if(x.id===idPfx+'mode')refresh();
+    const k=$(idPfx+'mode').value,v=$(idPfx+'v')?$(idPfx+'v').value:null;
+    onChange(k==='suppress'?['suppress']:k==='os'?['os','toggle']:k==='text'?['text',v||'']:[k,+v||(k==='key'?0x28:1)]);});
+  refresh();}
+function renderCaptureEditor(ed){
+  positionEditor();
+  if(comboSel.length){
+    $('editortitle').textContent='New combo';
+    window._comboDraft=window._comboDraft||{action:['suppress'],window_ms:60};
+    ed.innerHTML=`<h2 style="font-size:1rem">Combo: ${comboSel.map(x=>KEYS[x.canon]||MODS[x.canon]||'?').join(' + ')}</h2>
+      <p class="muted" style="font-size:.78rem">All these keys pressed together (within the window) fire one action; the individual keys are swallowed. <b>Shift-click</b> more keys on the wireframe to extend.</p>
+      <label>On press (fires the combo)</label>${actionPickerHTML('cb',window._comboDraft.action)}
+      <label>Window (ms)</label><input type="number" id="cbwin" value="${window._comboDraft.window_ms}" min="20" max="500">
+      <div class="bar" style="margin-top:.6rem"><button id="cbsave" class="primary">✓ Create combo</button>
+        <button onclick="clearCapture()">✕ Cancel</button></div>`;
+    actionPickerBind('cb',window._comboDraft.action,a=>{window._comboDraft.action=a;});
+    $('cbwin').onchange=()=>{window._comboDraft.window_ms=+$('cbwin').value||60;};
+    $('cbsave').onclick=()=>{
+      if(comboSel.length<2){toast('a combo needs at least 2 keys',true);return;}
+      const id='combo-'+comboSel.map(x=>x.canon).join('-');
+      cfg.combos[id]={keys:comboSel.map(x=>x.canon),action:window._comboDraft.action,window_ms:window._comboDraft.window_ms};
+      comboSel=[];window._comboDraft=null;sel={type:'combo',id};render();
+      toast('combo created — ⬆ Save to device to apply');};
+    return;}
+  // sequence -> expansion
+  $('editortitle').textContent='New typed sequence';
+  const trig=seqSel.map(x=>charForUsage(x.canon)||'?').join('');
+  window._seqDraft=window._seqDraft||{value:''};
+  ed.innerHTML=`<h2 style="font-size:1rem">Sequence → expansion</h2>
+    <p class="muted" style="font-size:.78rem">Typing <b>${esc(trig)}</b> in order expands to the text below. <b>Alt-click</b> more keys to extend.</p>
+    <label>Trigger</label><input type="text" id="sqtrig" value="${esc(trig)}" readonly>
+    <label>Expands to</label><textarea id="sqval" rows="3" placeholder="text (may embed {{ctrl+c}} chords)">${esc(window._seqDraft.value)}</textarea>
+    <div class="bar" style="margin-top:.6rem"><button id="sqsave" class="primary">✓ Create expansion</button>
+      <button onclick="clearCapture()">✕ Cancel</button></div>`;
+  $('sqval').oninput=()=>{window._seqDraft.value=$('sqval').value;};
+  $('sqsave').onclick=()=>{
+    if(seqSel.some(x=>!charForUsage(x.canon))){toast('sequences need character keys only',true);return;}
+    exps=exps||{};exps[trig]=$('sqval').value;seqSel=[];window._seqDraft=null;
+    render();renderExp();toast(`expansion "${trig}" added — ⬆ Save expansions to apply`);};}
 function renderEditor(){
   const ed=$('editorbody');
+  if(comboSel.length||seqSel.length){return renderCaptureEditor(ed);}
   if(!sel){$('editor').style.display='none';_edSnapKey=null;
   {const _drop=`<h2 style="font-size:1rem">Mapping editor</h2>
   <p class="muted">Click any key or button on a wireframe to edit it. There are two kinds of edit:</p>
@@ -1777,7 +1898,11 @@ function renderEditor(){
     :((!isBtn&&sel.physical!==undefined)?` <span class="muted">(E9 ${boxTag(sel.physical)})</span>`:'');
   const baseTag=!isBtn&&canon!==sel.id?` <span class="muted">(physical ${KEYS[sel.id]||'?'} ≡ ${KEYS[canon]||'?'} via ${esc(devName(selDev))} baseline)</span>`:'';
   const scopeSel=!isBtn&&selDev?scopeTabsHTML(selDev,scope):'';
-  ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnLabel(sel.id):(KEYS[canon]||'?')}${physTag}${baseTag} — layer ${layer}</h2>
+  const srcLayer=layerOfSource(isBtn?'btn':'key',canon);
+  if(srcLayer!=null)ui.press='layer';
+  const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)">Hold → Layer ${srcLayer}</span>`:'';
+  const layerOpt=`<option value="layer" ${ui.press==='layer'?'selected':''}>Hold → Layer…</option>`;
+  ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnLabel(sel.id):(KEYS[canon]||'?')}${physTag}${baseTag} — layer ${layer}${layerBadge}</h2>
   ${scopeSel}
   <div class="row"><div>
     <label>On press</label><select id="press">
@@ -1786,15 +1911,24 @@ function renderEditor(){
       ${isBtn?`<option value="btn" ${ui.press==='btn'?'selected':''}>Mouse button…</option>`:''}
       <option value="key" ${ui.press==='key'?'selected':''}>Key…</option>
       <option value="macro" ${ui.press==='macro'?'selected':''}>Macro…</option>
+      ${layerOpt}
       ${isBtn?`<option value="dpi" ${ui.press==='dpi'?'selected':''}>DPI cycle</option>`:''}
     </select><div id="pressArg"></div>
-    <label>On release</label><select id="release">
+    <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
+      <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
+      ${capBoxHTML()}${searchBoxHTML()}
+      <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
+    </div>
+    <label style="margin-top:.5rem">On release</label><select id="release">
       <option value="none" ${ui.release==='none'?'selected':''}>Nothing</option>
       <option value="macro" ${ui.release==='macro'?'selected':''}>Macro…</option>
     </select><div id="relArg"></div>
-  </div><div>${capBoxHTML()}${searchBoxHTML()}
-    <button id="newmacro" style="margin-top:.5rem">＋ New macro</button>
-    <div id="inlinemacro"></div></div></div>`;
+  </div></div>`;
+  function setLayerSource(L){
+    if(L==null){ if(isBtn)delete cfg.tap_hold[sel.id];
+      else{cfg.layer_keys=cfg.layer_keys||{};delete cfg.layer_keys[canon];} return; }
+    if(isBtn){const th=cfg.tap_hold[sel.id]||[['btn',sel.id],L];th[1]=L;cfg.tap_hold[sel.id]=th;}
+    else{cfg.layer_keys=cfg.layer_keys||{};cfg.layer_keys[canon]=L;}}
   const apply=a=>{ if(isBtn){ if(a)cfg.mouse_mappings[key]=a;else delete cfg.mouse_mappings[key]; }
     else{ if(!a)delete kmap[key];
       else if(a[0]==='key')kmap[key]=a[1];
@@ -1804,7 +1938,10 @@ function renderEditor(){
   const refresh=()=>{const p=$('press').value;
     $('pressArg').innerHTML=p==='btn'?`<select id="pressBtn">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===+(ui.pressBtn||1)?'selected':''}>${btnLabel(n)}</option>`).join('')}</select>`:
       p==='key'?`<select id="pressKey">${keyOpts(ui.pressKey||0x28)}</select>`:
-      p==='macro'?`<select id="pressMacro">${macOpts(ui.pressMacro||1)}</select>`:'';
+      p==='macro'?`<select id="pressMacro">${macOpts(ui.pressMacro||1)}</select>`:
+      p==='layer'?`<select id="pressLayer">${allLayers().map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(LAYER_NAMES[L]||('Layer '+L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
+    // quick-assign boxes only make sense for direct actions, not layer/dpi
+    $('pressAssign').style.display=(p==='key'||p==='macro'||p==='suppress'||p==='pass')?'':'none';
     const r=$('release').value;
     $('relArg').innerHTML=r==='macro'?`<select id="relMacro">${macOpts(ui.relMacro||1)}</select>`:'';};
   refresh();
@@ -1823,7 +1960,16 @@ function renderEditor(){
       // key/macro/button got immediately overwritten back to that stale
       // value before it was ever saved.
       if (x.id==='press' || x.id==='release') refresh();
-      apply(uiToAction({press:$('press').value,release:$('release').value,
+      const p=$('press').value;
+      if(p==='layer'){
+        let L=$('pressLayer')?$('pressLayer').value:'0';
+        if(L==='__new__'){L=Math.max(0,...allLayers())+1;}
+        setLayerSource(+L);
+        if(!isBtn)delete kmap[key];   // a layer key produces no output while held
+        render();toast('layer trigger set — ⬆ Save to device');return;}
+      // leaving layer mode: drop the layer-source entry
+      if(srcLayer!=null&&p!=='layer')setLayerSource(null);
+      apply(uiToAction({press:p,release:$('release').value,
         pressBtn:$('pressBtn')?.value,pressKey:$('pressKey')?.value,
         pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value}));
       render();});
@@ -1988,12 +2134,15 @@ function renderExp(){
   $('trigTime').value=byKind('time');
   $('trigDatetime').value=byKind('datetime');
   const rebind=()=>{
+    // NOTE: keep trailing spaces verbatim — a trigger like "dt " only fires
+    // after the space, and stripping it (old bug) is why "dt " reverted to
+    // "\dt".  Longest trigger wins in the engine, so "tdt " beats "dt ".
     const nt={};
-    if($('trigDate').value.trim())nt[$('trigDate').value.trim()]='date';
-    if($('trigTime').value.trim())nt[$('trigTime').value.trim()]='time';
-    if($('trigDatetime').value.trim())nt[$('trigDatetime').value.trim()]='datetime';
-    cfg.dynamic_triggers=nt;};
-  ['trigDate','trigTime','trigDatetime'].forEach(id=>$(id).onchange=rebind);
+    const dv=$('trigDate').value, tv=$('trigTime').value, dtv=$('trigDatetime').value;
+    if(dv)nt[dv]='date'; if(tv)nt[tv]='time'; if(dtv)nt[dtv]='datetime';
+    cfg.dynamic_triggers=nt;
+    toast('date/time triggers changed — press ⬆ Save to device (top) to apply');};
+  ['trigDate','trigTime','trigDatetime'].forEach(id=>{$(id).oninput=rebind;$(id).onchange=rebind;});
   const t=$('exptable');
   t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
   for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
@@ -2246,6 +2395,10 @@ function renderOsTab(){
   $('osautoswitch').checked=cfg.os_follow_browser!==false;
   $('osautoswitch').onchange=()=>{cfg.os_follow_browser=$('osautoswitch').checked;
     toast(($('osautoswitch').checked?'will':'will not')+' follow this browser\'s OS');};
+  $('osauto2').checked=cfg.os_autoswitch!==false;
+  $('osauto2').onchange=()=>{cfg.os_autoswitch=$('osauto2').checked;toast('⬆ Save to device to apply');};
+  const dsel=$('osdefault');dsel.innerHTML=oses.map(o=>`<option value="${esc(o)}" ${(cfg.default_os||'win')===o?'selected':''}>${esc(o)}</option>`).join('');
+  dsel.onchange=()=>{cfg.default_os=dsel.value;toast('default OS (when undetectable) — ⬆ Save to device');};
   // OS selector pills: click = edit that OS column; ★ = default/active
   const tb=$('ostabs');tb.innerHTML='';
   for(const o of oses){
@@ -2284,7 +2437,45 @@ function renderOsTab(){
       return `<td style="cursor:pointer" onclick="osMacroEdit('${esc(o)}',${n})">${
         same?'<span class="muted" style="opacity:.5">= base</span>':esc(macroToText(ov).replace(/\n/g,' · ').slice(0,26))}</td>`;}).join('');
     gh+='</tr>';}
-  $('osgrid').innerHTML=gh;}
+  $('osgrid').innerHTML=gh;
+  renderOsMap(oses);}
+function osMapOv(o,type){const p=osProf(o);const key=type==='key'?'kbd_mappings':'mouse_mappings';
+  return p[key]=p[key]||{};}
+function renderOsMap(oses){
+  $('osmaphdr').textContent='— editing '+(osView||'')+(osView===cfg.active_os?' (active)':'');
+  // collect every base custom mapping as rows: {type,id,L,base}
+  const rows=[];
+  for(const[k,v]of Object.entries(cfg.kbd_mappings||{})){const[L,id]=k.split(',').map(Number);rows.push({type:'key',id,L,base:v});}
+  for(const[k,v]of Object.entries(cfg.mouse_mappings||{})){const[L,id]=k.split(',').map(Number);rows.push({type:'btn',id,L,base:v});}
+  rows.sort((a,b)=>a.L-b.L||a.type.localeCompare(b.type)||a.id-b.id);
+  if(!rows.length){$('osmap').innerHTML='<tr><td class="muted">No base custom mappings yet.</td></tr>';return;}
+  let h=`<tr><td><b>Input</b></td><td><b>Layer</b></td><td><b>base output</b></td><td><b>${esc(osView||'')} override</b></td></tr>`;
+  for(const r of rows){
+    const inLbl=r.type==='key'?(KEYS[r.id]||('key '+r.id)):btnLabel(r.id);
+    const ovm=osMapOv(osView,r.type);const kk=`${r.L},${r.id}`;
+    const has=Object.prototype.hasOwnProperty.call(ovm,kk);
+    const ovVal=ovm[kk];
+    const cell=has?(ovVal===null?'<b>⟶ passthrough</b>':esc(asgActLabel(ovVal))):'<span class="muted" style="opacity:.55">= base</span>';
+    h+=`<tr><td>${esc(inLbl)}</td><td>L${r.L}</td>`
+      +`<td class="muted">${esc(asgActLabel(r.base))}</td>`
+      +`<td style="cursor:pointer" data-osmapedit="${r.type}:${r.id}:${r.L}">${cell}`
+      +(has?` <a class="mlink" title="clear override (inherit base)" data-osmapclr="${r.type}:${r.id}:${r.L}">✕</a>`:'')
+      +`</td></tr>`;}
+  $('osmap').innerHTML=h;
+  $('osmap').querySelectorAll('[data-osmapedit]').forEach(td=>td.onclick=e=>{
+    if(e.target.hasAttribute('data-osmapclr'))return;
+    const[type,id,L]=td.getAttribute('data-osmapedit').split(':');
+    asgOpenSearch(td,{type,id:+id},'osmap',act=>osMapSet(osView,type,+id,+L,act,true));});
+  $('osmap').querySelectorAll('[data-osmapclr]').forEach(a=>a.onclick=e=>{
+    e.stopPropagation();const[type,id,L]=a.getAttribute('data-osmapclr').split(':');
+    osMapSet(osView,type,+id,+L,undefined,false);});}
+window.osMapSet=(o,type,id,L,act,hasVal)=>{
+  const ovm=osMapOv(o,type);const kk=`${L},${id}`;
+  if(hasVal)ovm[kk]=act;          // act may be null = per-OS passthrough
+  else delete ovm[kk];            // inherit base
+  const p=osProf(o);const key=type==='key'?'kbd_mappings':'mouse_mappings';
+  if(p[key]&&!Object.keys(p[key]).length)delete p[key];
+  renderOsTab();toast('⬆ Save to device to apply');};
 window.osScrollSet=(o,dev,on)=>{const p=osProf(o);p.scroll_invert=p.scroll_invert||{};
   if(on)p.scroll_invert[dev]=true;else delete p.scroll_invert[dev];
   toast('⬆ Save to device to apply');};
@@ -2319,7 +2510,9 @@ function initTz(){
   sel.onchange=()=>{
     if(sel.value==='auto'){if(cfg)delete cfg.tz_offset_min;syncClock();}
     else if(cfg)cfg.tz_offset_min=+sel.value;
-    toast('timezone set — ⬆ Save to device to persist');};}
+    toast('timezone set — ⬆ Save to device to persist');};
+  const er=$('erasesel');if(er){er.value=(cfg&&cfg.erase_method)||'backspace';
+    er.onchange=()=>{if(cfg)cfg.erase_method=er.value;toast('erase method set — ⬆ Save to device');};}}
 
 /* ============ tabs ============ */
 function switchTab(t){
@@ -2336,11 +2529,24 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('editor').style.d
 document.addEventListener('click',e=>{
   if(e.target.closest('#editor'))return;
   window._edAnchor={x:e.pageX-scrollX,y:e.pageY-scrollY};},true);
+document.body.appendChild($('editor'));   // 6.3: escape any transformed ancestor so position:fixed truly sticks on scroll
 (function(){const h=$('editorhead'),e=$('editor');let dx=0,dy=0,drag=false;
   h.addEventListener('mousedown',ev=>{drag=true;dx=ev.clientX-e.offsetLeft;dy=ev.clientY-e.offsetTop;ev.preventDefault();});
   document.addEventListener('mousemove',ev=>{if(!drag)return;
     e.style.left=Math.max(0,ev.clientX-dx)+'px';e.style.top=Math.max(0,ev.clientY-dy)+'px';});
   document.addEventListener('mouseup',()=>drag=false);})();
+// 6.7: make the ✎ layout palette draggable by its header (grab the h3).
+(function(){const p=$('palette');if(!p)return;let dx=0,dy=0,drag=false;
+  p.addEventListener('pointerdown',ev=>{
+    const h=ev.target.closest('h3');if(!h||!p.contains(h))return;
+    const r=p.getBoundingClientRect();
+    // pin to left/top so dragging works regardless of the right/bottom anchor
+    p.style.left=r.left+'px';p.style.top=r.top+'px';p.style.right='auto';p.style.bottom='auto';
+    dx=ev.clientX-r.left;dy=ev.clientY-r.top;drag=true;ev.preventDefault();});
+  window.addEventListener('pointermove',ev=>{if(!drag)return;
+    p.style.left=Math.max(0,Math.min(innerWidth-40,ev.clientX-dx))+'px';
+    p.style.top=Math.max(0,Math.min(innerHeight-40,ev.clientY-dy))+'px';});
+  window.addEventListener('pointerup',()=>drag=false);})();
 document.querySelectorAll('#toptabs .tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.t));
 window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
 $('stage').onclick=e=>{if(e.target.id==='chordsvg'||e.target.id==='stage')clearChordSel();};
