@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 17.7</title>
+<title>HID Config 19.1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -48,9 +48,12 @@ font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12)
 .key.mapped{border-color:var(--ok);border-width:2px}
 .key.layerkey{background:rgba(184,134,11,.45)}
 .key.chordhl{outline:2px dashed var(--warn);outline-offset:1px}
-.key.held,.key.flash-red{background:rgba(239,68,68,.55)!important}
+.key.held,.key.flash-red{background:rgba(239,68,68,.55)!important;position:relative;z-index:3}
 svg .region.held{fill:rgba(239,68,68,.55)!important}
-.key.flash-yel{background:rgba(245,158,11,.55)!important}
+/* SENT = a thick yellow INSET ring (box-shadow), so it sits on top of a red
+   'held' fill AND above any group/layer OUTLINE overlays (which use `outline`,
+   a different layer). Result on the typed device: red fill + yellow ring. */
+.key.flash-yel{box-shadow:inset 0 0 0 3px rgba(245,158,11,.98)!important;position:relative;z-index:6}
 .key.flash-grn{background:rgba(34,197,94,.55)!important}
 .key.flash-blu{background:rgba(59,130,246,.6)!important}
 .key.flash-pass{background:rgba(239,68,68,.6)!important;
@@ -133,6 +136,10 @@ align-items:center;justify-content:center}
 .kabs .key{overflow:visible}
 .key.editsel{outline:2px solid var(--warn);outline-offset:1px;z-index:3}
 .wfbody.editing .key{cursor:grab;touch-action:none}
+.wfbody.editing .kabs{cursor:crosshair}
+.rubber{position:absolute;border:1px dashed var(--hi);background:rgba(59,130,246,.15);
+  pointer-events:none;z-index:50}
+.key.multisel{outline:2px solid var(--hi)!important;outline-offset:2px}
 #palette{position:fixed;right:1.1rem;bottom:1.1rem;z-index:60;background:Canvas;color:CanvasText;
 border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.35);
 padding:.8rem .9rem;width:250px;display:none}
@@ -218,24 +225,27 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </details>
 
 <div id="page-map">
+ <details id="devsection" style="margin:.2rem 0 .5rem">
+   <summary style="cursor:pointer;font-weight:600">🖧 Devices <span class="muted" id="devsummary" style="font-weight:400;font-size:.8rem"></span></summary>
+   <div style="padding:.5rem 0">
+     <div id="devattached"></div>
+     <div id="devavail" style="margin-top:.6rem"></div>
+     <details id="devadvanced" style="margin-top:.7rem">
+       <summary style="cursor:pointer;font-weight:600;font-size:.9rem">⚙ Advanced — device table</summary>
+       <div style="padding:.4rem 0">
+         <p class="muted" style="font-size:.78rem">Raw entries: pins, gesture-node pin, USB-id match, wireframe. For troubleshooting; most setups won't need this — use the pickers above.</p>
+         <table style="width:100%" id="devtable"></table>
+         <button onclick="addDeviceEntry()">+ Add blank entry</button>
+         <span class="muted">Then ⬆ Save to device; the engine picks up new devices on service restart.</span>
+       </div>
+     </details>
+   </div>
+ </details>
  <div id="maprow">
  <div style="flex:1;min-width:0">
-  <div class="bar" style="margin:.2rem 0;align-items:flex-start">
+  <div class="bar" style="margin:.2rem 0;align-items:center">
     <button id="showkeys">▶ Show key presses</button>
     <span class="muted" id="showkeysinfo"></span>
-    <details id="legend" open style="margin-left:auto"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
-      <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
-        <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
-        <span style="background:rgba(245,158,11,.55);padding:0 .3rem;border-radius:3px">yellow flash</span> key sent to the PC ·
-        <span style="background:rgba(34,197,94,.55);padding:0 .3rem;border-radius:3px">green flash</span> macro output ·
-        <span style="background:rgba(59,130,246,.6);padding:0 .3rem;border-radius:3px">blue flash</span> expansion output<br>
-        <span style="border:2px solid var(--ok);padding:0 .3rem;border-radius:3px">green outline</span> has a custom mapping on this layer ·
-        <span style="background:rgba(184,134,11,.45);padding:0 .3rem;border-radius:3px">gold key</span> starts a layer (its layer # is shown) ·
-        <span style="outline:2px solid var(--warn);padding:0 .3rem;border-radius:3px">dashed line</span> a chord (click to inspect) ·
-        <span style="outline:2px solid #a855f7;padding:0 .3rem;border-radius:3px">purple outline</span> belongs to a highlighted <b>group</b> (toggle groups in the 🗂 Groups card)<br>
-        corners on each key: <span style="color:var(--err)">red top-left</span> = original before this device's Baseline · grey center = current identity · <span style="color:var(--ok)">green bottom-right</span> = custom output on this layer · <span style="color:#000;background:var(--layer);border-radius:3px;padding:0 .2rem">L#</span> top-right = triggers that layer
-      </div>
-    </details>
   </div>
   <div class="pills" id="layers"></div>
   <div id="chordbar">
@@ -250,6 +260,20 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <svg id="chordsvg"></svg>
     <div class="devrow" id="devcards"></div>
   </div>
+  <details id="legend" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
+    <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
+      <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
+      <span style="background:rgba(245,158,11,.55);padding:0 .3rem;border-radius:3px">yellow flash</span> key sent to the PC ·
+      <span style="background:rgba(34,197,94,.55);padding:0 .3rem;border-radius:3px">green flash</span> macro output ·
+      <span style="background:rgba(59,130,246,.6);padding:0 .3rem;border-radius:3px">blue flash</span> expansion output<br>
+      <span style="border:2px solid var(--ok);padding:0 .3rem;border-radius:3px">green outline</span> has a custom mapping on this layer ·
+      <span style="background:rgba(184,134,11,.45);padding:0 .3rem;border-radius:3px">gold key</span> starts a layer (its layer # is shown) ·
+      <span style="outline:2px solid var(--warn);padding:0 .3rem;border-radius:3px">dashed line</span> a chord (click to inspect) ·
+      <span style="outline:2px solid #a855f7;padding:0 .3rem;border-radius:3px">purple outline</span> belongs to a highlighted <b>group</b> (toggle groups in the 🗂 Groups card)<br>
+      corners on each key: <span style="color:var(--err)">red top-left</span> = original before this device's Baseline · grey center = current identity · <span style="color:var(--ok)">green bottom-right</span> = custom output on this layer · <span style="color:#000;background:var(--layer);border-radius:3px;padding:0 .2rem">L#</span> top-right = triggers that layer<br>
+      <b>Modifier swaps live in Baseline:</b> to make a keyboard's <b>LAlt</b> act as <b>LWin</b> (Option/Command feel), click that key and set Baseline · LAlt → LWin. It then shows red LAlt → grey LWin. Nothing is swapped by default.
+    </div>
+  </details>
   <details class="dbg" id="remappanel" open><summary>📋 All Custom Remappings</summary>
     <div style="padding:0 1rem 1rem">
       <details id="ovpanel" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Overview</summary>
@@ -264,18 +288,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       </details>
     </div>
   </details>
-  <div class="panel">
-    <h2 style="font-size:1rem">Devices</h2>
-    <p class="muted">Every input device is an entry here -- there are no
-    built-ins. A device's <b>Baseline</b> maps its physical keys to your
-    standard layout; all <b>Custom Mappings</b> (layers, chords, combos,
-    macros) are shared and apply identically on every device. Pin = any
-    unique part of the device name shown by the Bluetooth tab or RAW log;
-    one entry covers all of a device's interfaces (keyboard + trackpad).</p>
-    <table style="width:100%" id="devtable"></table>
-    <button onclick="addDeviceEntry()">+ Add device</button>
-    <span class="muted">Then ⬆ Save to device; the engine picks up new devices on service restart.</span>
-  </div>
  </div>
  <div class="panel" id="editor">
    <div id="editorhead"><span id="editortitle">Mapping editor</span>
@@ -418,6 +430,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
 let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
+let editMulti=new Set();   // 19.1 #6: marquee-selected key indices in the layout editor
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
 let _showGroups=true,_groupsCollapsed=false;   // 6.9 master highlight toggle + collapse
 const _heldKeys=new Set(),_heldBtns=new Set();  // 6.10 keys/buttons currently held down
@@ -467,6 +480,9 @@ function onReport(e){
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===3){
         lastEng=obj;adoptEffective(obj);updateConStat();
+        updateOsBtn();   // 3.1: refresh the OS-mismatch badge once the engine's
+                         // active_os is known (post-save it was going stale)
+        if(typeof renderDevices==='function')renderDevices();
         if($('engpane').style.display!=='none'||obj.config_error)renderEngineStatus(obj);}
       else if(curFile===4){
         expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
@@ -688,11 +704,18 @@ function updateConStat(){
     const card=document.querySelector(`.devcard[data-dev="${d.id}"]`);
     if(!chip)continue;
     if(!d.mac){
-      // no MAC bound: offer the obvious candidate from the known-devices list
+      // No BT MAC. For a USB/bridge device this is NORMAL — show whether the
+      // engine is actually reading its input node(s) instead of a BT warning.
+      const claimed=((lastEng&&lastEng.all_nodes)||[]).filter(n=>n.device===d.id);
+      if(claimed.length){
+        chip.innerHTML=`<span class="dot on"></span> ${claimed.length} input${claimed.length>1?'s':''} (USB)`;
+        card&&card.classList.remove('disconnected');continue;}
+      // unclaimed & no MAC: offer to bind a matching Bluetooth device if one exists
       const cand=Object.entries(btKnown).find(([m,i])=>
         d.pin&&(i.name||'').toLowerCase().includes(d.pin.toLowerCase()));
-      chip.innerHTML='<span class="muted">no BT binding</span>'
-        +(cand?` <button onclick="bindMac('${d.id}','${cand[0]}')">bind ${esc(cand[1].name)}</button>`:'');
+      chip.innerHTML=(cand
+        ?`<span class="muted">not bound</span> <button onclick="bindMac('${d.id}','${cand[0]}')">bind ${esc(cand[1].name)}</button>`
+        :'<span style="color:var(--warn)">⚠ no input claimed</span>');
       card&&card.classList.remove('disconnected');continue;}
     const st=btStat[d.mac];
     if(st===true){
@@ -774,7 +797,11 @@ const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:
 0x21:'4',0x22:'5',0x23:'6',0x24:'7',0x25:'8',0x26:'9',0x27:'0',0x28:'Enter',0x29:'Esc',
 0x2a:'Bksp',0x2b:'Tab',0x2c:'Space',0x2d:'-',0x2e:'=',0x2f:'[',0x30:']',0x31:'\\',0x33:';',
 0x34:"'",0x35:'`',0x36:',',0x37:'.',0x38:'/',0x39:'Caps',0x4f:'→',0x50:'←',0x51:'↓',0x52:'↑',
-0x4a:'Home',0x4b:'PgUp',0x4c:'Del',0x4d:'End',0x4e:'PgDn',0x49:'Ins'};
+0x4a:'Home',0x4b:'PgUp',0x4c:'Del',0x4d:'End',0x4e:'PgDn',0x49:'Ins',
+0x46:'PrtSc',0x47:'ScrLk',0x48:'Pause',
+// editing / application keys (keyboard page) — Kinesis-style extra keys
+0x65:'Menu',0x76:'Props',0x78:'Stop',0x79:'Again',0x7a:'Undo',0x7b:'Cut',
+0x7c:'Copy',0x7d:'Paste',0x7e:'Find'};
 for(let i=0;i<12;i++)KEYS[0x3a+i]='F'+(i+1);
 KEYS[0x73]='F24';
 const MODS={0xe0:'LCtrl',0xe1:'LShift',0xe2:'LAlt',0xe3:'LWin',0xe4:'RCtrl',0xe5:'RShift',0xe6:'RAlt',0xe7:'RWin'};
@@ -786,13 +813,22 @@ const EV2HID={30:0x04,48:0x05,46:0x06,32:0x07,18:0x08,33:0x09,34:0x0a,35:0x0b,23
 47:0x19,17:0x1a,45:0x1b,21:0x1c,44:0x1d,2:0x1e,3:0x1f,4:0x20,5:0x21,6:0x22,7:0x23,8:0x24,
 9:0x25,10:0x26,11:0x27,28:0x28,1:0x29,14:0x2a,15:0x2b,57:0x2c,12:0x2d,13:0x2e,26:0x2f,
 27:0x30,43:0x31,39:0x33,40:0x34,41:0x35,51:0x36,52:0x37,53:0x38,58:0x39,105:0x50,106:0x4f,
-103:0x52,108:0x51,29:0xe0,42:0xe1,56:0xe2,125:0xe3,97:0xe4,54:0xe5,100:0xe6,126:0xe7};
+103:0x52,108:0x51,29:0xe0,42:0xe1,56:0xe2,125:0xe3,97:0xe4,54:0xe5,100:0xe6,126:0xe7,
+99:0x46,70:0x47,119:0x48,
+127:0x65,134:0x76,128:0x78,129:0x79,131:0x7a,137:0x7b,133:0x7c,135:0x7d,136:0x7e};
+// consumer-page keys the keyboard gadget can't emit (shown in RAW so they're not invisible)
+const CONSUMER_NAMES={158:'Web Back',159:'Web Forward',113:'Mute',114:'Vol−',115:'Vol+',
+163:'Next Track',164:'Play/Pause',165:'Prev Track',172:'Home Page',217:'Search',142:'Sleep'};
 const EVBTN={272:1,273:2,274:3,275:4,276:5,277:6,278:7,279:8,256:9,257:10,258:11,259:12,260:13,261:14,262:15};
 function ev2name(code){const u=EV2HID[code];
 if(u!==undefined)return MODS[u]||KEYS[u]||('0x'+u.toString(16));
 if(EVBTN[code]!==undefined)return'btn'+EVBTN[code];
+if(CONSUMER_NAMES[code])return CONSUMER_NAMES[code]+' (consumer)';
 return null;}
 function annotate(txt){
+  // engine's consumer-page line: "consumer code=158 usage=0x0224 Web Back val=1 dev=x"
+  let cm=txt.match(/^consumer code=(\d+) usage=(0x[0-9a-fA-F]+) (.+?) val=(\d)/);
+  if(cm)return txt+`  ⚠ consumer-page key — needs a Consumer HID interface to reach the host`;
   // RAW: "key code=125 val=1 port2=False" -> append [Name]
   let m=txt.match(/^key code=(\d+) val=(\d+)/);
   if(m){const n=ev2name(+m[1]);return txt+(n?` [${n}]`:' [?]');}
@@ -812,7 +848,8 @@ function annotate(txt){
   return txt;
 }
 const LAYER_NAMES=['0 · Base','1 · CapsLock','2 · Right-btn','3 · Back-btn','4 · Fwd-btn','5'];
-function btnLabel(n){return (cfg.button_labels&&cfg.button_labels[n])||({1:'Left',2:'Right',3:'Wheel'}[n]||('B'+n));}
+function btnLabel(n){return (cfg.button_labels&&cfg.button_labels[n])||
+  ({1:'Left',2:'Right',3:'Wheel',4:'Back',5:'Forward'}[n]||('B'+n));}
 function macroLabel(n){const nm=(cfg.macro_names||{})[n];return nm?nm:('M'+n);}
 function actShort(a){if(!a)return'';const k=a[0];
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
@@ -956,7 +993,7 @@ function render(){
   LAYER_NAMES.forEach((n,i)=>{const p=document.createElement('div');
   p.className='pill'+(i===layer?' on':'');p.textContent=n;
   p.onclick=()=>{layer=i;render();};L.appendChild(p);});
-  renderStage();renderMacros();renderEditor();renderDevs();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
+  renderStage();renderMacros();renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
   requestAnimationFrame(drawChords);
 }
 /* E9 wireframe: right btn / wheel + 10,11 / left btn / thumb rows 7-8-9, 4-5-6, 0-3 */
@@ -984,6 +1021,11 @@ function renderStage(){
     card.className='devcard';card.dataset.dev=d.id;
     card.innerHTML=`<div class="devhead">
       <h2>${esc(d.name)}</h2>
+      <select class="wfpick" data-wf="${d.id}" title="wireframe style for this device">
+        <option value="ansi" ${(d.wireframe||'ansi')==='ansi'?'selected':''}>ANSI</option>
+        <option value="split" ${d.wireframe==='split'?'selected':''}>Split</option>
+        <option value="e9" ${d.wireframe==='e9'?'selected':''}>E9 mouse</option>
+      </select>
       ${canEdit?`<button class="editbtn" data-ed="${d.id}" title="edit the wireframe drawing only (key positions), not mappings">${editing?'💾 Save layout':'✎ Layout'}</button>`:''}
       ${(()=>{const hasPtr=lastEng&&lastEng.nodes&&lastEng.nodes.some(n=>n.device===d.id&&n.role==='pointer');
         const hasPad=d.wireframe!=='e9'&&layoutFor(d).keys.some(k=>k.pad||k.btn||k.wheel);
@@ -996,17 +1038,29 @@ function renderStage(){
   window._supSet=suppressedMembers();
   renderGroupsCard(c);
   c.querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>toggleEdit(b.dataset.ed));
+  c.querySelectorAll('.wfpick').forEach(s=>s.onchange=()=>{
+    const d=(cfg.devices||[]).find(x=>x.id===s.dataset.wf);if(!d)return;
+    const old=d.wireframe||'ansi';
+    if(layouts&&layouts[d.id]&&!confirm('Switch wireframe style? This resets '+(d.name||d.id)+'\'s custom layout drawing.'))
+      {s.value=old;return;}
+    d.wireframe=s.value;
+    if(layouts)delete layouts[d.id];   // fall back to the template for the new style
+    render();toast('wireframe set to '+s.value+' — ⬆ Save to device');});
   updateConStat();reapplyHeld();}
 // 6.10: re-apply the persistent "held" highlight after a re-render so a key
 // held down across a render keeps its highlight.
+function _heldSel(u,dev){return dev?`.key[data-usage="${u}"][data-dev="${dev}"]`:`.key[data-usage="${u}"]`;}
 function reapplyHeld(){
-  _heldKeys.forEach(u=>document.querySelectorAll(`.key[data-usage="${u}"]`).forEach(e=>e.classList.add('held')));
+  _heldKeys.forEach(k=>{const i=k.indexOf('|'),u=k.slice(0,i),dev=k.slice(i+1);
+    document.querySelectorAll(_heldSel(u,dev)).forEach(e=>e.classList.add('held'));});
   _heldBtns.forEach(box=>{
     const r=document.querySelector(`#mousesvg [data-btn="${box}"]`);if(r)r.classList.add('held');
     document.querySelectorAll(`.key[data-btn-lay="${box}"]`).forEach(e=>e.classList.add('held'));});}
-function holdKey(u,on){
-  if(on)_heldKeys.add(u);else _heldKeys.delete(u);
-  document.querySelectorAll(`.key[data-usage="${u}"]`).forEach(e=>e.classList.toggle('held',on));}
+// 19.1 #3.1: held (red) is scoped to the SPECIFIC device being typed on.
+function holdKey(u,on,dev){
+  const k=u+'|'+(dev||'');
+  if(on)_heldKeys.add(k);else _heldKeys.delete(k);
+  document.querySelectorAll(_heldSel(u,dev)).forEach(e=>e.classList.toggle('held',on));}
 function holdBtn(box,on){
   if(on)_heldBtns.add(box);else _heldBtns.delete(box);
   const r=document.querySelector(`#mousesvg [data-btn="${box}"]`);if(r)r.classList.toggle('held',on);
@@ -1038,7 +1092,11 @@ function renderLayoutKbd(d,w){
   const offx=-Math.min(0,minx),offy=-Math.min(0,miny);   // fit negative rows (F-row)
   const div=document.createElement('div');div.className='kabs';
   div.style.width=((maxx+offx)*unit+6)+'px';div.style.height=((maxy+offy)*unit+12)+'px';
+  if(lay.bg){   // 3.1: optional SVG/PNG background so a wireframe can look like the real product
+    div.style.backgroundImage=`url("${lay.bg}")`;
+    div.style.backgroundSize='100% 100%';div.style.backgroundRepeat='no-repeat';}
   w.innerHTML='';w.appendChild(div);
+  if(editDev===d.id)bindMarquee(div,d,lay,unit,offx,offy);   // 19.1 #6
   lay.keys.forEach((k,idx)=>{
     const el=document.createElement('div');
     const kind=k.wheel?'wheel':k.stepper?'stepper':k.pad?'pad':(k.btn!=null?'btn':'key');
@@ -1054,7 +1112,7 @@ function renderLayoutKbd(d,w){
     if(kind==='wheel'){el.className='key';el.innerHTML=(k.label||'⇅')
         +(cfg.wheel_by_layer&&cfg.wheel_by_layer[layer]&&cfg.wheel_by_layer[layer][0]!=='pass'?`<span class="chip">${esc((cfg.wheel_by_layer[layer]||[]).join(' '))}</span>`:'');
       el.title='scroll wheel';
-      if(editing)bindEditKey(el,d,idx);else el.onclick=()=>{sel={type:'wheel'};render();};
+      if(editing)bindEditKey(el,d,idx);else el.onclick=()=>{sel={type:'wheel',dev:d.id};render();};
       div.appendChild(el);return;}
     if(kind==='stepper'){el.className='key';el.innerHTML=(k.label||'10▲ 11▼')
         +(cfg.stepper_by_layer&&cfg.stepper_by_layer[layer]&&cfg.stepper_by_layer[layer][0]!=='pass'?`<span class="chip">${esc((cfg.stepper_by_layer[layer]||[]).join(' '))}</span>`:'');
@@ -1071,7 +1129,7 @@ function renderLayoutKbd(d,w){
       if(gcol)el.style.setProperty('--grpc',gcol);
       el.dataset.btnLay=b;el.dataset.dev=d.id;
       el.innerHTML=(k.label||btnLabel(b))
-        +(eff!==undefined?`<span class="chip">→${esc(actShort(eff))}</span>`:'')
+        +(eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
         +elLayerBadge('btn',b);
       if(editing)bindEditKey(el,d,idx);
       else el.onclick=e=>{if(e.shiftKey||e.altKey)return;sel={type:'btn',id:b,dev:d.id};render();};
@@ -1083,7 +1141,9 @@ function renderLayoutKbd(d,w){
     el.className='key'+(eff.v!==undefined?' mapped':'')+(isSrc?' layerkey':'')+(gcol?' grouphl':'')
       +(sel&&sel.type==='key'&&sel.id===u&&(sel.dev||'')===d.id&&sel.i===idx?' sel':'')
       +(editing&&editSel===idx?' editsel':'')
+      +(editing&&editMulti.has(idx)?' multisel':'')
       +(comboSel.some(x=>x.dev===d.id&&x.u===u)?' combosel':'')
+      +((sel&&sel.type==='combo'&&cfg.combos[sel.id]&&cfg.combos[sel.id].keys.includes(eff.canon))?' combosel':'')  // 19.1 #4: highlight selected combo's members
       +(seqSel.some(x=>x.dev===d.id&&x.u===u)?' seqsel':'');
     if(gcol)el.style.setProperty('--grpc',gcol);
     el.dataset.usage=u;el.dataset.canon=eff.canon;el.dataset.i=idx;el.dataset.dev=d.id;
@@ -1092,8 +1152,8 @@ function renderLayoutKbd(d,w){
     const centerName=k.label||MODS[eff.canon]||KEYS[eff.canon]||'?';
     const baseChip=eff.base?`<span class="chipbase" title="original ${esc(KEYS[u]||MODS[u]||'?')} before this device's Baseline">${esc(KEYS[u]||MODS[u]||'?')}</span>`:'';
     const custChip=eff.v!==undefined?`<span class="chip">${
-      Array.isArray(eff.v)?'→'+esc(actShort(eff.v)):
-      eff.v===0?'∅':'→'+esc(KEYS[eff.v]||MODS[eff.v]||'?')}</span>`:'';
+      Array.isArray(eff.v)?esc(actShort(eff.v)):
+      eff.v===0?'∅':esc(KEYS[eff.v]||MODS[eff.v]||'?')}</span>`:'';
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
       +baseChip+`<span class="kcenter">${centerName}</span>`+custChip+elLayerBadge('key',eff.canon);
@@ -1161,6 +1221,37 @@ window.addTrackpadTo=id=>{
   if(device)putFile(2,layouts||{});
   render();toast('trackpad cluster added to '+d.name);};
 /* ---- wireframe edit mode ---- */
+// 19.1 #6: click-drag on empty space inside the layout to marquee-select keys.
+function bindMarquee(div,d,lay,unit,offx,offy){
+  div.onpointerdown=e=>{
+    if(e.target!==div)return;                 // only start on empty space
+    e.preventDefault();
+    const r=div.getBoundingClientRect();
+    const sx=e.clientX-r.left,sy=e.clientY-r.top;
+    const box=document.createElement('div');box.className='rubber';
+    div.appendChild(box);
+    const draw=ev=>{
+      const cx=ev.clientX-r.left,cy=ev.clientY-r.top;
+      const x=Math.min(sx,cx),y=Math.min(sy,cy);
+      box.style.left=x+'px';box.style.top=y+'px';
+      box.style.width=Math.abs(cx-sx)+'px';box.style.height=Math.abs(cy-sy)+'px';};
+    const done=ev=>{
+      window.removeEventListener('pointermove',draw);
+      window.removeEventListener('pointerup',done);
+      const cx=ev.clientX-r.left,cy=ev.clientY-r.top;
+      const x0=Math.min(sx,cx),x1=Math.max(sx,cx),y0=Math.min(sy,cy),y1=Math.max(sy,cy);
+      box.remove();
+      if(!(e.shiftKey||e.metaKey||e.ctrlKey))editMulti.clear();
+      if(Math.abs(cx-sx)>4||Math.abs(cy-sy)>4){
+        lay.keys.forEach((k,i)=>{      // hit-test each key rect against the marquee
+          const kx=(k.x+offx)*unit,ky=(k.y+offy)*unit;
+          const kw=(k.w||1)*unit,kh=(k.h||1)*unit;
+          if(kx<x1&&kx+kw>x0&&ky<y1&&ky+kh>y0)editMulti.add(i);});
+        if(editMulti.size)toast(editMulti.size+' selected — drag to move, Delete to remove');
+      }
+      editSel=null;render();};
+    window.addEventListener('pointermove',draw);
+    window.addEventListener('pointerup',done);};}
 function bindEditKey(el,d,idx){
   el.style.opacity='';
   el.onpointerdown=e=>{
@@ -1185,16 +1276,27 @@ function bindEditKey(el,d,idx){
       el.style.transform='';el.style.zIndex='';
       if(moved){
         const dx=(ev.clientX-sx)/unit,dy=(ev.clientY-sy)/unit;
-        k.x=Math.round((ox+dx)*4)/4;   // allow negative (drag above/left of grid)
-        k.y=Math.round((oy+dy)*4)/4;
+        // 19.1 #6: if this key is part of a marquee selection, move the WHOLE
+        // selection by the same delta; otherwise just this one.
+        const idxs=editMulti.has(idx)?[...editMulti]:[idx];
+        const ddx=Math.round(dx*4)/4,ddy=Math.round(dy*4)/4;
+        if(idxs.length>1){idxs.forEach(i2=>{const q=lay.keys[i2];if(!q)return;
+          q.x=Math.round((q.x+ddx)*4)/4;q.y=Math.round((q.y+ddy)*4)/4;});}
+        else{k.x=Math.round((ox+dx)*4)/4;k.y=Math.round((oy+dy)*4)/4;}
         const mnx=Math.min(...lay.keys.map(q=>q.x));   // 6.2: dragged-above
         const mny=Math.min(...lay.keys.map(q=>q.y));   // pushes the rest down/right
         if(mnx<0||mny<0)lay.keys.forEach(q=>{q.x-=Math.min(0,mnx);q.y-=Math.min(0,mny);});
-      }else editSel=editSel===idx?null:idx;
+      }else{
+        if(ev.shiftKey||ev.metaKey||ev.ctrlKey){       // shift-click extends the selection
+          if(editMulti.has(idx))editMulti.delete(idx);else editMulti.add(idx);
+          editSel=idx;
+        }else{editMulti.clear();editSel=editSel===idx?null:idx;}
+      }
       render();};
     window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',up);};}
 function toggleEdit(id){
+  editMulti.clear();
   if(editDev===id){
     editDev=null;editSel=null;
     if(device)putFile(2,layouts||{});
@@ -1216,7 +1318,9 @@ function renderPalette(){
   const selLabel=selk?(selk.label||MODS[selk.u]||KEYS[selk.u]||selKind):'';
   p.innerHTML=`<h3>✎ ${esc(d.name)}</h3>
   <div class="muted" style="font-size:.74rem;margin-bottom:.3rem">Drag to reposition
-  (¼-unit snap; drag above the top to push the rest down) · click to select</div>
+  (¼-unit snap; drag above the top to push the rest down) · click to select ·
+  <b>drag on empty space</b> to marquee-select · shift-click to extend ·
+  <b>Delete</b> removes the selection${editMulti.size?` · <b>${editMulti.size} selected</b>`:''}</div>
   <label>Add element</label>
   <div style="display:flex;gap:.4rem">
     <select id="palkind" style="flex:1">
@@ -1236,10 +1340,25 @@ function renderPalette(){
      <label style="flex:1;margin:0">H<input type="number" id="palsh" value="${selk.h||1}" step="0.25" min="0.5"></label>
      <label style="flex:1;margin:0">↻°<input type="number" id="palsr" value="${selk.rot||0}" step="15"></label></div>
    <button id="paldel" style="margin-top:.4rem;width:100%">🗑 Remove element</button>`:''}
+  <button id="palnav" style="margin-top:.35rem;width:100%">＋ Back / Forward buttons</button>
   <hr><label>Start over from template</label>
   <div style="display:flex;gap:.4rem"><button id="palansi" style="flex:1">ANSI</button>
   <button id="palsplit" style="flex:1">Split</button>
-  <button id="pale9" style="flex:1">E9 mouse</button></div>`;
+  <button id="pale9" style="flex:1">E9 mouse</button></div>
+  ${(()=>{const lib=Object.keys((cfg&&cfg.layout_library)||{});
+    return lib.length?`<div class="muted" style="font-size:.72rem;margin-top:.35rem">Saved layouts</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.3rem">${lib.map(n=>
+        `<button data-libtpl="${esc(n)}" style="flex:1 0 45%">${esc(n)}</button>`).join('')}</div>`:'';})()}
+  <button id="paldetect" style="margin-top:.35rem;width:100%">🔎 Detected keys (from device)</button>
+  <hr><label>Background image <span class="muted" style="font-weight:400">(SVG/PNG behind the keys)</span></label>
+  <div style="display:flex;gap:.4rem">
+    <button id="palbg" style="flex:1">🖼 ${lay.bg?'Replace':'Add'} background</button>
+    ${lay.bg?'<button id="palbgclr">✕ Clear</button>':''}</div>
+  <input type="file" id="palbgfile" accept=".svg,image/svg+xml,image/png,image/jpeg" style="display:none">
+  <hr><label>Layout library</label>
+  <div style="display:flex;gap:.4rem">
+    <button id="palsaveas" style="flex:1">💾 Save layout as…</button>
+    <button id="palloadlib" style="flex:1">📂 Load…</button></div>`;
   p.style.display='block';
   const valRefresh=()=>{const kind=$('palkind').value;
     $('palvalwrap').innerHTML=kind==='key'?`<select id="palkey" style="width:100%">${keyOptsHtml}</select>`:
@@ -1263,14 +1382,87 @@ function renderPalette(){
     $('paldel').onclick=()=>{lay.keys.splice(editSel,1);editSel=null;render();};}
   $('palansi').onclick=()=>{if(confirm('Replace this layout with the ANSI template?')){layouts[d.id]=ansiLayout();editSel=null;render();}};
   $('palsplit').onclick=()=>{if(confirm('Replace this layout with the split template?')){layouts[d.id]=splitLayout();editSel=null;render();}};
-  $('pale9').onclick=()=>{if(confirm('Replace this layout with the E9 mouse template?')){layouts[d.id]=e9Layout();editSel=null;render();}};}
-/* ---- Shift = combo capture, Alt = sequence capture ---- */
+  $('pale9').onclick=()=>{if(confirm('Replace this layout with the E9 mouse template?')){layouts[d.id]=e9Layout();editSel=null;render();}};
+  // quick-add the two navigation buttons (btn4/btn5) — easy to miss otherwise
+  $('palnav').onclick=()=>{
+    const maxy=lay.keys.length?Math.max(...lay.keys.map(k=>k.y+(k.h||1))):0;
+    lay.keys.push({btn:4,x:0,y:Math.round(maxy*4)/4,w:1.5,label:'Back'},
+                  {btn:5,x:1.6,y:Math.round(maxy*4)/4,w:1.5,label:'Forward'});
+    editSel=lay.keys.length-1;render();toast('added Back (btn4) and Forward (btn5) — drag into place');};
+  $('paldetect').onclick=()=>{
+    const dn=detectedNodesFor(d.id);
+    const us=detectedKeysFor(d.id);
+    if(!dn.length){toast('This entry isn\'t claiming any input node yet — check Devices → Add a device (and ⬆ Save + restart the engine after adding).',true);return;}
+    // multi-node (composite) -> combined kbd+mouse sections; else keyboard grid
+    if(dn.length>1||dn.some(n=>n.role==='pointer')){
+      if(confirm('Rebuild this wireframe from the '+dn.length+' detected interface(s) (keyboard + mouse sections)?')){
+        layouts[d.id]=compositeLayout(dn);editSel=null;render();
+        toast('rebuilt from '+dn.length+' detected interface(s) — drag sections to arrange');}
+      return;}
+    if(!us.length){
+      // node exists but exposes no usages we can place (e.g. a consumer-only
+      // sub-interface). Say so instead of silently doing nothing.
+      toast('“'+nodeShort(dn[0].name)+'” reports no placeable keys — it\'s likely a consumer/media-only interface. Use ＋ Add element to place buttons manually.',true);
+      return;}
+    if(confirm('Replace this layout with the '+us.length+' keys detected on the device?')){
+      layouts[d.id]=keysLayout(us);editSel=null;render();
+      toast('prefilled '+us.length+' detected keys — drag to arrange, then ⬆ Save to device');}};
+  p.querySelectorAll('[data-libtpl]').forEach(b=>b.onclick=()=>{
+    const nm=b.dataset.libtpl,lib=(cfg.layout_library||{})[nm];if(!lib)return;
+    if(confirm('Replace this layout with saved layout "'+nm+'"?')){
+      layouts[d.id]=JSON.parse(JSON.stringify(lib));editSel=null;render();
+      toast('applied saved layout "'+nm+'" — ⬆ Save to device');}});
+  // 3.1: background image (data URL kept in the layout, so it saves with the profile)
+  $('palbg').onclick=()=>$('palbgfile').click();
+  $('palbgfile').onchange=e=>{const f=e.target.files[0];if(!f)return;
+    if(f.size>600000){toast('image too large (>600 KB) — please shrink it first',true);return;}
+    const r=new FileReader();r.onload=()=>{editableLayout(d).bg=r.result;render();
+      toast('background set — drag keys to align with the image, then ⬆ Save to device');};
+    r.readAsDataURL(f);};
+  if($('palbgclr'))$('palbgclr').onclick=()=>{delete editableLayout(d).bg;render();toast('background cleared');};
+  // 3: named layout library, stored in the profile (saves to the Pi)
+  $('palsaveas').onclick=()=>{
+    const nm=prompt('Save this device\'s layout to the library as:',d.name||d.id);
+    if(!nm)return;cfg.layout_library=cfg.layout_library||{};
+    cfg.layout_library[nm]=JSON.parse(JSON.stringify(editableLayout(d)));
+    toast('saved layout "'+nm+'" to the library — ⬆ Save to device to persist');};
+  $('palloadlib').onclick=()=>{
+    const lib=cfg.layout_library||{};const names=Object.keys(lib);
+    if(!names.length){toast('no saved layouts yet — use “Save layout as…” first',true);return;}
+    const nm=prompt('Load which layout?\n'+names.join(', '),names[0]);
+    if(!nm||!lib[nm]){if(nm)toast('no layout named "'+nm+'"',true);return;}
+    layouts[d.id]=JSON.parse(JSON.stringify(lib[nm]));editSel=null;render();
+    toast('loaded layout "'+nm+'" — ⬆ Save to device');};}
+/* ---- Shift = combo (built live in the Mapping Editor), Alt = sequence ---- */
 function addComboSel(dev,u){
   if(seqSel.length){toast('finish or cancel the sequence first',true);return;}
   const canon=baselineOf(dev,u);
-  const i=comboSel.findIndex(x=>x.dev===dev&&x.u===u);
-  if(i>=0)comboSel.splice(i,1);else comboSel.push({dev,u,canon});
-  render();}
+  window._comboMemberDevs=window._comboMemberDevs||{};
+  // Shift-click while a combo is selected: add this key, or remove it if already a member.
+  if(sel&&sel.type==='combo'&&cfg.combos[sel.id]){
+    const c=cfg.combos[sel.id];let keys=c.keys.slice();
+    const md=window._comboMemberDevs[sel.id]||{};
+    const i=keys.indexOf(canon);
+    if(i>=0){ if(keys.length<=2){toast('a combo needs at least 2 keys',true);return;}
+      keys.splice(i,1);delete md[canon]; }
+    else{ keys.push(canon);md[canon]=dev; }
+    delete cfg.combos[sel.id];delete window._comboMemberDevs[sel.id];
+    if(c.dev){const ds=[...new Set(Object.values(md).filter(Boolean))];
+      if(ds.length!==1||ds[0]!==c.dev)delete c.dev;}   // scope broke -> drop dev
+    const id=comboIdFor(keys);c.keys=keys;
+    cfg.combos[id]=c;window._comboMemberDevs[id]=md;
+    sel={type:'combo',id};render();return;}
+  // Otherwise start a NEW combo, seeding from the currently-selected single key.
+  const md={},keys=[];
+  if(sel&&sel.type==='key'){const sd=sel.dev||'',sc=baselineOf(sd,sel.id);keys.push(sc);md[sc]=sd;}
+  if(!keys.includes(canon)){keys.push(canon);md[canon]=dev;}
+  if(keys.length<2){toast('click a key first, then Shift-click a different key to combo them',true);return;}
+  const id=comboIdFor(keys);
+  cfg.combos=cfg.combos||{};
+  cfg.combos[id]={keys,action:['suppress'],window_ms:60};
+  window._comboMemberDevs[id]=md;
+  comboSel=[];sel={type:'combo',id};render();
+  toast('combo created — set its action, then ⬆ Save to device');}
 function addSeqSel(dev,u){
   if(comboSel.length){toast('finish or cancel the combo first',true);return;}
   seqSel.push({dev,u,canon:baselineOf(dev,u)});
@@ -1724,39 +1916,71 @@ function bindGroupAssign(member){
   const b=$('groupaddbtn');if(!b)return;
   b.onclick=()=>addToGroup($('groupinput').value,member);
   $('groupinput').onkeydown=e=>{if(e.key==='Enter')addToGroup($('groupinput').value,member);};}
+function comboIdFor(keys){return 'combo-'+keys.slice().sort((a,b)=>a-b).join('-');}
+function comboScopeDev(id,c){
+  if(c.dev)return c.dev;                    // already device-scoped
+  const md=(window._comboMemberDevs||{})[id];   // devices we saw while building
+  if(md){const ds=[...new Set(Object.values(md).filter(Boolean))];
+    if(ds.length===1)return ds[0];}
+  return null;}                             // unknown / multi-device -> no dev tab
 function renderComboEd(ed){
   const c=cfg.combos[sel.id];
   if(!c){sel=null;return renderEditor();}
   const a=c.action||['suppress'];
-  ed.innerHTML=`<h2 style="font-size:1rem">Combo: ${c.keys.map(u=>KEYS[u]||'?').join(' + ')}</h2>
-  <p class="muted">All keys pressed together (within ${c.window_ms||60} ms, on any device)
-  fire this action; the individual keys are swallowed.</p>
-  <div class="row"><div>
-    <label>Action</label><select id="cact">
-      <option value="suppress" ${a[0]==='suppress'?'selected':''}>Nothing (swallow keys)</option>
-      <option value="key" ${a[0]==='key'?'selected':''}>Key…</option>
-      <option value="macro" ${a[0]==='macro'?'selected':''}>Macro…</option>
-      <option value="text" ${a[0]==='text'?'selected':''}>Type text…</option>
-      <option value="os" ${a[0]==='os'?'selected':''}>Switch OS (win/mac)</option>
-    </select><div id="cargwrap"></div>
-    <label>Window (ms)</label><input type="number" id="cwin" value="${c.window_ms||60}" min="20" max="500">
-  </div><div>
-    <button id="cdel" style="margin-top:1.4rem">🗑 Delete combo</button>
-    <p class="muted">Saved into the shared config — ⬆ Save to device to apply.</p>
-  </div></div>`;
+  const ui=actionToUI(a);
+  const title=c.keys.map(u=>KEYS[u]||MODS[u]||'?').join(' + ');
+  const scopeDev=comboScopeDev(sel.id,c);
+  // Custom scope tabs — same idea as the key editor. "device only" is hidden
+  // when the combo's keys span multiple devices (or origin is unknown).
+  const scopeTabs=`<div class="pills" style="margin:.2rem 0 .1rem">
+      <div class="pill ${!c.dev?'on':''}" onclick="comboSetDev(null)">Custom · all devices</div>
+      ${scopeDev?`<div class="pill ${c.dev?'on':''}" onclick="comboSetDev('${esc(scopeDev)}')">Custom · ${esc(devName(scopeDev))} only</div>`:''}
+    </div>
+    <p class="muted" style="margin:.1rem 0 .5rem;font-size:.76rem">${c.dev
+      ?('Fires only when every key comes from <b>'+esc(devName(c.dev))+'</b>.')
+      :'Fires when these keys are pressed together on <b>any</b> device.'} Combos fire on any layer.</p>`;
+  ed.innerHTML=`<h2 style="font-size:1rem">${esc(title)} — layer ${layer}</h2>
+    <p class="muted" style="font-size:.78rem">These keys pressed together (within ${c.window_ms||60} ms) fire one action; the keys are swallowed. <b>Shift-click</b> another key on a wireframe to add it, or a member to remove it.</p>
+    ${scopeTabs}
+    <div class="row"><div>
+      <label>On press</label><select id="cact">
+        <option value="suppress" ${a[0]==='suppress'?'selected':''}>Nothing (swallow keys)</option>
+        <option value="key" ${a[0]==='key'?'selected':''}>Key…</option>
+        <option value="macro" ${a[0]==='macro'?'selected':''}>Macro…</option>
+        <option value="text" ${a[0]==='text'?'selected':''}>Type text…</option>
+        <option value="os" ${a[0]==='os'?'selected':''}>Switch OS (win/mac)</option>
+      </select><div id="cargwrap"></div>
+      <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
+        <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
+        ${capBoxHTML()}${searchBoxHTML()}
+        <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
+      </div>
+      <label style="margin-top:.5rem">Window (ms)</label><input type="number" id="cwin" value="${c.window_ms||60}" min="20" max="500">
+    </div><div>
+      <button id="cdel" style="margin-top:.2rem">🗑 Delete combo</button>
+    </div></div>`;
   const refresh=()=>{const k=$('cact').value,w=$('cargwrap');
-    w.innerHTML=k==='key'?`<select id="carg">${keyOpts(a[1]||0x28)}</select>`:
-      k==='macro'?`<select id="carg">${macOpts(a[1]||1)}</select>`:
+    w.innerHTML=k==='key'?`<select id="carg">${keyOpts(ui.pressKey||a[1]||0x28)}</select>`:
+      k==='macro'?`<select id="carg">${macOpts(ui.pressMacro||a[1]||1)}</select>`:
       k==='text'?`<input type="text" id="carg" value="${a[0]==='text'?esc(a[1]||''):''}" placeholder="text (may embed {{ctrl+c}})">`:'';
-    bind();};
-  const bind=()=>ed.querySelectorAll('select,input').forEach(x=>x.onchange=()=>{
-    if(x.id==='cact')refresh();
-    const k=$('cact').value,v=$('carg')?$('carg').value:null;
+    // quick-assign boxes only make sense for direct actions
+    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress')?'':'none';};
+  refresh();
+  const commit=()=>{const k=$('cact').value,v=$('carg')?$('carg').value:null;
     c.action=k==='suppress'?['suppress']:k==='os'?['os','toggle']:
       k==='text'?['text',v||'']:[k,+v||(k==='key'?0x28:1)];
-    c.window_ms=+$('cwin').value||60;});
-  refresh();
-  $('cdel').onclick=()=>{delete cfg.combos[sel.id];sel=null;render();};}
+    c.window_ms=+$('cwin').value||60;
+    toast('combo updated — ⬆ Save to device to apply');};
+  ed.querySelectorAll('#cact,#cargwrap select,#cargwrap input,#cwin').forEach(x=>x.onchange=()=>{
+    if(x.id==='cact'){refresh();}commit();});
+  // Press-key-to-assign, search-actions, and ＋New macro all set the combo action
+  // (identical to the key editor). Multi-key press auto-builds a macro.
+  bindEditorCommon(a2=>{c.action=a2;});
+  $('cdel').onclick=()=>{delete cfg.combos[sel.id];
+    if(window._comboMemberDevs)delete window._comboMemberDevs[sel.id];
+    sel=null;render();toast('combo deleted — ⬆ Save to device to apply');};}
+window.comboSetDev=d=>{const c=cfg.combos[sel.id];if(!c)return;
+  if(d)c.dev=d;else delete c.dev;render();toast('⬆ Save to device to apply');};
 window.setScope=v=>{if(sel){sel.scope=v;render();}};
 function scopeTabsHTML(selDev,active){
   const blurb={custom:'Shared behavior on the canonical key — applies identically on every device.',
@@ -1820,24 +2044,8 @@ function actionPickerBind(idPfx,a,onChange){
   refresh();}
 function renderCaptureEditor(ed){
   positionEditor();
-  if(comboSel.length){
-    $('editortitle').textContent='New combo';
-    window._comboDraft=window._comboDraft||{action:['suppress'],window_ms:60};
-    ed.innerHTML=`<h2 style="font-size:1rem">Combo: ${comboSel.map(x=>KEYS[x.canon]||MODS[x.canon]||'?').join(' + ')}</h2>
-      <p class="muted" style="font-size:.78rem">All these keys pressed together (within the window) fire one action; the individual keys are swallowed. <b>Shift-click</b> more keys on the wireframe to extend.</p>
-      <label>On press (fires the combo)</label>${actionPickerHTML('cb',window._comboDraft.action)}
-      <label>Window (ms)</label><input type="number" id="cbwin" value="${window._comboDraft.window_ms}" min="20" max="500">
-      <div class="bar" style="margin-top:.6rem"><button id="cbsave" class="primary">✓ Create combo</button>
-        <button onclick="clearCapture()">✕ Cancel</button></div>`;
-    actionPickerBind('cb',window._comboDraft.action,a=>{window._comboDraft.action=a;});
-    $('cbwin').onchange=()=>{window._comboDraft.window_ms=+$('cbwin').value||60;};
-    $('cbsave').onclick=()=>{
-      if(comboSel.length<2){toast('a combo needs at least 2 keys',true);return;}
-      const id='combo-'+comboSel.map(x=>x.canon).join('-');
-      cfg.combos[id]={keys:comboSel.map(x=>x.canon),action:window._comboDraft.action,window_ms:window._comboDraft.window_ms};
-      comboSel=[];window._comboDraft=null;sel={type:'combo',id};render();
-      toast('combo created — ⬆ Save to device to apply');};
-    return;}
+  // Combos are now created directly in the Mapping Editor (see addComboSel);
+  // this capture editor only handles Alt-click typed sequences.
   // sequence -> expansion
   $('editortitle').textContent='New typed sequence';
   const trig=seqSel.map(x=>charForUsage(x.canon)||'?').join('');
@@ -1855,7 +2063,7 @@ function renderCaptureEditor(ed){
     render();renderExp();toast(`expansion "${trig}" added — ⬆ Save expansions to apply`);};}
 function renderEditor(){
   const ed=$('editorbody');
-  if(comboSel.length||seqSel.length){return renderCaptureEditor(ed);}
+  if(seqSel.length){return renderCaptureEditor(ed);}
   if(!sel){$('editor').style.display='none';_edSnapKey=null;
   {const _drop=`<h2 style="font-size:1rem">Mapping editor</h2>
   <p class="muted">Click any key or button on a wireframe to edit it. There are two kinds of edit:</p>
@@ -1863,7 +2071,7 @@ function renderEditor(){
   <i>is</i>. Set once when you add a keyboard (e.g. reshaping the Fintie to your
   standard layout). Chip: <b>≡X</b>.</p>
   <p style="font-size:.85rem"><b>Custom</b> — shared. Layers, chords, macros and combos on
-  canonical keys — the same on every device (Caps+IJKL etc.). Chip: <b>→Y</b>.</p>
+  canonical keys — the same on every device (Caps+IJKL etc.). Chip: <b>Y</b> (bottom-right).</p>
   <p class="muted" style="font-size:.78rem">Gold keys start layers · dashed lines are chords (click one) ·
   Shift-click keys = combo · Alt-click = typed sequence · ✎ Layout edits only the
   wireframe drawing, never the mapping.</p>`;}return;}
@@ -1939,6 +2147,7 @@ function renderEditor(){
       <option value="none" ${ui.release==='none'?'selected':''}>Nothing</option>
       <option value="macro" ${ui.release==='macro'?'selected':''}>Macro…</option>
     </select><div id="relArg"></div>
+    ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
   </div></div>`;
   function setLayerSource(L){
     if(L==null){ if(isBtn)delete cfg.tap_hold[sel.id];
@@ -1990,6 +2199,7 @@ function renderEditor(){
         pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value}));
       render();});
   bindEditorCommon(apply);
+  bindEditorOsOverride(isBtn,isBtn?sel.id:canon);
   const member=(isBtn?'mouse:':'kbd:')+key;
   const gwrap=document.createElement('div');
   gwrap.innerHTML=groupAssignHTML(member);
@@ -2005,19 +2215,65 @@ function renderWheelEd(ed){
     <option value="pan" ${cur[0]==='pan'?'selected':''}>Horizontal ×N</option>
     <option value="macro_updown" ${cur[0]==='macro_updown'?'selected':''}>Macros up/down</option>
     <option value="macro_per" ${cur[0]==='macro_per'?'selected':''}>Macro per N detents</option>
-  </select><div id="warg"></div>`;
+  </select><div id="warg"></div>
+  ${osScrollInvertHTML(sel.dev)}`;
   const refresh=()=>{const m=$('wmode').value,w=$('warg');
     w.innerHTML=m==='scale'||m==='pan'?`<input id="w1" type="number" step="0.5" value="${cur[1]??(m==='pan'?-0.5:1)}">`:
     m==='macro_updown'?`<div class="row"><select id="w1">${macOpts(cur[1]||22)}</select><select id="w2">${macOpts(cur[2]||23)}</select></div>`:
     m==='macro_per'?`<div class="row"><select id="w1">${macOpts(cur[1]||10)}</select><input id="w2" type="number" min="1" value="${cur[2]||2}"></div>`:'';
     bind();};
-  const bind=()=>ed.querySelectorAll('select,input').forEach(x=>x.onchange=()=>{
+  const bind=()=>ed.querySelectorAll('#wmode,#warg select,#warg input').forEach(x=>x.onchange=()=>{
     if(x.id==='wmode')refresh();
     const m=$('wmode').value,v1=$('w1')?.value,v2=$('w2')?.value;
     cfg.wheel_by_layer[layer]=m==='pass'?['pass']:m==='scale'?['scale',+v1]:m==='pan'?['pan',+v1]:
       m==='macro_updown'?['macro_updown',+v1,+v2]:['macro_per',+v1,+v2];});
   refresh();
+  bindOsScrollInvert(sel.dev);
 }
+// 3: reach the OS tab's per-OS scroll inversion right from the wheel on a
+// wireframe. scroll_invert is per-device-per-OS (os_profiles[os].scroll_invert).
+function osScrollInvertHTML(devid){
+  if(!devid)return'';
+  const oses=osKnown();
+  const rows=oses.map(o=>{
+    const inv=((cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].scroll_invert)||{})[devid];
+    const active=o===(cfg.active_os||'win');
+    return `<label style="display:flex;align-items:center;gap:.4rem;margin:.15rem 0">
+      <input type="checkbox" data-scrinv="${esc(o)}" ${inv?'checked':''}>
+      Invert scroll on <b>${esc(o)}</b>${active?' <span class="muted">(active)</span>':''}</label>`;}).join('');
+  return `<hr style="border:none;border-top:1px solid var(--line);margin:.5rem 0">
+    <label>Scroll direction — per OS <span class="muted" style="font-weight:400;font-size:.74rem">(same setting as the OS tab)</span></label>
+    ${rows}
+    <p class="muted" style="font-size:.73rem">If a new mouse scrolls the wrong way on one OS, tick that OS here. ⬆ Save to device to apply.</p>`;}
+function bindOsScrollInvert(devid){
+  if(!devid)return;
+  document.querySelectorAll('[data-scrinv]').forEach(cb=>cb.onchange=()=>{
+    osScrollSet(cb.dataset.scrinv,devid,cb.checked);});}
+// 3: per-OS override for THIS key/button on the currently-active OS, right in
+// the mapping editor. Writes os_profiles[activeOS].{kbd,mouse}_mappings — the
+// same overlay the OS tab edits (engine honors it; null = per-OS passthrough).
+function editorOsOverrideHTML(isBtn,id){
+  const o=cfg.active_os||'win';
+  const type=isBtn?'btn':'key';
+  const ovm=(cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o][isBtn?'mouse_mappings':'kbd_mappings'])||{};
+  const kk=`${layer},${id}`;
+  const has=Object.prototype.hasOwnProperty.call(ovm,kk);
+  const v=ovm[kk];
+  const cellTxt=has?(v===null?'⟶ passthrough':esc(asgActLabel(v))):'<span class="muted" style="opacity:.6">= same as all-OS</span>';
+  return `<hr style="border:none;border-top:1px solid var(--line);margin:.5rem 0">
+    <label>On <b>${esc(o)}</b> only <span class="muted" style="font-weight:400;font-size:.74rem">(per-OS override — same as OS tab)</span></label>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <span data-osov style="cursor:pointer;text-decoration:underline">${cellTxt}</span>
+      ${has?'<a class="mlink" data-osovclr title="clear override (use all-OS behavior)">✕</a>':''}
+    </div>
+    <p class="muted" style="font-size:.72rem">Give this ${isBtn?'button':'key'} a different action just on ${esc(o)} — e.g. pass a chord through untouched on mac. Blank = uses the shared mapping above.</p>`;}
+function bindEditorOsOverride(isBtn,id){
+  const o=cfg.active_os||'win';const type=isBtn?'btn':'key';
+  const cell=document.querySelector('[data-osov]');if(!cell)return;
+  cell.onclick=()=>asgOpenSearch(cell,{type,id:+id},'osov',act=>{
+    if(typeof osMapSet==='function')osMapSet(o,type,+id,layer,act,true);render();});
+  const clr=document.querySelector('[data-osovclr]');
+  if(clr)clr.onclick=()=>{if(typeof osMapSet==='function')osMapSet(o,type,+id,layer,undefined,false);render();};}
 function renderStepperEd(ed){
   cfg.stepper_by_layer=cfg.stepper_by_layer||{};
   const cur=cfg.stepper_by_layer[layer]||['pass'];
@@ -2121,6 +2377,211 @@ function renderDevs(){
       <td><button onclick="removeDevice(${i})">✕</button></td>`;
     tr.querySelectorAll('select,input').forEach(x=>x.onchange=collectDevs);
     t.appendChild(tr);});}
+/* ====== streamlined Devices section (top of Mapping) ====== */
+function renderDevices(){
+  if(!cfg)return;
+  if(!cfg.devices)migrateDevices();
+  renderDevs();               // the Advanced table (kept for troubleshooting)
+  renderDevAttached();
+  renderDevAvail();
+  const s=$('devsummary');
+  if(s)s.textContent=cfg.devices?`· ${cfg.devices.length} attached`:'';}
+// strip "bridge-" + trailing role words so a composite's differently-named
+// interfaces (…Mouse / …Mouse Keyboard / …Consumer Control) share one stem.
+function devStem(name){
+  let s=(name||'').replace(/^bridge-/i,'').toLowerCase().trim();
+  const re=/[\s\-]+(consumer control|system control|wireless|keyboard|mouse|touchpad|trackpad|pointer|control|kbd)$/;
+  for(let i=0;i<3;i++){const t=s.replace(re,'').trim();if(t===s)break;s=t;}
+  return s||(name||'').toLowerCase();}
+// group detected nodes into physical devices: by USB vid/pid when present,
+// else by name stem (so composites group even if the mirror drops vid/pid).
+function groupNodes(nodes){
+  const groups=[],by={};
+  nodes.forEach(n=>{
+    const gid=(n.vid&&n.pid)?('id:'+n.vid+':'+n.pid):('nm:'+devStem(n.name));
+    if(!by[gid]){by[gid]={gid,nodes:[]};groups.push(by[gid]);}
+    by[gid].nodes.push(n);});
+  return groups;}
+function renderDevAttached(){
+  const host=$('devattached');if(!host)return;
+  const devs=(cfg&&cfg.devices)||[];
+  const nodes=(lastEng&&lastEng.all_nodes)||[];
+  if(!devs.length){host.innerHTML='<span class="muted" style="font-size:.8rem">No devices attached yet — add one below.</span>';return;}
+  let h='<div style="font-weight:600;font-size:.85rem;margin-bottom:.3rem">Attached</div><div class="pills">';
+  devs.forEach((d,i)=>{
+    const claimed=nodes.filter(n=>n.device===d.id);
+    const cnt=claimed.length;
+    const icon=d.kind==='mouse'?'🖱':'⌨';
+    const tag=cnt>1?` <span class="muted">${cnt} nodes</span>`:(cnt===1?'':' <span style="color:var(--warn)">⚠ no input</span>');
+    h+=`<span class="grouppill" style="cursor:default">${icon} ${esc(d.name||d.id)}${tag}
+      <a class="mlink" data-devrm="${i}" title="remove this device">✕</a></span>`;});
+  h+='</div>';
+  host.innerHTML=h;
+  host.querySelectorAll('[data-devrm]').forEach(a=>a.onclick=()=>removeDevice(+a.dataset.devrm));}
+function renderDevAvail(){
+  const host=$('devavail');if(!host)return;
+  if(!lastEng){host.innerHTML='<span class="muted" style="font-size:.8rem">Connect to see devices available to add.</span>';return;}
+  const nodes=lastEng.all_nodes||null;
+  if(!nodes){host.innerHTML='<span class="muted" style="font-size:.8rem">This engine build doesn’t report inputs yet — deploy the updated <code>s1_devices.py</code> + <code>s6_orchestrator.py</code> and restart the expander.</span>';return;}
+  // available = any group with at least ONE unclaimed node, narrowed to just
+  // its unclaimed nodes. (Bug: requiring the WHOLE group be unclaimed hid a
+  // hub's mouse once its keyboard sibling had been attached — they share a
+  // name stem, so the claimed keyboard suppressed the still-free mouse.)
+  const groups=groupNodes(nodes)
+    .map(g=>({gid:g.gid,nodes:g.nodes.filter(n=>!n.device),
+              claimed:g.nodes.filter(n=>n.device)}))
+    .filter(g=>g.nodes.length);
+  window._availGroups=groups;
+  // paired Bluetooth devices not represented by any device entry
+  const haveMac=new Set((cfg.devices||[]).map(d=>(d.mac||'').toUpperCase()).filter(Boolean));
+  const btAvail=Object.entries(btKnown||{}).filter(([mac])=>!haveMac.has(mac.toUpperCase()));
+  if(!groups.length&&!btAvail.length){
+    host.innerHTML='<div style="font-weight:600;font-size:.85rem;margin-bottom:.3rem">Add a device</div><span class="muted" style="font-size:.8rem">Nothing new detected. Forwarded devices appear while Pi2 is streaming; Bluetooth devices appear after pairing in the Bluetooth tab.</span>';
+    return;}
+  let h='<div style="font-weight:600;font-size:.85rem;margin-bottom:.3rem">Add a device</div>';
+  if(groups.length){
+    h+='<table style="width:100%;font-size:.82rem">';
+    groups.forEach((g,gi)=>{
+      const roles=[...new Set(g.nodes.map(n=>n.role==='pointer'?'mouse':'keyboard'))].join(' + ');
+      const nkeys=g.nodes.reduce((s,n)=>s+((n.keys&&n.keys.length)||0),0);
+      const composite=g.nodes.length>1;
+      const nm=g.nodes[0].name.replace(/^bridge-/i,'');
+      const sib=(g.claimed||[]).length;
+      h+=`<tr>
+        <td style="width:1.4rem"><input type="checkbox" data-avchk="${gi}"></td>
+        <td><b>${esc(nm)}</b> <span class="muted">${roles}${composite?' · composite':''}${nkeys?(' · '+nkeys+' keys'):''}</span>
+          ${sib?`<div class="muted" style="font-size:.7rem">↳ same physical device as <b>${esc(devName(g.claimed[0].device))}</b> (already attached) — add this interface too, or leave it</div>`:''}
+          ${composite?`<div class="muted" style="font-size:.7rem">${g.nodes.map((n,ni)=>`${esc(n.name)} <a class="mlink" data-avsep="${gi}:${ni}" title="add just this interface as its own device">add separately</a>`).join(' · ')}</div>`:''}</td>
+        <td style="text-align:right"><button data-avadd="${gi}">＋ Add${composite?' as one':''}</button></td></tr>`;});
+    h+='</table><button data-avcombine style="margin-top:.35rem">🔗 Combine checked into one device</button>';
+  }
+  if(btAvail.length){
+    h+='<div style="font-weight:600;font-size:.82rem;margin:.5rem 0 .2rem">Bluetooth devices</div><table style="width:100%;font-size:.82rem">';
+    btAvail.forEach(([mac,info])=>{
+      h+=`<tr><td><b>${esc(info.name||mac)}</b> <span class="muted">${esc(mac)}</span></td>
+        <td style="text-align:right"><button data-btadd="${esc(mac)}">＋ Add</button></td></tr>`;});
+    h+='</table>';
+  }
+  host.innerHTML=h;
+  host.querySelectorAll('[data-avadd]').forEach(b=>b.onclick=()=>{
+    const g=groups[+b.dataset.avadd];
+    if(g.nodes.length>1)addCompositeDevice(g.nodes);else addDeviceFromNode(g.nodes[0]);});
+  const cb=host.querySelector('[data-avcombine]');
+  if(cb)cb.onclick=()=>{
+    const picked=[...host.querySelectorAll('[data-avchk]:checked')]
+      .flatMap(c=>groups[+c.dataset.avchk].nodes);
+    if(picked.length<2){toast('check at least two rows to combine',true);return;}
+    addCombinedDevice(picked);};
+  host.querySelectorAll('[data-avsep]').forEach(a=>a.onclick=()=>{
+    const [gi,ni]=a.dataset.avsep.split(':').map(Number);
+    addDeviceFromNode(groups[gi].nodes[ni]);});   // 19.1 #1c: treat one interface as its own device
+  host.querySelectorAll('[data-btadd]').forEach(b=>b.onclick=()=>addBtDevice(b.dataset.btadd));}
+window.addBtDevice=mac=>{
+  if(!cfg){toast('config not loaded yet',true);return;}
+  const info=(btKnown||{})[mac.toUpperCase()]||{name:mac};
+  cfg.devices=cfg.devices||[];
+  const words=(info.name||'').split(/[^A-Za-z0-9]+/).filter(w=>w.length>=3);
+  const pin=(words.sort((a,b)=>b.length-a.length)[0]||info.name||'').toLowerCase();
+  cfg.devices.push({id:slug(info.name||mac)||('dev-'+(cfg.devices.length+1)),
+    name:info.name||mac,kind:'kbd',pin,mac:mac.toUpperCase(),wireframe:'ansi'});
+  render();toast('added "'+(info.name||mac)+'" — set its Pin to a node name if needed, then ⬆ Save to device');};
+// combine arbitrary checked nodes into ONE entry: match by shared vid/pid if
+// they have one, else by the longest word common to all their names.
+window.addCombinedDevice=nodes=>{
+  if(!cfg){toast('config not loaded yet',true);return;}
+  const vid=nodes[0].vid,pid=nodes[0].pid;
+  const sharedId=vid&&pid&&nodes.every(n=>n.vid===vid&&n.pid===pid);
+  let pin='';
+  if(!sharedId){
+    const wordSets=nodes.map(n=>new Set(n.name.replace(/^bridge-/i,'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>=3)));
+    const common=[...wordSets[0]].filter(w=>wordSets.every(s=>s.has(w)));
+    pin=common.sort((a,b)=>b.length-a.length)[0]||'';
+    if(!pin){toast('these nodes share no USB id or common name word — add them separately',true);return;}
+  }
+  const kbdNode=nodes.find(n=>n.role!=='pointer');
+  const kind=kbdNode?'kbd':'mouse';
+  const nm=nodes[0].name.replace(/^bridge-/i,'');
+  const id=slug(nm)||('dev-'+(cfg.devices.length+1));
+  const entry={id,name:nm,kind,pin,mac:'',wireframe:kind==='mouse'?'e9':'ansi'};
+  if(sharedId){entry.vid=vid;entry.pid=pid;}
+  cfg.devices=cfg.devices||[];cfg.devices.push(entry);
+  layouts=layouts||{};layouts[id]=compositeLayout(nodes);
+  render();toast('combined '+nodes.length+' nodes into "'+nm+'" ('+(sharedId?'USB id':'pin: '+pin)+') — ⬆ Save to device');};
+window.addDeviceFromNode=n=>{
+  if(!cfg){toast('config not loaded yet',true);return;}
+  cfg.devices=cfg.devices||[];
+  const kind=n.role==='pointer'?'mouse':'kbd';
+  // pick the longest distinctive word of the node name as the pin, so two
+  // bridge-* nodes get different pins and don't claim each other's node.
+  const words=n.name.replace(/^bridge-/i,'').split(/[^A-Za-z0-9]+/).filter(w=>w.length>=3);
+  const pin=(words.sort((a,b)=>b.length-a.length)[0]||n.name).toLowerCase();
+  const id=slug(n.name)||('dev-'+(cfg.devices.length+1));
+  cfg.devices.push({id,name:n.name.replace(/^bridge-/i,''),kind,pin,mac:'',
+    wireframe:kind==='mouse'?'e9':'ansi'});
+  if(kind==='kbd'&&n.keys&&n.keys.length){layouts=layouts||{};layouts[id]=keysLayout(n.keys);}  // #1 prefill
+  render();toast('added "'+n.name+'" (pin: '+pin+')'+(n.keys?' with '+n.keys.length+' detected keys':'')+' — ⬆ Save to device, then restart the engine');};
+// #2: add a composite device (all nodes sharing a vendor/product) as ONE
+// entry, matched by vid/pid so the engine claims its keyboard AND mouse nodes.
+window.addCompositeDevice=nodes=>{
+  if(!cfg){toast('config not loaded yet',true);return;}
+  cfg.devices=cfg.devices||[];
+  const kbdNode=nodes.find(n=>n.role!=='pointer');
+  const kind=kbdNode?'kbd':'mouse';
+  const nm=(nodes[0].name.replace(/^bridge-/i,'')||'Composite');
+  const id=slug(nm)||('dev-'+(cfg.devices.length+1));
+  cfg.devices.push({id,name:nm,kind,pin:'',
+    vid:nodes[0].vid,pid:nodes[0].pid,mac:'',
+    wireframe:kind==='mouse'?'e9':'ansi'});
+  layouts=layouts||{};layouts[id]=compositeLayout(nodes);   // 19.1 #1: combined kbd+mouse wireframe
+  render();toast('added composite "'+nm+'" ('+nodes.length+' nodes) — arrange the sections, ⬆ Save to device, then restart the engine');};
+// #1: union of detected key usages across a config device's keyboard node(s).
+function detectedKeysFor(devid){
+  const ns=(lastEng&&lastEng.all_nodes)||[];const set=new Set();
+  for(const n of ns)if(n.device===devid&&n.keys)n.keys.forEach(u=>set.add(u));
+  return[...set];}
+// nodes claimed by a device (for rebuilding a composite wireframe)
+function detectedNodesFor(devid){
+  return((lastEng&&lastEng.all_nodes)||[]).filter(n=>n.device===devid);}
+function nodeShort(name){return (name||'').replace(/^bridge-/i,'');}
+// 19.1 #1: build a combined wireframe with one labeled SECTION per evdev node
+// (keyboard node -> its key grid; pointer node -> a mouse cluster), stacked so
+// the user can drag sections into the arrangement they want.
+function compositeLayout(nodes){
+  const keys=[];let y=0;
+  // keyboards first, then pointers, for a predictable stack
+  const ordered=[...nodes].sort((a,b)=>(a.role==='pointer'?1:0)-(b.role==='pointer'?1:0));
+  for(const n of ordered){
+    const ptr=n.role==='pointer';
+    keys.push({pad:1,x:0,y:y*1.12,w:ptr?4:8,h:0.6,label:nodeShort(n.name).slice(0,44)});
+    y+=1;
+    if(ptr){
+      keys.push({btn:1,x:0,y:y*1.12,w:1.6,label:'Left'},
+                {wheel:1,x:1.7,y:y*1.12,w:0.9},
+                {btn:2,x:2.7,y:y*1.12,w:1.6,label:'Right'},
+                {btn:3,x:1.55,y:(y+1.1)*1.12,w:1.5,label:'Mid'});
+      y+=2.5;
+    }else{
+      const kl=keysLayout(n.keys||[]);
+      let mrow=1;
+      kl.keys.forEach(k=>{const ry=(k.y||0)/1.12;mrow=Math.max(mrow,ry+(k.h||1));
+        keys.push({...k,y:(y+ry)*1.12});});
+      y+=mrow+0.6;
+    }
+  }
+  return{unit:38,keys};}
+// #1: build a wireframe from a set of HID usages -- take the ANSI template,
+// keep only keys the device actually has, then append any extras (media keys,
+// etc.) in rows below for the user to drag into place.
+function keysLayout(usages){
+  const set=new Set(usages);
+  const base=ansiLayout();
+  const keys=base.keys.filter(k=>set.has(k.u));
+  const present=new Set(base.keys.map(k=>k.u));
+  const extra=[...set].filter(u=>!present.has(u)&&(KEYS[u]||MODS[u]));
+  let maxy=keys.length?Math.max(...keys.map(k=>k.y+((k.h||1)*1.12))):0;
+  let x=0;
+  for(const u of extra){keys.push({u,x,y:maxy,w:1});x++;if(x>=13){x=0;maxy+=1.12;}}
+  return{unit:base.unit||38,keys};}
 window.removeDevice=i=>{
   if(!confirm('Remove '+(cfg.devices[i].name||cfg.devices[i].id)+'? Its Baseline entries remain in the config.'))return;
   cfg.devices.splice(i,1);render();};
@@ -2219,6 +2680,7 @@ function liveRaw(txt){
     return; }
   const m=txt.match(/key code=(\d+) val=([012]) port2=(True|False)/);if(!m)return;
   const code=+m[1],isPort2=m[3]==='True',down=+m[2]!==0;
+  const dm=txt.match(/ dev=(\S+)/),rdev=dm?dm[1]:'';   // 19.1 #3.1: which device
   if(isPort2){
     if(RAW_DIGITBTN_BOX[code]!==undefined){holdBtn(RAW_DIGITBTN_BOX[code],down);return;}
     if(RAW_PORT2_CHORD_BOX[code]!==undefined){holdBtn(RAW_PORT2_CHORD_BOX[code],down);return;}
@@ -2230,7 +2692,7 @@ function liveRaw(txt){
     return;
   }
   const u=EV2HID[code];if(!u)return;
-  holdKey(u,down);}
+  holdKey(u,down,rdev);}
 function liveOut(txt){
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
@@ -2524,10 +2986,26 @@ function switchTab(t){
   if(t==='os')renderOsTab();
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
-  if(t==='map')requestAnimationFrame(drawChords);}
+  if(t==='map'){renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
 $('editorclose').onclick=closeEditor;
 $('editorrevert').onclick=revertEditor;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('editor').style.display==='block')closeEditor();});
+// 19.1 #6: Delete/Backspace removes the selected element(s) while editing a layout
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Delete'&&e.key!=='Backspace')return;
+  if(!editDev)return;
+  const t=e.target,tn=(t&&t.tagName||'').toLowerCase();
+  if(tn==='input'||tn==='textarea'||tn==='select'||(t&&t.isContentEditable))return;
+  const d=allDevices().find(x=>x.id===editDev);if(!d)return;
+  const lay=editableLayout(d);
+  const idxs=editMulti.size?[...editMulti]:(editSel!=null?[editSel]:[]);
+  if(!idxs.length)return;
+  e.preventDefault();
+  idxs.sort((a,b)=>b-a).forEach(i=>lay.keys.splice(i,1));   // descending: keep indices valid
+  editMulti.clear();editSel=null;render();
+  toast('removed '+idxs.length+' element'+(idxs.length>1?'s':'')+' — ⬆ Save to device');});
+document.addEventListener('keydown',e=>{   // Escape clears a marquee selection
+  if(e.key==='Escape'&&editMulti.size){editMulti.clear();render();}});
 // capture where the user clicked so the popover appears next to it
 document.addEventListener('click',e=>{
   if(e.target.closest('#editor'))return;
