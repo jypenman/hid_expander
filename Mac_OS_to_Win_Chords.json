@@ -1,0 +1,701 @@
+{
+ "kind": "hid-expander-addition",
+ "version": 1,
+ "name": "macOS shortcuts on Windows",
+ "created": "2026-07-28",
+ "description": "Mirror image of the Windows-on-macOS set: keep using Mac muscle memory (Cmd+C, Cmd+Q, Cmd+Left, Option+Left) while the Windows host receives its native equivalents (Ctrl+C, Alt+F4, Home, Ctrl+Left). Implemented with modifier-chords, so no Ctrl/Cmd key swap is needed and every other use of Cmd/Option passes through untouched. Applies on Windows only.",
+ "requires": {
+  "engine": "mod_chords support (s2_mapping.mod_chord / s6 _run_mod_chord)"
+ },
+ "entries": [
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 6,
+   "action": [
+    "keymods",
+    6,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+C -> Ctrl+C (Copy)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 25,
+   "action": [
+    "keymods",
+    25,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+V -> Ctrl+V (Paste)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 27,
+   "action": [
+    "keymods",
+    27,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+X -> Ctrl+X (Cut)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 29,
+   "action": [
+    "keymods",
+    29,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+Z -> Ctrl+Z (Undo)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 4,
+   "action": [
+    "keymods",
+    4,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+A -> Ctrl+A (Select all)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 22,
+   "action": [
+    "keymods",
+    22,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+S -> Ctrl+S (Save)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 9,
+   "action": [
+    "keymods",
+    9,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+F -> Ctrl+F (Find)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 19,
+   "action": [
+    "keymods",
+    19,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+P -> Ctrl+P (Print)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 17,
+   "action": [
+    "keymods",
+    17,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+N -> Ctrl+N (New)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 18,
+   "action": [
+    "keymods",
+    18,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+O -> Ctrl+O (Open)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 26,
+   "action": [
+    "keymods",
+    26,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+W -> Ctrl+W (Close)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 23,
+   "action": [
+    "keymods",
+    23,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+T -> Ctrl+T (New tab)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 21,
+   "action": [
+    "keymods",
+    21,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+R -> Ctrl+R (Reload)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 5,
+   "action": [
+    "keymods",
+    5,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+B -> Ctrl+B (Bold)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 12,
+   "action": [
+    "keymods",
+    12,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+I -> Ctrl+I (Italic)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 24,
+   "action": [
+    "keymods",
+    24,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+U -> Ctrl+U (Underline)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 15,
+   "action": [
+    "keymods",
+    15,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+L -> Ctrl+L (Address bar)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 7,
+   "action": [
+    "keymods",
+    7,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+D -> Ctrl+D (Duplicate)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 10,
+   "action": [
+    "keymods",
+    10,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+G -> Ctrl+G (Find next)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 14,
+   "action": [
+    "keymods",
+    14,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+K -> Ctrl+K (Insert link)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 8,
+   "action": [
+    "keymods",
+    8,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+E -> Ctrl+E (Search)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 13,
+   "action": [
+    "keymods",
+    13,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+J -> Ctrl+J (Downloads)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 28,
+   "action": [
+    "keymods",
+    28,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+Y -> Ctrl+Y (Redo)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 16,
+   "action": [
+    "keymods",
+    16,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+M -> Ctrl+M (Minimise)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 11,
+   "action": [
+    "keymods",
+    11,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+H -> Ctrl+H (Hide)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 29,
+   "action": [
+    "keymods",
+    29,
+    3
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+Z -> Ctrl+Shift+Z (Redo)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 23,
+   "action": [
+    "keymods",
+    23,
+    3
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+T -> Ctrl+Shift+T (Reopen tab)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 17,
+   "action": [
+    "keymods",
+    17,
+    3
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+N -> Ctrl+Shift+N (New private window)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 19,
+   "action": [
+    "keymods",
+    19,
+    3
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+P -> Ctrl+Shift+P (Private window)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 25,
+   "action": [
+    "keymods",
+    25,
+    3
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+V -> Ctrl+Shift+V (Paste & match style)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 22,
+   "action": [
+    "keymods",
+    22,
+    3
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+S -> Ctrl+Shift+S (Save as)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 10,
+   "action": [
+    "keymods",
+    10,
+    3
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+G -> Ctrl+Shift+G (Find previous)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 20,
+   "action": [
+    "keymods",
+    61,
+    4
+   ],
+   "os": "win",
+   "note": "Cmd+Q (quit app) -> Alt+F4"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 43,
+   "action": [
+    "keymods",
+    43,
+    4
+   ],
+   "os": "win",
+   "note": "Cmd+Tab -> Alt+Tab (app switch)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 43,
+   "action": [
+    "keymods",
+    43,
+    6
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+Tab -> Alt+Shift+Tab"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 44,
+   "action": [
+    "keymods",
+    22,
+    8
+   ],
+   "os": "win",
+   "note": "Cmd+Space (Spotlight) -> Win+S (Windows search)"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 80,
+   "action": [
+    "keymods",
+    74,
+    0
+   ],
+   "os": "win",
+   "note": "Cmd+Left (line start) -> Home"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 79,
+   "action": [
+    "keymods",
+    77,
+    0
+   ],
+   "os": "win",
+   "note": "Cmd+Right (line end) -> End"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 80,
+   "action": [
+    "keymods",
+    74,
+    2
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+Left -> Shift+Home"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 10,
+   "id": 79,
+   "action": [
+    "keymods",
+    77,
+    2
+   ],
+   "os": "win",
+   "note": "Cmd+Shift+Right -> Shift+End"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 82,
+   "action": [
+    "keymods",
+    74,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+Up (doc start) -> Ctrl+Home"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 81,
+   "action": [
+    "keymods",
+    77,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+Down (doc end) -> Ctrl+End"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 4,
+   "id": 80,
+   "action": [
+    "keymods",
+    80,
+    1
+   ],
+   "os": "win",
+   "note": "Option+Left (word left) -> Ctrl+Left"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 4,
+   "id": 79,
+   "action": [
+    "keymods",
+    79,
+    1
+   ],
+   "os": "win",
+   "note": "Option+Right (word right) -> Ctrl+Right"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 6,
+   "id": 80,
+   "action": [
+    "keymods",
+    80,
+    3
+   ],
+   "os": "win",
+   "note": "Option+Shift+Left -> Ctrl+Shift+Left"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 6,
+   "id": 79,
+   "action": [
+    "keymods",
+    79,
+    3
+   ],
+   "os": "win",
+   "note": "Option+Shift+Right -> Ctrl+Shift+Right"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 42,
+   "action": [
+    "keymods",
+    42,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+Backspace (delete to line start) -> Ctrl+Backspace"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 4,
+   "id": 42,
+   "action": [
+    "keymods",
+    42,
+    1
+   ],
+   "os": "win",
+   "note": "Option+Backspace (delete word) -> Ctrl+Backspace"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 4,
+   "id": 76,
+   "action": [
+    "keymods",
+    76,
+    1
+   ],
+   "os": "win",
+   "note": "Option+Delete (delete word fwd) -> Ctrl+Delete"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 53,
+   "action": [
+    "keymods",
+    43,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+` (next window) -> Ctrl+Tab"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 46,
+   "action": [
+    "keymods",
+    46,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+= (zoom in) -> Ctrl+="
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 45,
+   "action": [
+    "keymods",
+    45,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+- (zoom out) -> Ctrl+-"
+  },
+  {
+   "scope": "modchord",
+   "layer": -1,
+   "mods": 8,
+   "id": 39,
+   "action": [
+    "keymods",
+    39,
+    1
+   ],
+   "os": "win",
+   "note": "Cmd+0 (reset zoom) -> Ctrl+0"
+  }
+ ]
+}
