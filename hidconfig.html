@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.1</title>
+<title>HID Config 19.2</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -207,6 +207,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="expr">Expressions</div>
   <div class="tab" data-t="os">OS</div>
   <div class="tab" data-t="bt">Bluetooth</div>
+  <div class="tab" data-t="log">Changes</div>
 </div>
 
 <details class="dbg" id="debugmon"><summary>🐞 Debug monitors</summary>
@@ -283,8 +284,13 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       </details>
       <details id="asgpanel" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Assignments (add / edit / remove)</summary>
         <p class="muted" style="font-size:.78rem;margin:.3rem 0">Each row is one input. Pick its Input and Output; the layer columns show what fires on each layer (click to change). Group is optional. ✕ removes the row.</p>
-        <table style="width:100%;font-size:.82rem" id="asgtbl"></table>
-        <button id="asgnewadd" style="margin-top:.4rem">＋ Add mapping</button>
+        <div id="asgtbl"></div>
+        <div class="bar" style="margin-top:.4rem">
+          <button id="asgnewadd">＋ Add mapping</button>
+          <button id="asgimport">📥 Import addition…</button>
+          <input type="file" id="asgimportfile" accept=".json" style="display:none">
+          <span class="muted" style="font-size:.76rem">Additions are small JSON files of mappings you can share or re-apply.</span>
+        </div>
       </details>
     </div>
   </details>
@@ -300,6 +306,17 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
  </div>
 </div>
 
+<div id="page-log" style="display:none">
+  <div class="panel">
+    <h2 style="font-size:1rem">Change history <span class="muted" id="logcount" style="font-weight:400;font-size:.8rem"></span></h2>
+    <p class="muted" style="font-size:.8rem">Written automatically each time you <b>⬆ Save to device</b>: a plain-English record of what changed, stored inside the profile so it travels with it.</p>
+    <div class="bar"><button onclick="exportChangelog()">⬇ Export as .txt</button>
+      <button onclick="clearChangelog()">🗑 Clear history</button></div>
+    <div id="logbody" style="white-space:pre-wrap;font-family:ui-monospace,monospace;
+      font-size:.78rem;line-height:1.5;border:1px solid var(--line);border-radius:8px;
+      padding:.6rem;margin-top:.5rem;max-height:65vh;overflow:auto"></div>
+  </div>
+</div>
 <div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div></div>
 
 <div id="page-exp" style="display:none">
@@ -475,7 +492,7 @@ function onReport(e){
       for(const p of parts){buf.set(p,o);o+=p.length;}
       if(buf.length!==rxTotal){toast('short read — try again',true);return;}
       const obj=JSON.parse(new TextDecoder().decode(buf));
-      if(curFile===0){cfg=obj;normalize();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
+      if(curFile===0){cfg=obj;normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
         $('svcwarn').style.display='none';}
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===3){
@@ -571,14 +588,14 @@ $('ostoggle').onclick=()=>{
   updateOsBtn();if($('page-os').style.display!=='none')renderOsTab();
   toast('OS set to '+cfg.active_os+' — ⬆ Save to device to apply');};
 $('read').onclick=()=>getFile(0);
-$('write').onclick=()=>putFile(0,cfg);
+$('write').onclick=()=>{recordChanges();putFile(0,cfg);};
 $('dl').onclick=()=>{const a=document.createElement('a');
 a.href=URL.createObjectURL(new Blob([JSON.stringify({config:cfg,expansions:exps||{},layouts:layouts||{}},null,1)],{type:'application/json'}));
 a.download='bridge-profile-'+new Date().toISOString().slice(0,10)+'.json';a.click();};
 $('up').onchange=async e=>{const f=e.target.files[0];if(!f)return;
 const o=JSON.parse(await f.text());
 if(o.config){cfg=o.config;if(o.expansions)exps=o.expansions;if(o.layouts)layouts=o.layouts;}else cfg=o;
-normalize();render();toast('profile loaded — Save to device to apply');};
+normalize();snapCfg();render();toast('profile loaded — Save to device to apply');};
 function clickFx(el){el.classList.remove('clicked');void el.offsetWidth;el.classList.add('clicked');}
 let _evAutoStop=null;
 function eventsOn(seconds){
@@ -1535,7 +1552,7 @@ function asgSearchResults(q,isBtn){
   if(!isBtn&&'suppress'.startsWith(q))out.push({label:'∅ Suppress',act:0});
   if('passthrough'.startsWith(q)||'clear'.startsWith(q))out.push({label:'Passthrough (clear mapping)',act:null});
   if(isBtn){
-    for(let n=1;n<=30;n++){const nm=(cfg.macro_names||{})[n]||'';
+    for(const n of macroSlots()){const nm=(cfg.macro_names||{})[n]||'';
       if(('m'+n).includes(q)||('macro '+n).includes(q)||nm.toLowerCase().includes(q))
         out.push({label:nm?nm+' (M'+n+')':'Macro '+n,act:['macro',n]});}
     if('dpi'.includes(q))out.push({label:'DPI cycle',act:['dpi_cycle']});
@@ -1631,34 +1648,56 @@ function asgRows(){
 function asgApply(inp,L,act){
   const key=`${L},${inp.id}`,tbl=inp.type==='key'?cfg.kbd_mappings:cfg.mouse_mappings;
   if(act===null||act===undefined)delete tbl[key];else tbl[key]=act;}
+function asgGroupsOf(r){
+  const member=(r.type==='key'?'kbd:*,':'mouse:*,')+r.id;
+  const gs=Object.keys(cfg.mapping_groups||{}).filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
+  return gs.length?gs:['(ungrouped)'];}
 function renderAssignTable(){
-  const t=$('asgtbl');if(!t||!cfg)return;
+  const host=$('asgtbl');if(!host||!cfg)return;
   const rows=asgRows();
-  let h=`<tr><td><b>Input</b></td><td><b>Output</b></td>${LAYER_NAMES.map((n,L)=>`<td title="layer ${L}" style="text-align:center"><b>${esc(n)}</b></td>`).join('')}<td><b>Group</b></td><td></td></tr>`;
-  rows.forEach((r,ri)=>{
-    const key=r.type+':'+r.id;
-    const member=(r.type==='key'?'kbd:*,':'mouse:*,')+r.id;
-    const inGroups=Object.keys(cfg.mapping_groups||{}).filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
-    const inputSel=`<select data-asginput="${ri}" style="width:auto;max-width:140px">`
-      +asgAllInputs().map(o=>`<option value="${o.v}" ${o.v===key?'selected':''}>${esc(o.label)}</option>`).join('')+`</select>`;
-    const outLbl=r.out===undefined?'<span class="muted">(set…)</span>':esc(asgActLabel(r.out));
-    let cells='';
-    for(let L=0;L<6;L++)cells+=`<td style="text-align:center"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
-    h+=`<tr>
-      <td>${inputSel}</td>
-      <td data-asgout="${ri}" style="cursor:pointer"><a class="mlink">${outLbl}</a></td>
-      ${cells}
-      <td><input type="text" data-asggrp="${key}" list="grouplist" placeholder="group" value="" style="width:80px" maxlength="60">
-        ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}</td>
-      <td><button data-asgdel="${ri}" title="remove this Input→Output">✕</button></td></tr>`;});
-  t.innerHTML=h;
+  // 19.2R #5: partition rows into collapsible sections, one per mapping group
+  const buckets={};
+  rows.forEach((r,ri)=>{for(const g of asgGroupsOf(r)){(buckets[g]=buckets[g]||[]).push(ri);}});
+  const names=Object.keys(buckets).sort((a,b)=>
+    a==='(ungrouped)'?1:b==='(ungrouped)'?-1:a.localeCompare(b));
+  window._asgRows=rows;
+  const head=`<tr><td><b>Input</b></td><td><b>Output</b></td>${LAYER_NAMES.map((n,L)=>`<td title="layer ${L}" style="text-align:center"><b>${esc(n)}</b></td>`).join('')}<td><b>Group</b></td><td></td></tr>`;
+  let h='';
+  if(!rows.length)h='<span class="muted" style="font-size:.8rem">No mappings yet — use ＋ Add mapping, or click a key on a wireframe.</span>';
+  for(const g of names){
+    const ris=buckets[g];
+    h+=`<details class="asggrp" open style="margin:.3rem 0;border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem">
+      <summary style="cursor:pointer;font-weight:600">${esc(g)}
+        <span class="muted" style="font-weight:400;font-size:.78rem">· ${ris.length} mapping${ris.length>1?'s':''}</span>
+        <button data-asgexp="${esc(g)}" style="margin-left:.5rem;font-size:.72rem"
+          title="save this group as an importable addition file">⬇ Export group</button></summary>
+      <table style="width:100%;font-size:.82rem">${head}`;
+    for(const ri of ris){
+      const r=rows[ri];
+      const key=r.type+':'+r.id;
+      const member=(r.type==='key'?'kbd:*,':'mouse:*,')+r.id;
+      const inGroups=Object.keys(cfg.mapping_groups||{}).filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
+      const inputSel=`<select data-asginput="${ri}" style="width:auto;max-width:140px">`
+        +asgAllInputs().map(o=>`<option value="${o.v}" ${o.v===key?'selected':''}>${esc(o.label)}</option>`).join('')+`</select>`;
+      const outLbl=r.out===undefined?'<span class="muted">(set…)</span>':esc(asgActLabel(r.out));
+      let cells='';
+      for(let L=0;L<6;L++)cells+=`<td style="text-align:center"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
+      h+=`<tr>
+        <td>${inputSel}</td>
+        <td data-asgout="${ri}" style="cursor:pointer"><a class="mlink">${outLbl}</a></td>
+        ${cells}
+        <td><input type="text" data-asggrp="${key}" list="grouplist" placeholder="group" value="" style="width:80px" maxlength="60">
+          ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}</td>
+        <td><button data-asgdel="${ri}" title="remove this Input→Output">✕</button></td></tr>`;}
+    h+='</table></details>';}
+  host.innerHTML=h;
   const R=ri=>rows[+ri];
-  t.querySelectorAll('[data-asginput]').forEach(sl=>sl.onchange=()=>{
+  host.querySelectorAll('[data-asginput]').forEach(sl=>sl.onchange=()=>{
     const r=R(sl.dataset.asginput),[nt,nid]=sl.value.split(':');
     if(r.out!==undefined)for(const L of r.layers){asgApply({type:r.type,id:r.id},L,null);asgApply({type:nt,id:+nid},L,r.out);}
     if(r.pending&&r.__p){r.__p.type=nt;r.__p.id=+nid;}
     render();toast('input changed — ⬆ Save to device');});
-  t.querySelectorAll('[data-asgout]').forEach(td=>td.onclick=()=>{
+  host.querySelectorAll('[data-asgout]').forEach(td=>td.onclick=()=>{
     const r=R(td.dataset.asgout);
     asgOpenSearch(td,{type:r.type,id:r.id},'row',act=>{
       const targets=r.layers.size?[...r.layers]:[layer];
@@ -1666,23 +1705,93 @@ function renderAssignTable(){
       if(act!==null)for(const L of targets)asgApply({type:r.type,id:r.id},L,act);
       if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
       render();toast('output set — ⬆ Save to device');});});
-  t.querySelectorAll('[data-asgchk]').forEach(cb=>cb.onchange=()=>{
+  host.querySelectorAll('[data-asgchk]').forEach(cb=>cb.onchange=()=>{
     const r=R(cb.dataset.asgchk),L=+cb.dataset.l;
     if(r.out===undefined){cb.checked=false;toast('set an Output first',true);return;}
     asgApply({type:r.type,id:r.id},L,cb.checked?r.out:null);
     render();toast('layer '+L+(cb.checked?' on':' off')+' — ⬆ Save to device');});
-  t.querySelectorAll('[data-asgdel]').forEach(b=>b.onclick=()=>{
+  host.querySelectorAll('[data-asgdel]').forEach(b=>b.onclick=()=>{
     const r=R(b.dataset.asgdel);
     if(r.out!==undefined)for(const L of r.layers)asgApply({type:r.type,id:r.id},L,null);
     if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
     render();toast('mapping removed — ⬆ Save to device');});
-  t.querySelectorAll('input[data-asggrp]').forEach(gi=>{
+  host.querySelectorAll('input[data-asggrp]').forEach(gi=>{
     const commit=()=>{if(!gi.value.trim())return;const[type,id]=gi.dataset.asggrp.split(':');
       addToGroup(gi.value,(type==='key'?'kbd:*,':'mouse:*,')+id);gi.value='';};
     gi.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commit();}};gi.onblur=commit;});
+  host.querySelectorAll('[data-asgexp]').forEach(b=>b.onclick=e=>{
+    e.preventDefault();e.stopPropagation();exportAddition(b.dataset.asgexp,buckets[b.dataset.asgexp].map(i=>rows[i]));});
   const add=$('asgnewadd');
   if(add)add.onclick=()=>{window._asgPending=window._asgPending||[];
-    window._asgPending.push({type:'key',id:0x04});render();};}
+    window._asgPending.push({type:'key',id:0x04});render();};
+  const imp=$('asgimport'),impf=$('asgimportfile');
+  if(imp&&impf){imp.onclick=()=>impf.click();
+    impf.onchange=async e=>{const f=e.target.files[0];if(!f)return;
+      try{importAddition(JSON.parse(await f.text()));}
+      catch(err){toast('import failed: '+err.message,true);}
+      impf.value='';};}}
+
+/* ===== 19.2R #5/#6: mapping "additions" (importable bundles) ================
+   An addition records, per entry, the SCOPE it belongs to:
+     custom     -> shared kbd_mappings / mouse_mappings (all devices)
+     devcustom  -> kbd_mappings_by_device[device]  (needs "device")
+     baseline   -> baseline[device]                (needs "device")
+     modchord   -> mod_chords (modifier+key rewrites)
+     combo      -> combos
+   plus an optional per-entry "os" so a bundle can apply on one OS only. */
+const ADDITION_KIND='hid-expander-addition';
+function exportAddition(name,rows){
+  const entries=[];
+  for(const r of rows){
+    if(r.out===undefined)continue;
+    for(const L of r.layers){
+      const key=`${L},${r.id}`;
+      const kind=r.type==='key'?'kbd_mappings':'mouse_mappings';
+      entries.push({scope:'custom',table:kind,layer:L,id:r.id,
+        action:r.out,os:scopeOf(kind,key)||undefined});}}
+  downloadAddition({kind:ADDITION_KIND,version:1,name,
+    created:new Date().toISOString(),entries});}
+function downloadAddition(obj){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,1)],{type:'application/json'}));
+  a.download='addition-'+slug(obj.name||'mappings')+'.json';a.click();
+  toast('exported "'+(obj.name||'addition')+'" ('+obj.entries.length+' entries)');}
+window.importAddition=obj=>{
+  if(!cfg){toast('connect / load a config first',true);return;}
+  if(!obj||obj.kind!==ADDITION_KIND||!Array.isArray(obj.entries))
+    throw new Error('not a HID Expander addition file');
+  let applied=0,skipped=[];
+  for(const e of obj.entries){
+    const os=e.os||'';
+    if(os&&!osKnown().includes(os)){skipped.push(`${os}-only entry (no such OS profile)`);continue;}
+    if(e.scope==='baseline'){
+      if(!e.device){skipped.push('baseline entry without a device');continue;}
+      if(!(cfg.devices||[]).some(d=>d.id===e.device)){
+        skipped.push(`baseline for unknown device "${e.device}"`);continue;}
+      cfg.baseline[e.device]=cfg.baseline[e.device]||{};
+      cfg.baseline[e.device][e.usage]=e.value;applied++;continue;}
+    if(e.scope==='devcustom'){
+      if(!e.device||!(cfg.devices||[]).some(d=>d.id===e.device)){
+        skipped.push(`device mapping for unknown device "${e.device||'?'}"`);continue;}
+      cfg.kbd_mappings_by_device[e.device]=cfg.kbd_mappings_by_device[e.device]||{};
+      cfg.kbd_mappings_by_device[e.device][`${e.layer},${e.id}`]=e.action;applied++;continue;}
+    if(e.scope==='modchord'){
+      const t=scopeTable(os,'mod_chords');
+      t[`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`]=e.action;applied++;continue;}
+    if(e.scope==='combo'){
+      cfg.combos=cfg.combos||{};
+      const id=e.id||('combo-'+(e.keys||[]).join('-'));
+      cfg.combos[id]={keys:e.keys,action:e.action,window_ms:e.window_ms||60};
+      if(os)cfg.combos[id].os=[os];
+      if(e.device)cfg.combos[id].dev=e.device;
+      applied++;continue;}
+    // default: shared custom mapping
+    const table=e.table||'kbd_mappings';
+    scopeTable(os,table)[`${e.layer},${e.id}`]=e.action;applied++;}
+  render();
+  toast(`imported "${obj.name||'addition'}": ${applied} entries`+
+    (skipped.length?` · ${skipped.length} skipped`:'')+' — ⬆ Save to device');
+  if(skipped.length)console.warn('addition skipped:',skipped);};
 
 /* ============ chord lines ============ */
 function elsFor(t){
@@ -1837,7 +1946,155 @@ if(u.press==='dpi')return['dpi_cycle'];
 if(u.press==='btn')return['btn',+u.pressBtn];if(u.press==='key')return['key',+u.pressKey];
 if(u.press==='macro')return['macro',+u.pressMacro];return null;}
 function keyOpts(v){return Object.entries(KEYS).map(([u,n])=>`<option value="${u}" ${+u===+v?'selected':''}>${n}</option>`).join('');}
-function macOpts(v){let h='';for(let n=1;n<=30;n++){const nm=(cfg.macro_names||{})[n];
+/* ===== 19.2R #3: OS scope selector ==========================================
+   "Both / Mac only / Win only" wherever something is added.  Only OSes that
+   actually exist in the OS tab are offered.  Scope "" = all OSes (shared
+   table); a named OS writes into os_profiles[os].* instead. */
+function osScopeHTML(id,cur){
+  const oses=osKnown();
+  if(oses.length<2)return'';        // nothing to choose between
+  return `<label style="margin-top:.4rem">Applies to</label>
+    <select id="${id}">
+      <option value="" ${!cur?'selected':''}>All OSes${oses.length?' ('+oses.join(' + ')+')':''}</option>
+      ${oses.map(o=>`<option value="${esc(o)}" ${cur===o?'selected':''}>${esc(o)} only</option>`).join('')}
+    </select>`;}
+// where a mapping of this scope should be written
+function scopeTable(scope,kind){
+  // kind: 'kbd_mappings' | 'mouse_mappings' | 'mod_chords'
+  if(!scope)return (cfg[kind]=cfg[kind]||{});
+  cfg.os_profiles=cfg.os_profiles||{};
+  const p=cfg.os_profiles[scope]=cfg.os_profiles[scope]||{};
+  return (p[kind]=p[kind]||{});}
+// which scope currently holds this mapping key (for display)
+function scopeOf(kind,key){
+  for(const[os,p]of Object.entries(cfg.os_profiles||{}))
+    if(p&&p[kind]&&Object.prototype.hasOwnProperty.call(p[kind],key))return os;
+  return'';}
+
+/* ===== 19.2R #2: human-readable change log ==================================
+   On every "Save to device" we diff the config against the snapshot taken at
+   the last save/load and append plain-English lines to cfg._changelog, which
+   travels with the profile (so the history lives on the Pi, not just here). */
+const CHANGELOG_MAX=400;
+let _cfgSnap=null;
+function snapCfg(){try{_cfgSnap=JSON.stringify(cfgForDiff());}catch(_){_cfgSnap=null;}}
+function cfgForDiff(){
+  if(!cfg)return{};
+  const c={};for(const k of Object.keys(cfg))if(k!=='_changelog')c[k]=cfg[k];
+  return c;}
+function _keyLabel(k){const[L,id]=String(k).split(',');
+  return `${KEYS[+id]||MODS[+id]||('0x'+(+id).toString(16))} on layer ${L}`;}
+function _btnLabel(k){const[L,id]=String(k).split(',');
+  return `${btnLabel(+id)} on layer ${L}`;}
+function _actLabel(v){
+  if(v===undefined)return'(none)';
+  if(v===null)return'passthrough';
+  if(typeof v==='number')return v===0?'suppressed':(KEYS[v]||MODS[v]||('0x'+v.toString(16)));
+  return actShort(v)||JSON.stringify(v);}
+function _diffMap(out,label,before,after,fmtKey,fmtVal){
+  before=before||{};after=after||{};
+  for(const k of Object.keys(after))
+    if(!(k in before))out.push(`+ ${label}: ${fmtKey(k)} → ${fmtVal(after[k])}`);
+    else if(JSON.stringify(before[k])!==JSON.stringify(after[k]))
+      out.push(`~ ${label}: ${fmtKey(k)} — ${fmtVal(before[k])} → ${fmtVal(after[k])}`);
+  for(const k of Object.keys(before))
+    if(!(k in after))out.push(`− ${label}: ${fmtKey(k)} (was ${fmtVal(before[k])})`);}
+function diffConfig(a,b){
+  const out=[],id=x=>x;
+  _diffMap(out,'Key mapping',a.kbd_mappings,b.kbd_mappings,_keyLabel,_actLabel);
+  _diffMap(out,'Button mapping',a.mouse_mappings,b.mouse_mappings,_btnLabel,_actLabel);
+  _diffMap(out,'Mod-chord',a.mod_chords,b.mod_chords,
+    k=>{const[L,m,u]=String(k).split(',');return `${modsName(+m)}+${KEYS[+u]||'?'} (layer ${L==='-1'?'any':L})`;},_actLabel);
+  // per-device baselines
+  const ab=a.baseline||{},bb=b.baseline||{};
+  for(const dev of new Set([...Object.keys(ab),...Object.keys(bb)]))
+    _diffMap(out,`Baseline (${devName(dev)})`,ab[dev],bb[dev],
+      u=>KEYS[+u]||MODS[+u]||('0x'+(+u).toString(16)),_actLabel);
+  // combos
+  const ac=a.combos||{},bc=b.combos||{};
+  const comboTxt=c=>`${(c.keys||[]).map(u=>KEYS[u]||MODS[u]||'?').join('+')} → ${_actLabel(c.action)}${c.os?' ['+[].concat(c.os).join('/')+' only]':''}${c.dev?' ('+devName(c.dev)+')':''}`;
+  for(const k of Object.keys(bc))
+    if(!(k in ac))out.push(`+ Combo: ${comboTxt(bc[k])}`);
+    else if(JSON.stringify(ac[k])!==JSON.stringify(bc[k]))out.push(`~ Combo: ${comboTxt(bc[k])}`);
+  for(const k of Object.keys(ac))if(!(k in bc))out.push(`− Combo: ${comboTxt(ac[k])}`);
+  // macros (content + names)
+  const am=a.macros||{},bm=b.macros||{},an=a.macro_names||{},bn=b.macro_names||{};
+  for(const n of new Set([...Object.keys(am),...Object.keys(bm)])){
+    const before=JSON.stringify(am[n]||[]),after=JSON.stringify(bm[n]||[]);
+    const nm=bn[n]||an[n]||('Macro '+n);
+    if(before==='[]'&&after!=='[]')out.push(`+ Macro ${n} "${nm}" created`);
+    else if(before!=='[]'&&after==='[]')out.push(`− Macro ${n} "${nm}" cleared`);
+    else if(before!==after)out.push(`~ Macro ${n} "${nm}" steps changed`);
+    if((an[n]||'')!==(bn[n]||''))out.push(`~ Macro ${n} renamed: "${an[n]||'(unnamed)'}" → "${bn[n]||'(unnamed)'}"`);}
+  // groups
+  const ag=a.mapping_groups||{},bg=b.mapping_groups||{};
+  for(const g of new Set([...Object.keys(ag),...Object.keys(bg)])){
+    if(!(g in ag))out.push(`+ Group "${g}" created (${(bg[g].members||[]).length} members)`);
+    else if(!(g in bg))out.push(`− Group "${g}" deleted`);
+    else{
+      const na=(ag[g].members||[]).length,nb=(bg[g].members||[]).length;
+      if(na!==nb)out.push(`~ Group "${g}": ${na} → ${nb} members`);
+      if((ag[g].active!==false)!==(bg[g].active!==false))
+        out.push(`~ Group "${g}" ${bg[g].active===false?'disabled':'enabled'}`);}}
+  // devices
+  const ad=(a.devices||[]).map(d=>d.id),bd=(b.devices||[]).map(d=>d.id);
+  bd.filter(x=>!ad.includes(x)).forEach(x=>out.push(`+ Device added: ${x}`));
+  ad.filter(x=>!bd.includes(x)).forEach(x=>out.push(`− Device removed: ${x}`));
+  // per-OS overlays
+  const ao=a.os_profiles||{},bo=b.os_profiles||{};
+  for(const os of new Set([...Object.keys(ao),...Object.keys(bo)])){
+    const pa=ao[os]||{},pb=bo[os]||{};
+    _diffMap(out,`Key mapping [${os} only]`,pa.kbd_mappings,pb.kbd_mappings,_keyLabel,_actLabel);
+    _diffMap(out,`Button mapping [${os} only]`,pa.mouse_mappings,pb.mouse_mappings,_btnLabel,_actLabel);
+    _diffMap(out,`Mod-chord [${os} only]`,pa.mod_chords,pb.mod_chords,
+      k=>{const[L,m,u]=String(k).split(',');return `${modsName(+m)}+${KEYS[+u]||'?'}`;},_actLabel);
+    if(JSON.stringify(pa.scroll_invert||{})!==JSON.stringify(pb.scroll_invert||{}))
+      out.push(`~ Scroll inversion changed for ${os}`);
+    if((pa.unicode_method||'')!==(pb.unicode_method||''))
+      out.push(`~ Unicode method [${os}]: ${pa.unicode_method||'default'} → ${pb.unicode_method||'default'}`);}
+  if((a.active_os||'')!==(b.active_os||''))out.push(`~ Active OS: ${a.active_os||'?'} → ${b.active_os||'?'}`);
+  return out;}
+function modsName(m){const p=[];
+  if(m&0x01)p.push('Ctrl');if(m&0x02)p.push('Shift');if(m&0x04)p.push('Alt');if(m&0x08)p.push('Cmd/Win');
+  return p.join('+')||'(none)';}
+function recordChanges(){
+  if(!cfg)return;
+  let before={};
+  try{before=_cfgSnap?JSON.parse(_cfgSnap):{};}catch(_){before={};}
+  const lines=diffConfig(before,cfgForDiff());
+  if(lines.length){
+    cfg._changelog=cfg._changelog||[];
+    cfg._changelog.push({ts:new Date().toISOString(),
+      profile:cfg._profile_name||'working config',changes:lines});
+    if(cfg._changelog.length>CHANGELOG_MAX)
+      cfg._changelog=cfg._changelog.slice(-CHANGELOG_MAX);}
+  snapCfg();
+  if($('page-log')&&$('page-log').style.display!=='none')renderChangelog();
+  return lines.length;}
+function changelogText(){
+  const es=(cfg&&cfg._changelog)||[];
+  if(!es.length)return'No changes recorded yet.\n\nA numbered entry is added each time you ⬆ Save to device.';
+  return es.slice().reverse().map(e=>
+    `${fmtWhen(e.ts)}  —  ${e.profile}\n`+e.changes.map(l=>'    '+l).join('\n')).join('\n\n');}
+function renderChangelog(){
+  const el=$('logbody');if(!el)return;
+  const es=(cfg&&cfg._changelog)||[];
+  $('logcount').textContent=es.length?`${es.length} saved revision${es.length>1?'s':''}`:'';
+  el.textContent=changelogText();}
+window.exportChangelog=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([changelogText()],{type:'text/plain'}));
+  a.download='hid-changelog-'+new Date().toISOString().slice(0,10)+'.txt';a.click();};
+window.clearChangelog=()=>{
+  if(!cfg||!confirm('Clear the saved change history? (The current config is untouched.)'))return;
+  cfg._changelog=[];renderChangelog();toast('history cleared — ⬆ Save to device to persist');};
+function macroMax(){   // 19.2R #4: no fixed cap -- engine keys macros by int
+  const used=Object.keys(cfg.macros||{}).map(Number).filter(n=>!isNaN(n));
+  const named=Object.keys(cfg.macro_names||{}).map(Number).filter(n=>!isNaN(n));
+  return Math.max(30,...used,...named,0);}
+function macroSlots(){const out=[];const m=macroMax();for(let n=1;n<=m;n++)out.push(n);return out;}
+function nextFreeMacro(){let n=1;while((cfg.macros&&cfg.macros[n]&&cfg.macros[n].length))n++;return n;}
+function macOpts(v){let h='';for(const n of macroSlots()){const nm=(cfg.macro_names||{})[n];
   h+=`<option value="${n}" ${n===+v?'selected':''}>${nm?nm+' (M'+n+')':'Macro '+n}</option>`;}return h;}
 function searchBoxHTML(){return `<label>Search actions</label>
 <input type="text" id="actsearch" placeholder="type: copy, M4, Enter, dpi…">
@@ -1850,7 +2107,7 @@ function bindEditorCommon(applyAction){
     const q=s.value.toLowerCase();const out=[];
     if(!q){$('searchres').innerHTML='';return;}
     for(const[u,n]of Object.entries(KEYS))if(n.toLowerCase().includes(q))out.push(`<a class="mlink" onclick='applySearch(["key",${u}])'>${n}</a>`);
-    for(let n=1;n<=30;n++){const nm=(cfg.macro_names||{})[n]||'';
+    for(const n of macroSlots()){const nm=(cfg.macro_names||{})[n]||'';
       if(('m'+n).includes(q)||('macro '+n).includes(q)||(nm&&nm.toLowerCase().includes(q)))
         out.push(`<a class="mlink" onclick='applySearch(["macro",${n}])'>${nm?esc(nm)+' (M'+n+')':'M'+n}</a>`);}
     if('dpi'.includes(q))out.push(`<a class="mlink" onclick='applySearch(["dpi_cycle"])'>DPI cycle</a>`);
@@ -1866,19 +2123,33 @@ function bindEditorCommon(applyAction){
       kc.value=[...held].map(u=>MODS[u]||KEYS[u]||'?').join('+');};
     kc.onkeyup=e=>{e.preventDefault();
       if(held.size===1)applyAction(['key',[...held][0]]);
-      else if(held.size>1){ // multi-key: auto-create a macro
-        let n=1;while(cfg.macros[n]&&cfg.macros[n].length)n++;
+      else if(held.size>1){ // multi-key: auto-create a macro (19.2R #1: named)
+        const n=nextFreeMacro();
+        const combo=[...held].map(u=>MODS[u]||KEYS[u]||'?').join('+');
         cfg.macros[n]=[[...held].map(u=>0x00070000+ +u)];
-        applyAction(['macro',n]);toast('created Macro '+n+' for combo');}
+        cfg.macro_names=cfg.macro_names||{};
+        if(!cfg.macro_names[n])cfg.macro_names[n]=combo;   // e.g. "LCtrl+C"
+        applyAction(['macro',n]);toast('created "'+combo+'" (M'+n+') — rename it in the box above');}
       held.clear();render();};}
   const nm=$('newmacro');
   if(nm)nm.onclick=()=>{
-    let n=1;while(cfg.macros[n]&&cfg.macros[n].length)n++;
+    const n=nextFreeMacro();
     cfg.macros[n]=[];applyAction(['macro',n]);
-    $('inlinemacro').innerHTML=`<label>Macro ${n} (one step per line: ctrl+c / btn1 / wheel / .)</label>
-    <textarea id="im" rows="4"></textarea><button onclick="finishInline(${n})">Done</button>`;};
+    // 19.2R #1: name the macro right here, at creation time
+    $('inlinemacro').innerHTML=`<label>Name (optional)</label>
+    <input type="text" id="imname" placeholder="e.g. Copy line" value="${esc((cfg.macro_names||{})[n]||'')}">
+    <label>Macro ${n} steps (one per line: ctrl+c / btn1 / wheel / .)</label>
+    <textarea id="im" rows="4"></textarea><button onclick="finishInline(${n})">Done</button>`;
+    const nmi=$('imname');
+    if(nmi)nmi.oninput=()=>{cfg.macro_names=cfg.macro_names||{};
+      const v=nmi.value.trim();
+      if(v)cfg.macro_names[n]=v;else delete cfg.macro_names[n];};
+    if(nmi)nmi.focus();};
   window.finishInline=n=>{cfg.macros[n]=textToMacro($('im').value);
-    $('inlinemacro').innerHTML=`Bound to <a class="mlink" onclick="gotoMacro(${n})">Macro ${n}</a>`;render();};
+    const nmi=$('imname');
+    if(nmi){cfg.macro_names=cfg.macro_names||{};const v=nmi.value.trim();
+      if(v)cfg.macro_names[n]=v;else delete cfg.macro_names[n];}
+    $('inlinemacro').innerHTML=`Bound to <a class="mlink" onclick="gotoMacro(${n})">${esc(macroLabel(n))}</a>`;render();};
 }
 function groupNamesSorted(){
   const set=new Set();
@@ -1956,23 +2227,45 @@ function renderComboEd(ed){
         <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
       </div>
       <label style="margin-top:.5rem">Window (ms)</label><input type="number" id="cwin" value="${c.window_ms||60}" min="20" max="500">
+      ${osScopeHTML('cbos',(c.os&&[].concat(c.os)[0])||'')}
     </div><div>
       <button id="cdel" style="margin-top:.2rem">🗑 Delete combo</button>
     </div></div>`;
-  const refresh=()=>{const k=$('cact').value,w=$('cargwrap');
-    w.innerHTML=k==='key'?`<select id="carg">${keyOpts(ui.pressKey||a[1]||0x28)}</select>`:
-      k==='macro'?`<select id="carg">${macOpts(ui.pressMacro||a[1]||1)}</select>`:
-      k==='text'?`<input type="text" id="carg" value="${a[0]==='text'?esc(a[1]||''):''}" placeholder="text (may embed {{ctrl+c}})">`:'';
+  // 19.3 #1: rebuilding #cargwrap replaces the #carg element, so any handler
+  // bound to the OLD one is thrown away with it.  Previously we bound once,
+  // which meant that after switching the mode dropdown the key/macro/text
+  // picker was inert -- you'd choose a value, it was never committed, and the
+  // combo reverted to its stored action the next time the editor rendered.
+  // Fix: re-bind after every rebuild, and seed the picker from the CURRENT
+  // action rather than a snapshot taken when the editor first opened.
+  const refresh=()=>{
+    const k=$('cact').value,w=$('cargwrap');
+    const cur=c.action||['suppress'];                    // live, not stale
+    const curKey=cur[0]==='key'?cur[1]:(ui.pressKey||0x28);
+    const curMac=cur[0]==='macro'?cur[1]:(ui.pressMacro||1);
+    const curTxt=cur[0]==='text'?(cur[1]||''):'';
+    w.innerHTML=k==='key'?`<select id="carg">${keyOpts(curKey)}</select>`:
+      k==='macro'?`<select id="carg">${macOpts(curMac)}</select>`:
+      k==='text'?`<input type="text" id="carg" value="${esc(curTxt)}" placeholder="text (may embed {{ctrl+c}})">`:'';
     // quick-assign boxes only make sense for direct actions
-    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress')?'':'none';};
-  refresh();
-  const commit=()=>{const k=$('cact').value,v=$('carg')?$('carg').value:null;
+    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress')?'':'none';
+    bindArgs();};
+  const commit=()=>{
+    const k=$('cact').value,el=$('carg'),v=el?el.value:null;
     c.action=k==='suppress'?['suppress']:k==='os'?['os','toggle']:
-      k==='text'?['text',v||'']:[k,+v||(k==='key'?0x28:1)];
+      k==='text'?['text',v==null?'':v]:
+      [k,(v!==null&&v!=='')?+v:(k==='key'?0x28:1)];
     c.window_ms=+$('cwin').value||60;
+    const os=($('cbos')&&$('cbos').value)||'';      // 19.2R #3
+    if(os)c.os=[os];else delete c.os;
     toast('combo updated — ⬆ Save to device to apply');};
-  ed.querySelectorAll('#cact,#cargwrap select,#cargwrap input,#cwin').forEach(x=>x.onchange=()=>{
-    if(x.id==='cact'){refresh();}commit();});
+  // handlers for the dynamically-rebuilt argument widget
+  const bindArgs=()=>ed.querySelectorAll('#cargwrap select,#cargwrap input')
+    .forEach(x=>{x.onchange=()=>{commit();renderMapTable();renderAssignTable();};});
+  refresh();          // also performs the first bindArgs()
+  ed.querySelectorAll('#cact,#cwin,#cbos').forEach(x=>x.onchange=()=>{
+    if(x.id==='cact')refresh();      // rebuilds + rebinds the arg widget
+    commit();renderMapTable();renderAssignTable();});
   // Press-key-to-assign, search-actions, and ＋New macro all set the combo action
   // (identical to the key editor). Multi-key press auto-builds a macro.
   bindEditorCommon(a2=>{c.action=a2;});
@@ -2147,6 +2440,7 @@ function renderEditor(){
       <option value="none" ${ui.release==='none'?'selected':''}>Nothing</option>
       <option value="macro" ${ui.release==='macro'?'selected':''}>Macro…</option>
     </select><div id="relArg"></div>
+    ${devScoped?'':osScopeHTML('osscope',scopeOf(isBtn?'mouse_mappings':'kbd_mappings',key))}
     ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
   </div></div>`;
   function setLayerSource(L){
@@ -2154,12 +2448,24 @@ function renderEditor(){
       else{cfg.layer_keys=cfg.layer_keys||{};delete cfg.layer_keys[canon];} return; }
     if(isBtn){const th=cfg.tap_hold[sel.id]||[['btn',sel.id],L];th[1]=L;cfg.tap_hold[sel.id]=th;}
     else{cfg.layer_keys=cfg.layer_keys||{};cfg.layer_keys[canon]=L;}}
-  const apply=a=>{ if(isBtn){ if(a)cfg.mouse_mappings[key]=a;else delete cfg.mouse_mappings[key]; }
-    else{ if(!a)delete kmap[key];
-      else if(a[0]==='key')kmap[key]=a[1];
-      else if(a[0]==='suppress')kmap[key]=0;
-      else if(a[0]==='macro')kmap[key]=['macro',+a[1]];
-      else kmap[key]=a; }};
+  const apply=a=>{
+    // 19.2R #3: honour the OS-scope picker -- "All OSes" writes the shared
+    // table, "<os> only" writes os_profiles[os].* and clears the other homes
+    // so the mapping can't exist in two scopes at once.
+    const scope=($('osscope')&&$('osscope').value)||'';
+    const kind=isBtn?'mouse_mappings':'kbd_mappings';
+    if(!devScoped){
+      // remove this key from every scope it isn't supposed to live in
+      if(cfg[kind])delete cfg[kind][key];
+      for(const p of Object.values(cfg.os_profiles||{}))if(p&&p[kind])delete p[kind][key];
+    }
+    const tbl=devScoped?kmap:scopeTable(scope,kind);
+    if(isBtn){ if(a)tbl[key]=a;else delete tbl[key]; }
+    else{ if(!a)delete tbl[key];
+      else if(a[0]==='key')tbl[key]=a[1];
+      else if(a[0]==='suppress')tbl[key]=0;
+      else if(a[0]==='macro')tbl[key]=['macro',+a[1]];
+      else tbl[key]=a; }};
   const refresh=()=>{const p=$('press').value;
     $('pressArg').innerHTML=p==='btn'?`<select id="pressBtn">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===+(ui.pressBtn||1)?'selected':''}>${btnLabel(n)}</option>`).join('')}</select>`:
       p==='key'?`<select id="pressKey">${keyOpts(ui.pressKey||0x28)}</select>`:
@@ -2176,7 +2482,7 @@ function renderEditor(){
   // #pressArg/#relArg by refresh(), and a narrower selector here (an
   // earlier regression) meant selecting a specific macro number, key, or
   // button in those dropdowns silently did nothing.
-  ed.querySelectorAll('#press,#release,#pressArg select,#relArg select')
+  ed.querySelectorAll('#press,#release,#pressArg select,#relArg select,#osscope')
     .forEach(x=>x.onchange=()=>{
       // Only rebuild the sub-dropdown's HTML when the top-level MODE
       // itself changes (#press/#release) -- rebuilding on every change
@@ -2326,17 +2632,24 @@ steps.push(us);}return steps;}
 function renderMacros(){
   const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)</h2>';
   if(!cfg.macro_names)cfg.macro_names={};
-  for(let n=1;n<=30;n++){const s=(cfg.macros&&cfg.macros[n])||[];
+  for(const n of macroSlots()){const s=(cfg.macros&&cfg.macros[n])||[];
   const nm=cfg.macro_names[n]||'';
   h+=`<details class="macro" id="macro-${n}"><summary><b>${nm?nm+' (M'+n+')':'Macro '+n}</b> — ${s.length?
   macroToText(s).split('\n').filter(l=>l!=='.').slice(0,3).join(' · '):'<span class="muted">empty</span>'}</summary>
   <label>Name (optional)</label><input type="text" data-mn="${n}" value="${nm.replace(/"/g,'&quot;')}" placeholder="e.g. Copy">
   <label>Steps</label><textarea data-m="${n}" rows="${Math.max(3,s.length)}">${macroToText(s)}</textarea></details>`;}
+  h+=`<div class="bar" style="margin-top:.5rem"><button id="macroadd">＋ Add macro</button>
+    <span class="muted">${macroMax()} slots · the engine has no fixed limit</span></div>`;
   el.innerHTML=h;
   el.querySelectorAll('textarea[data-m]').forEach(t=>t.onchange=()=>{cfg.macros[t.dataset.m]=textToMacro(t.value);});
   el.querySelectorAll('input[data-mn]').forEach(i=>i.onchange=()=>{
     if(i.value.trim())cfg.macro_names[i.dataset.mn]=i.value.trim();
     else delete cfg.macro_names[i.dataset.mn];});
+  const add=$('macroadd');
+  if(add)add.onclick=()=>{const n=macroMax()+1;
+    cfg.macros=cfg.macros||{};cfg.macros[n]=[];
+    render();toast('added Macro '+n+' — give it steps, then ⬆ Save to device');
+    setTimeout(()=>gotoMacro(n),50);};
 }
 function gotoMacro(n){switchTab('macros');const d=$('macro-'+n);
 if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});
@@ -2747,8 +3060,9 @@ function renderSetTable(){
   if(!curSet||!expSets||!expSets[curSet]){t.innerHTML='';bar.style.display='none';return;}
   bar.style.display='flex';
   const st=expSets[curSet];
+  const _oses=osKnown();
   let h=`<tr><td><b>Trigger</b></td><td><b>Expands to</b></td>
-    <td><b>Regex</b></td><td><b>Case</b></td><td></td></tr>`;
+    <td><b>Regex</b></td><td><b>Case</b></td>${_oses.length>1?'<td><b>OS</b></td>':''}<td></td></tr>`;
   (st.items||[]).forEach((it,i)=>{
     h+=`<tr>
       <td><input type="text" data-si="${i}" data-f="trigger" value="${esc(it.trigger||'')}" style="font-family:ui-monospace,monospace"></td>
@@ -2757,6 +3071,10 @@ function renderSetTable(){
       <td><select data-si="${i}" data-f="case">
         <option value="ignore" ${it.case!=='match'?'selected':''}>ignore</option>
         <option value="match" ${it.case==='match'?'selected':''}>match</option></select></td>
+      ${_oses.length>1?`<td><select data-si="${i}" data-f="os" title="which OS this expansion applies on">
+        <option value="" ${!it.os?'selected':''}>all</option>
+        ${_oses.map(o=>`<option value="${esc(o)}" ${[].concat(it.os||[])[0]===o?'selected':''}>${esc(o)} only</option>`).join('')}
+      </select></td>`:''}
       <td><button data-sdel="${i}">✕</button></td></tr>`;});
   t.innerHTML=h;
   t.querySelectorAll('[data-si]').forEach(el=>el.onchange=()=>{
@@ -2764,6 +3082,7 @@ function renderSetTable(){
     const f=el.dataset.f;
     if(f==='regex')it.regex=el.checked;
     else if(f==='value')it.value=el.value.replace(/\\n/g,'\n');
+    else if(f==='os'){if(el.value)it.os=[el.value];else delete it.os;}   // 19.2R #3
     else it[f]=el.value;
     if(f==='trigger'&&it.regex){try{new RegExp(it.trigger)}catch(e){toast('regex error: '+e.message,true);}}});
   t.querySelectorAll('[data-sdel]').forEach(b=>b.onclick=()=>{
@@ -2982,8 +3301,9 @@ function initTz(){
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log'])$('page-'+p).style.display=p===t?'':'none';
   if(t==='os')renderOsTab();
+  if(t==='log')renderChangelog();
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
