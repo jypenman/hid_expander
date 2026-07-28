@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.6</title>
+<title>HID Config 19.8 BF1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -242,6 +242,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="expr">Expressions</div>
   <div class="tab" data-t="os">OS</div>
   <div class="tab" data-t="bt">Bluetooth</div>
+  <div class="tab" data-t="clip">Copy</div>
   <div class="tab" data-t="log">Changes</div>
 </div>
 
@@ -343,6 +344,30 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
  </div>
 </div>
 
+<div id="page-clip" style="display:none">
+  <div class="panel">
+    <h2 style="font-size:1rem">Copy / Paste — carry text between computers</h2>
+    <p class="muted" style="font-size:.82rem">Text stored on the Pi in its own
+    <code>copy_paste/</code> files. Open this page on the other computer, press
+    <b>📋 Copy</b>, and paste. Nothing is typed out key-by-key, so length costs a
+    one-off transfer rather than minutes of keystrokes.</p>
+    <p class="muted" style="font-size:.78rem"><b>Kept apart on purpose:</b> this has its own
+    storage and its own transfer channel, and <i>no</i> part of the remapping engine reads it —
+    so anything wrong with a saved item cannot affect your keys, macros or expansions.</p>
+    <div class="bar">
+      <button id="clipnew" class="primary">＋ New</button>
+      <button id="clipsave" disabled>⬆ Save all to device</button>
+      <button id="clipreload">↻ Reload from device</button>
+      <span class="muted" id="clipinfo" style="font-size:.78rem"></span>
+    </div>
+    <div id="cliplist" style="margin-top:.5rem"></div>
+    <p class="muted" style="font-size:.76rem;margin-top:.5rem">
+      Items are <b>read-only</b> until you press <b>✎ Edit</b>. Up to
+      <b>32 KB</b> per item and <b>128 KB</b> in total; transfer runs at roughly
+      9 KB/s, so a 30 KB script takes about 3 seconds to save. Text is stored and
+      returned verbatim — no character sequence is interpreted.</p>
+  </div>
+</div>
 <div id="page-log" style="display:none">
   <div class="panel">
     <h2 style="font-size:1rem">Change history <span class="muted" id="logcount" style="font-weight:400;font-size:.8rem"></span></h2>
@@ -375,8 +400,15 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <table style="width:100%;font-size:.84rem" id="settable"></table>
     <div class="bar" id="setitembar" style="display:none">
       <button id="setadditem">＋ Add expansion</button>
+      <button id="setsaveone" class="primary">⬆ Save this set</button>
       <button id="setdelete">🗑 Delete this set</button>
+      <span class="muted" id="setdirty" style="font-size:.78rem"></span>
     </div>
+    <p class="muted" style="font-size:.78rem;margin-top:.3rem">
+      <b>Where edits go:</b> expansion sets are stored in their own files on the Pi
+      (<code>expansion_sets/</code>), <i>not</i> in your profile. Editing an item here needs
+      <b>⬆ Save this set</b> (or ⬆ Save sets) — <b>⬆ Save to device</b> saves the profile and
+      will not save expansion changes.</p>
   </div>
   <div class="panel">
     <h2 style="font-size:1rem">Date &amp; time triggers</h2>
@@ -563,6 +595,10 @@ function onReport(e){
         expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
         _setsChannelOk=!!(obj&&'sets'in obj);
         $('setsave').disabled=false;renderSets();}
+      else if(curFile===6){
+        clips=(obj&&obj.clips&&typeof obj.clips==='object')?obj.clips:{};
+        _clipsChannelOk=!!(obj&&'clips'in obj);
+        if($('page-clip')&&$('page-clip').style.display!=='none')renderClips();}
       else if(curFile===5){
         // 19.6 BUGFIX: the UI never read additions back, so an applied pack
         // vanished from view -- its rules had been moved OUT of the profile
@@ -622,6 +658,7 @@ $('connect').onclick=async()=>{
   setTimeout(()=>getFile(3),1900);           // engine status -> adopt built-ins
   setTimeout(()=>getFile(4),2300);           // expansion sets bundle
   setTimeout(()=>getFile(5),2700);           // 19.6: addition packs
+  setTimeout(()=>getFile(6),3100);           // 19.8: copy/paste stash
   setTimeout(applyBrowserOS,2600);           // this browser's OS == the host OS
   // config-read watchdog: if the Pi never answers, say so instead of
   // letting the page sit half-dead
@@ -732,9 +769,14 @@ function pfResult(text){
   // otherwise: a list
   const sel=$('proflist'); sel.disabled=false; sel.innerHTML='';
   $('profbackups').disabled=false;      // 19.6: backups browser available too
+  const cs=$('clipsave');if(cs)cs.disabled=false;
   for(const name of text.split('\n')){
     const o=document.createElement('option'); o.textContent=name; sel.appendChild(o);}
 }
+$('setsaveone').onclick=()=>saveOneSet();
+$('clipnew').onclick=()=>addClip();
+$('clipsave').onclick=()=>saveClips();
+$('clipreload').onclick=()=>{if(device)getFile(6);else toast('connect first',true);};
 $('profbackups').onclick=()=>showBackups();
 $('bkclose').onclick=()=>{$('bkpane').style.display='none';};
 $('profload').onclick=()=>{const n=$('proflist').value;
@@ -2147,6 +2189,122 @@ function removeProfileRule(e){
 async function saveAdditions(){
   if(!device){toast('connect to save additions to the Pi',true);return;}
   await putFile(5,{additions});}
+/* 19.8 #2.2: save just the current set.  Expansion sets live in their own
+   files on the Pi, never in the profile -- "Save to device" (profile) does NOT
+   include them, which was the confusion.  Because the Pi syncs the whole
+   expansion_sets folder in one bundle we still send all sets, but the button
+   makes it obvious which action saves expansions. */
+let _setsDirty=false;
+function markSetsDirty(){_setsDirty=true;const el=$('setdirty');
+  if(el)el.textContent='unsaved changes in this set';}
+window.saveOneSet=async()=>{
+  if(!device){toast('connect first',true);return;}
+  if(!curSet||!expSets||!expSets[curSet]){toast('pick a set first',true);return;}
+  await putFile(4,{sets:expSets});
+  _setsDirty=false;const el=$('setdirty');if(el)el.textContent='';
+  toast(`set "${curSet}" saved to the Pi (engine reloads in ~2 s)`);};
+/* ===== 19.8 BF1: Copy / Paste stash ==========================================
+   NOT an expansion.  Text lives in its own copy_paste/*.json files on the Pi
+   and is transferred over its own channel (fid 6).  Nothing in the engine
+   (s1-s6) ever reads it, so anything wrong here cannot disturb remapping or
+   expansions -- it is served by the separate hidconfig sidecar process.
+   Nothing is ever typed: you read it in this UI on the other machine and copy
+   it with one click, so size costs a transfer, not minutes of keystrokes.
+   All rendering uses textContent / .value, never innerHTML. */
+let clips={},_clipsChannelOk=false,_clipEdit={};
+const CLIP_MAX=32768;        // per slot  (~3.5 s to send)
+const CLIP_TOTAL_MAX=131072; // all slots (~15 s)
+function clipBytes(){
+  try{return new TextEncoder().encode(JSON.stringify({clips})).length;}catch(_){return 0;}}
+function safeClipName(n){
+  return String(n||'').replace(/[^A-Za-z0-9 ._'-]/g,'_').replace(/^[. ]+|[. ]+$/g,'').slice(0,60);}
+function renderClips(){
+  const host=$('cliplist');if(!host)return;
+  host.innerHTML='';
+  const names=Object.keys(clips);
+  if(!device&&!names.length){
+    const p=document.createElement('p');p.className='muted';
+    p.textContent='Connect to load your saved text.';host.appendChild(p);return;}
+  if(!_clipsChannelOk&&device&&!names.length){
+    const p=document.createElement('p');p.className='muted';
+    p.textContent='No copy/paste channel on the Pi yet — deploy the updated s0_hidconfig.py and restart hidconfig.';
+    host.appendChild(p);return;}
+  if(!names.length){
+    const p=document.createElement('p');p.className='muted';
+    p.textContent='Nothing saved yet — press “＋ New” and paste your text.';
+    host.appendChild(p);return;}
+  for(const key of names){
+    const c=clips[key]||{};
+    const editing=!!_clipEdit[key];
+    const box=document.createElement('details');
+    box.className='asggrp';box.open=editing;
+    box.style.cssText='margin:.35rem 0;border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem';
+    const sum=document.createElement('summary');
+    sum.style.cssText='cursor:pointer;font-weight:600';
+    sum.textContent=`${c.name||key} — ${(c.text||'').length.toLocaleString()} chars`
+      +(c.error?'  ⚠ unreadable on the Pi':'');
+    box.appendChild(sum);
+    if(c.note){const nd=document.createElement('div');
+      nd.className='muted';nd.style.fontSize='.76rem';nd.textContent=c.note;box.appendChild(nd);}
+    const bar=document.createElement('div');
+    bar.className='bar';bar.style.margin='.3rem 0';
+    const mk=(label,fn,cls)=>{const b=document.createElement('button');
+      b.textContent=label;if(cls)b.className=cls;b.onclick=fn;bar.appendChild(b);return b;};
+    mk('📋 Copy',async()=>{
+      const txt=(clips[key]||{}).text||'';
+      try{await navigator.clipboard.writeText(txt);toast('copied '+txt.length+' characters');}
+      catch(_){ta.focus();ta.select();toast('press ⌘/Ctrl+C to copy',true);}},'primary');
+    if(!editing){
+      mk('✎ Edit',()=>{_clipEdit[key]=true;renderClips();});
+    }else{
+      mk('💾 Save',()=>saveClip(key,ta.value));
+      mk('✕ Cancel',()=>{delete _clipEdit[key];renderClips();});}
+    mk('⬇ Download',()=>{const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([(clips[key]||{}).text||''],{type:'text/plain'}));
+      a.download=(c.name||key)+'.txt';a.click();});
+    mk('🗑 Delete',()=>{
+      if(!confirm(`Delete "${c.name||key}"?`))return;
+      delete clips[key];delete _clipEdit[key];saveClips();});
+    box.appendChild(bar);
+    const ta=document.createElement('textarea');
+    ta.rows=editing?16:8;
+    ta.readOnly=!editing;                    // read-only until you press Edit
+    ta.spellcheck=false;
+    ta.style.cssText='width:100%;font-family:ui-monospace,monospace;font-size:.8rem'
+      +(editing?'':';opacity:.9;background:var(--panel)');
+    ta.value=c.text||'';                     // .value: never parsed as markup
+    if(editing)ta.oninput=()=>{
+      if(ta.value.length>CLIP_MAX){ta.value=ta.value.slice(0,CLIP_MAX);
+        toast(`truncated to ${CLIP_MAX.toLocaleString()} characters`,true);}};
+    box.appendChild(ta);
+    host.appendChild(box);}
+  const b=clipBytes();
+  $('clipinfo').textContent=`${names.length} item(s) · ${(b/1024).toFixed(1)} KB of ${(CLIP_TOTAL_MAX/1024)|0} KB`;}
+window.addClip=()=>{
+  const nm=prompt('Name this item (letters, numbers, spaces):','snippet '+(Object.keys(clips).length+1));
+  if(nm===null)return;
+  const key=safeClipName(nm);
+  if(!key){toast('please use a simple name',true);return;}
+  if(clips[key]){toast('that name is taken',true);return;}
+  clips[key]={name:key,text:'',note:''};
+  _clipEdit[key]=true;renderClips();};
+window.saveClip=async(key,text)=>{
+  if(text.length>CLIP_MAX){toast('too long — trim it first',true);return;}
+  clips[key]=clips[key]||{name:key};
+  clips[key].text=text;
+  delete _clipEdit[key];
+  await saveClips();};
+window.saveClips=async()=>{
+  if(!device){toast('connect first',true);return;}
+  const b=clipBytes();
+  if(b>CLIP_TOTAL_MAX){
+    toast(`${(b/1024).toFixed(1)} KB is over the ${(CLIP_TOTAL_MAX/1024)|0} KB budget — delete or trim an item`,true);
+    return;}
+  try{
+    await putFile(6,{clips});
+    renderClips();
+    toast(`saved to the Pi (${(b/1024).toFixed(1)} KB)`);
+  }catch(err){toast('save failed: '+err.message,true);}};
 /* 19.6 #1.1: browse the timestamped backups the Pi already writes on every
    save, and restore one.  Reuses the existing profile command channel, so no
    new transport.  Restoring stages the file into bridge_config.json on the Pi;
@@ -3911,6 +4069,7 @@ function renderSetTable(){
   t.querySelectorAll('[data-si]').forEach(el=>el.onchange=()=>{
     const it=st.items[+el.dataset.si];if(!it)return;
     const f=el.dataset.f;
+    markSetsDirty();
     if(f==='regex')it.regex=el.checked;
     else if(f==='value')it.value=el.value.replace(/\\n/g,'\n');
     else if(f==='os'){if(el.value)it.os=[el.value];else delete it.os;}   // 19.2R #3
@@ -4197,9 +4356,10 @@ function initTz(){
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt','log'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log','clip'])$('page-'+p).style.display=p===t?'':'none';
   if(t==='os')renderOsTab();
   if(t==='log')renderChangelog();
+  if(t==='clip'){if(device)getFile(6);renderClips();}
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
