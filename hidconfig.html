@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.2 BF2</title>
+<title>HID Config 19.2 BF3</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -418,6 +418,16 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <p class="muted" style="font-size:.78rem">Override a custom key/button mapping just for the selected OS — e.g. pass <b>Cmd+Option</b> through untouched on mac while it runs a macro on win. Click a cell to change it; <b>= base</b> means it inherits. <b>Passthrough</b> clears the mapping for that OS only.</p>
     <table style="width:100%;font-size:.82rem" id="osmap"></table>
     <p class="muted" style="font-size:.76rem;margin-top:.3rem">Only inputs that have a base custom mapping appear here. Add base mappings in the <b>Mapping</b> tab first.</p>
+  </div>
+  <div class="panel">
+    <h3 style="font-size:.95rem;margin:.2rem 0">Modifier swap <span class="muted" id="mrhdr" style="font-weight:400;font-size:.8rem"></span></h3>
+    <p class="muted" style="font-size:.78rem">Swap modifiers at the source for the selected OS. Unlike a per-shortcut rewrite this keeps <b>hold</b> behaviour intact, so Cmd+Tab can hold the app switcher open and Cmd+C works with zero latency. Blank = no swap.</p>
+    <table style="width:100%;font-size:.82rem" id="modremap"></table>
+  </div>
+  <div class="panel">
+    <h3 style="font-size:.95rem;margin:.2rem 0">Window mode (drag / resize chord)</h3>
+    <p class="muted" style="font-size:.78rem">Hold this modifier chord and move the mouse to <b>move</b> a window; add Shift to <b>resize</b>. Set the chord to match your physical keys — if you swap Cmd/Ctrl above, the same physical keys arrive as a different combination.</p>
+    <div id="winmodebox"></div>
   </div>
 </div>
 
@@ -1917,6 +1927,10 @@ window.importAddition=obj=>{
       cfg.kbd_mappings_by_device[e.device]=cfg.kbd_mappings_by_device[e.device]||{};
       cfg.kbd_mappings_by_device[e.device][`${e.layer},${e.id}`]=e.action;
       addMember(`kbd:*,${e.id}`);note(noteKey('kbd',e.layer,e.id),e);applied++;continue;}
+    if(e.scope==='modremap'){          // 19.2 BF3: source-level modifier swap
+      const tb=os?modRemapTable(os):(cfg.mod_remap=cfg.mod_remap||{});
+      for(const[k,v]of Object.entries(e.map||{}))tb[k]=+v;
+      applied++;continue;}
     if(e.scope==='modchord'){
       const t=scopeTable(os,'mod_chords');
       const mk=`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`;
@@ -3468,7 +3482,72 @@ function renderOsTab(){
         same?'<span class="muted" style="opacity:.5">= base</span>':esc(macroToText(ov).replace(/\n/g,' · ').slice(0,26))}</td>`;}).join('');
     gh+='</tr>';}
   $('osgrid').innerHTML=gh;
-  renderOsMap(oses);}
+  renderOsMap(oses);
+  renderModRemap();
+  renderWinmode();}
+/* 19.2 BF3: modifier swap (per-OS).  Bits: 1 Ctrl, 2 Shift, 4 Alt/Opt, 8 Cmd/Win */
+const MOD_BITS=[[0x01,'Ctrl'],[0x02,'Shift'],[0x04,'Alt / Option'],[0x08,'Cmd / Win']];
+function modRemapTable(os){
+  if(!os)return cfg.mod_remap=cfg.mod_remap||{};
+  cfg.os_profiles=cfg.os_profiles||{};
+  const p=cfg.os_profiles[os]=cfg.os_profiles[os]||{};
+  return p.mod_remap=p.mod_remap||{};}
+function renderModRemap(){
+  const t=$('modremap');if(!t)return;
+  const os=osView||cfg.active_os||'win';
+  $('mrhdr').textContent='— '+os;
+  const tbl=(cfg.os_profiles&&cfg.os_profiles[os]&&cfg.os_profiles[os].mod_remap)||{};
+  let h=`<tr><td><b>Physical key</b></td><td><b>Sends</b></td></tr>`;
+  for(const[b,n]of MOD_BITS){
+    const cur=tbl[b]!==undefined?tbl[b]:'';
+    h+=`<tr><td>${esc(n)}</td><td><select data-mr="${b}">
+      <option value="">(itself)</option>
+      ${MOD_BITS.map(([b2,n2])=>`<option value="${b2}" ${+cur===b2?'selected':''}>${esc(n2)}</option>`).join('')}
+    </select></td></tr>`;}
+  t.innerHTML=h+`<tr><td colspan="2" style="padding-top:.4rem">
+    <button id="mrswap">⇄ Swap Cmd/Win ↔ Ctrl on ${esc(os)}</button>
+    <button id="mrclear">✕ Clear swaps</button></td></tr>`;
+  t.querySelectorAll('[data-mr]').forEach(sl=>sl.onchange=()=>{
+    const tb=modRemapTable(os),b=sl.dataset.mr;
+    if(sl.value)tb[b]=+sl.value;else delete tb[b];
+    if(!Object.keys(tb).length&&cfg.os_profiles[os])delete cfg.os_profiles[os].mod_remap;
+    renderOsTab();toast('modifier swap changed — ⬆ Save to device');});
+  $('mrswap').onclick=()=>{const tb=modRemapTable(os);tb[8]=1;tb[1]=8;
+    renderOsTab();toast('Cmd/Win ↔ Ctrl swapped on '+os+' — ⬆ Save to device');};
+  $('mrclear').onclick=()=>{if(cfg.os_profiles&&cfg.os_profiles[os])delete cfg.os_profiles[os].mod_remap;
+    renderOsTab();toast('swaps cleared — ⬆ Save to device');};}
+/* 19.2 BF3 #3: window-mode chord + macros, editable at last */
+function renderWinmode(){
+  const b=$('winmodebox');if(!b)return;
+  const cur=cfg.winmode_mods!==undefined?+cfg.winmode_mods:0x0C;
+  const eng=(lastEng&&lastEng.winmode)||null;
+  const oses=osKnown();
+  const wo=cfg.winmode_oses||(eng&&eng.oses)||['win'];
+  b.innerHTML=`<label>Trigger chord (hold these, then move the mouse)</label>
+    <div>${MOD_BITS.map(([bit,n])=>`<label style="display:inline-flex;align-items:center;gap:.25rem;margin-right:.7rem">
+      <input type="checkbox" data-wmmod="${bit}" ${cur&bit?'checked':''}>${esc(n)}</label>`).join('')}</div>
+    <div class="row" style="margin-top:.4rem">
+      <div><label>Move macro</label><select id="wmmove">${macOpts(cfg.winmode_move_macro||1)}</select></div>
+      <div><label>Resize macro (chord + Shift)</label><select id="wmresize">${macOpts(cfg.winmode_resize_macro||2)}</select></div>
+    </div>
+    <div class="row" style="margin-top:.4rem">
+      <div><label>Cursor bump X</label><input type="number" id="wmbx" value="${(cfg.winmode_cursor_bump||[-15,15])[0]}"></div>
+      <div><label>Cursor bump Y</label><input type="number" id="wmby" value="${(cfg.winmode_cursor_bump||[-15,15])[1]}"></div>
+    </div>
+    <label style="margin-top:.4rem">Active on</label>
+    <div>${oses.map(o=>`<label style="display:inline-flex;align-items:center;gap:.25rem;margin-right:.7rem">
+      <input type="checkbox" data-wmos="${esc(o)}" ${wo.includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>
+    <p class="muted" style="font-size:.75rem;margin-top:.3rem">Engine currently: chord <b>${eng?modsName(eng.mods):'?'}</b>${eng?` · move M${eng.move_macro} · resize M${eng.resize_macro} · on ${eng.oses.join(', ')}`:' (connect to read)'}</p>`;
+  const commit=()=>{
+    let m=0;b.querySelectorAll('[data-wmmod]:checked').forEach(x=>m|=+x.dataset.wmmod);
+    cfg.winmode_mods=m;
+    cfg.winmode_move_macro=+$('wmmove').value||1;
+    cfg.winmode_resize_macro=+$('wmresize').value||2;
+    cfg.winmode_cursor_bump=[+$('wmbx').value||0,+$('wmby').value||0];
+    const os=[];b.querySelectorAll('[data-wmos]:checked').forEach(x=>os.push(x.dataset.wmos));
+    cfg.winmode_oses=os.length?os:['win'];
+    toast('window mode updated — ⬆ Save to device');};
+  b.querySelectorAll('input,select').forEach(x=>x.onchange=commit);}
 function osMapOv(o,type){const p=osProf(o);const key=type==='key'?'kbd_mappings':'mouse_mappings';
   return p[key]=p[key]||{};}
 function renderOsMap(oses){
