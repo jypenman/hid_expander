@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.2</title>
+<title>HID Config 19.2 BF1 </title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -490,7 +490,17 @@ function onReport(e){
       const parts=Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
       const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
       for(const p of parts){buf.set(p,o);o+=p.length;}
-      if(buf.length!==rxTotal){toast('short read — try again',true);return;}
+      if(buf.length!==rxTotal){
+        // 19.2 BF1: a dropped chunk used to require a manual retry. Retry once
+        // automatically (the config grew with the change log, so partial reads
+        // got more likely), and only complain if the retry also comes up short.
+        const missing=rxTotal-buf.length;
+        if(!window._reReadTried){window._reReadTried=curFile;
+          toast(`short read (${missing} bytes missing) — retrying…`,true);
+          setTimeout(()=>getFile(curFile),350);return;}
+        window._reReadTried=null;
+        toast(`short read — ${missing} bytes missing. Reconnect and try again.`,true);return;}
+      window._reReadTried=null;
       const obj=JSON.parse(new TextDecoder().decode(buf));
       if(curFile===0){cfg=obj;normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
         $('svcwarn').style.display='none';}
@@ -1161,6 +1171,7 @@ function renderLayoutKbd(d,w){
       +(editing&&editMulti.has(idx)?' multisel':'')
       +(comboSel.some(x=>x.dev===d.id&&x.u===u)?' combosel':'')
       +((sel&&sel.type==='combo'&&cfg.combos[sel.id]&&cfg.combos[sel.id].keys.includes(eff.canon))?' combosel':'')  // 19.1 #4: highlight selected combo's members
+      +((sel&&sel.type==='modchord'&&(sel.keys||[]).includes(eff.canon))?' combosel':'')                              // 19.2 BF1: same for modifier shortcuts
       +(seqSel.some(x=>x.dev===d.id&&x.u===u)?' seqsel':'');
     if(gcol)el.style.setProperty('--grpc',gcol);
     el.dataset.usage=u;el.dataset.canon=eff.canon;el.dataset.i=idx;el.dataset.dev=d.id;
@@ -1451,35 +1462,89 @@ function renderPalette(){
     layouts[d.id]=JSON.parse(JSON.stringify(lib[nm]));editSel=null;render();
     toast('loaded layout "'+nm+'" — ⬆ Save to device');};}
 /* ---- Shift = combo (built live in the Mapping Editor), Alt = sequence ---- */
+/* 19.2 BF1: modifiers NEVER reach the combo detector -- the engine handles
+   them on the MODMAP path and they only ever set the modifier bitmask.  So a
+   "combo" like Cmd+` could never fire.  When the selected keys include one or
+   more modifiers we therefore build a MOD-CHORD (mods + key -> action), which
+   is exactly what that engine path supports. */
+const MOD_BIT={0xe0:0x01,0xe1:0x02,0xe2:0x04,0xe3:0x08,
+               0xe4:0x01,0xe5:0x02,0xe6:0x04,0xe7:0x08};   // right folds onto left
+function isModUsage(u){return u>=0xe0&&u<=0xe7;}
+function splitMods(keys){
+  let mods=0;const plain=[];
+  for(const u of keys){if(isModUsage(u))mods|=MOD_BIT[u];else plain.push(u);}
+  return{mods,plain};}
+function mcKey(mods,canon,L){return `${L===undefined?-1:L},${mods},${canon}`;}
+function mcTable(os){return scopeTable(os||'','mod_chords');}
+// find an existing mod-chord for these mods+key, in any OS scope
+function findModChord(mods,canon){
+  for(const L of[-1,layer]){
+    const k=mcKey(mods,canon,L);
+    if((cfg.mod_chords||{})[k]!==undefined)return{key:k,os:'',action:cfg.mod_chords[k]};
+    for(const[os,p]of Object.entries(cfg.os_profiles||{}))
+      if(p&&p.mod_chords&&p.mod_chords[k]!==undefined)return{key:k,os,action:p.mod_chords[k]};}
+  return null;}
 function addComboSel(dev,u){
   if(seqSel.length){toast('finish or cancel the sequence first',true);return;}
   const canon=baselineOf(dev,u);
   window._comboMemberDevs=window._comboMemberDevs||{};
-  // Shift-click while a combo is selected: add this key, or remove it if already a member.
+  // ---- extend / shrink the CURRENT selection -------------------------------
+  let keys=[],md={},curOs='',curAction=null,curWin=60,curDev=null;
   if(sel&&sel.type==='combo'&&cfg.combos[sel.id]){
-    const c=cfg.combos[sel.id];let keys=c.keys.slice();
-    const md=window._comboMemberDevs[sel.id]||{};
+    const c=cfg.combos[sel.id];keys=c.keys.slice();
+    md=window._comboMemberDevs[sel.id]||{};
+    curAction=c.action;curWin=c.window_ms||60;curDev=c.dev||null;
+    curOs=(c.os&&[].concat(c.os)[0])||'';
     const i=keys.indexOf(canon);
-    if(i>=0){ if(keys.length<=2){toast('a combo needs at least 2 keys',true);return;}
-      keys.splice(i,1);delete md[canon]; }
-    else{ keys.push(canon);md[canon]=dev; }
+    if(i>=0){if(keys.length<=2){toast('needs at least 2 keys',true);return;}
+      keys.splice(i,1);delete md[canon];}
+    else{keys.push(canon);md[canon]=dev;}
     delete cfg.combos[sel.id];delete window._comboMemberDevs[sel.id];
-    if(c.dev){const ds=[...new Set(Object.values(md).filter(Boolean))];
-      if(ds.length!==1||ds[0]!==c.dev)delete c.dev;}   // scope broke -> drop dev
-    const id=comboIdFor(keys);c.keys=keys;
-    cfg.combos[id]=c;window._comboMemberDevs[id]=md;
-    sel={type:'combo',id};render();return;}
-  // Otherwise start a NEW combo, seeding from the currently-selected single key.
-  const md={},keys=[];
-  if(sel&&sel.type==='key'){const sd=sel.dev||'',sc=baselineOf(sd,sel.id);keys.push(sc);md[sc]=sd;}
-  if(!keys.includes(canon)){keys.push(canon);md[canon]=dev;}
-  if(keys.length<2){toast('click a key first, then Shift-click a different key to combo them',true);return;}
+  }else if(sel&&sel.type==='modchord'&&sel.mcKey){
+    const cur=findModChord(sel.mods,sel.canon);
+    keys=sel.keys.slice();curAction=cur?cur.action:null;curOs=cur?cur.os:'';
+    const i=keys.indexOf(canon);
+    if(i>=0){if(keys.length<=2){toast('needs at least 2 keys',true);return;}keys.splice(i,1);}
+    else keys.push(canon);
+    if(cur){const t=mcTable(cur.os);delete t[cur.key];}      // re-key below
+  }else{
+    // ---- start a NEW selection, seeding from the selected single key -------
+    if(sel&&sel.type==='key'){const sd=sel.dev||'',sc=baselineOf(sd,sel.id);keys.push(sc);md[sc]=sd;}
+    if(!keys.includes(canon)){keys.push(canon);md[canon]=dev;}
+    if(keys.length<2){toast('click a key first, then Shift-click another to combine them',true);return;}
+    // If these keys already have a rule, SELECT it instead of making a duplicate
+    const sp0=splitMods(keys);
+    if(sp0.mods&&sp0.plain.length===1){
+      const ex=findModChord(sp0.mods,sp0.plain[0]);
+      if(ex){sel={type:'modchord',mods:sp0.mods,canon:sp0.plain[0],keys,mcKey:ex.key,os:ex.os};
+        render();toast('editing existing '+modsName(sp0.mods)+'+'+(KEYS[sp0.plain[0]]||'?')+' rule');return;}
+    }else{
+      const exId=comboIdFor(keys);
+      if((cfg.combos||{})[exId]){sel={type:'combo',id:exId};render();
+        toast('editing existing combo');return;}}
+  }
+  // ---- store as a MOD-CHORD when a modifier is involved --------------------
+  const {mods,plain}=splitMods(keys);
+  if(mods){
+    if(plain.length!==1){
+      toast('a modifier rule needs exactly one non-modifier key (e.g. Cmd + `)',true);
+      render();return;}
+    const canon2=plain[0],k=mcKey(mods,canon2,-1);
+    const t=mcTable(curOs);
+    t[k]=curAction||['suppress'];
+    sel={type:'modchord',mods,canon:canon2,keys,mcKey:k,os:curOs};
+    render();
+    toast(modsName(mods)+' + '+(KEYS[canon2]||'?')+' rule ready — set its action, then ⬆ Save');
+    return;}
+  // ---- otherwise a plain multi-key combo ----------------------------------
   const id=comboIdFor(keys);
   cfg.combos=cfg.combos||{};
-  cfg.combos[id]={keys,action:['suppress'],window_ms:60};
+  cfg.combos[id]={keys,action:curAction||['suppress'],window_ms:curWin};
+  if(curDev)cfg.combos[id].dev=curDev;
+  if(curOs)cfg.combos[id].os=[curOs];
   window._comboMemberDevs[id]=md;
   comboSel=[];sel={type:'combo',id};render();
-  toast('combo created — set its action, then ⬆ Save to device');}
+  toast('combo ready — set its action, then ⬆ Save to device');}
 function addSeqSel(dev,u){
   if(comboSel.length){toast('finish or cancel the combo first',true);return;}
   seqSel.push({dev,u,canon:baselineOf(dev,u)});
@@ -1538,7 +1603,16 @@ function renderMapTable(){
   $('mtlayers').innerHTML='<span style="opacity:.6">Layer columns show the output on each layer; click a cell to edit it.</span>';
   const cb=$('mtcombos');let ch='';
   for(const[id,c]of Object.entries(cfg.combos||{}))
-    ch+=`<div>⧉ combo ${c.keys.map(u=>KEYS[u]||'?').join('+')} → ${actShort(c.action)||'(swallow)'} <a class="mlink" onclick='sel={type:"combo",id:"${id}"};render()'>edit</a></div>`;
+    ch+=`<div>⧉ combo ${c.keys.map(u=>KEYS[u]||'?').join('+')} → ${actShort(c.action)||'(swallow)'}${c.os?' <span class="muted">['+[].concat(c.os).join('/')+' only]</span>':''} <a class="mlink" onclick='sel={type:"combo",id:"${id}"};render()'>edit</a></div>`;
+  // 19.2 BF1: modifier shortcuts live in mod_chords (shared + per-OS overlays)
+  const mcSources=[['',cfg.mod_chords||{}]].concat(
+    Object.entries(cfg.os_profiles||{}).map(([os,p])=>[os,(p&&p.mod_chords)||{}]));
+  for(const[os,tbl]of mcSources)
+    for(const[k,act]of Object.entries(tbl)){
+      const[L,m,u]=k.split(',').map(Number);
+      ch+=`<div>⌘ ${esc(modsName(m))}+${esc(KEYS[u]||MODS[u]||'?')} → ${esc(actShort(act)||'(swallow)')}`
+        +(os?` <span class="muted">[${esc(os)} only]</span>`:'')
+        +` <a class="mlink" onclick='sel={type:"modchord",mods:${m},canon:${u},keys:[${u}],mcKey:${JSON.stringify(k)},os:${JSON.stringify(os)}};render()'>edit</a></div>`;}
   cb.innerHTML=ch;}
 
 /* ============ assignment table (HID-Remapper style, editable) ============ */
@@ -1975,7 +2049,8 @@ function scopeOf(kind,key){
    On every "Save to device" we diff the config against the snapshot taken at
    the last save/load and append plain-English lines to cfg._changelog, which
    travels with the profile (so the history lives on the Pi, not just here). */
-const CHANGELOG_MAX=400;
+const CHANGELOG_MAX=60;      // keep the profile small enough to transfer reliably
+const CHANGELOG_LINES=40;   // per-entry cap
 let _cfgSnap=null;
 function snapCfg(){try{_cfgSnap=JSON.stringify(cfgForDiff());}catch(_){_cfgSnap=null;}}
 function cfgForDiff(){
@@ -2064,8 +2139,11 @@ function recordChanges(){
   const lines=diffConfig(before,cfgForDiff());
   if(lines.length){
     cfg._changelog=cfg._changelog||[];
+    const trimmed=lines.length>CHANGELOG_LINES
+      ?lines.slice(0,CHANGELOG_LINES).concat([`…and ${lines.length-CHANGELOG_LINES} more changes`])
+      :lines;
     cfg._changelog.push({ts:new Date().toISOString(),
-      profile:cfg._profile_name||'working config',changes:lines});
+      profile:cfg._profile_name||'working config',changes:trimmed});
     if(cfg._changelog.length>CHANGELOG_MAX)
       cfg._changelog=cfg._changelog.slice(-CHANGELOG_MAX);}
   snapCfg();
@@ -2194,6 +2272,82 @@ function comboScopeDev(id,c){
   if(md){const ds=[...new Set(Object.values(md).filter(Boolean))];
     if(ds.length===1)return ds[0];}
   return null;}                             // unknown / multi-device -> no dev tab
+/* 19.2 BF1: editor for a modifier shortcut (mods + key -> action).  Unlike a
+   combo this fires from the engine's mod-chord table, which is the only path
+   that can see held modifiers. */
+function renderModChordEd(ed){
+  const cur=findModChord(sel.mods,sel.canon);
+  const os=cur?cur.os:(sel.os||'');
+  const key=cur?cur.key:mcKey(sel.mods,sel.canon,-1);
+  const a=(cur&&cur.action)||['suppress'];
+  const ui=actionToUI(a);
+  const title=modsName(sel.mods)+' + '+(KEYS[sel.canon]||MODS[sel.canon]||'?');
+  ed.innerHTML=`<h2 style="font-size:1rem">${esc(title)}</h2>
+    <p class="muted" style="font-size:.78rem">Fires whenever <b>${esc(modsName(sel.mods))}</b> is held and
+    <b>${esc(KEYS[sel.canon]||'?')}</b> is pressed, on any layer and any device. The held modifier is
+    <i>not</i> passed through — the action below replaces it entirely.
+    <b>Shift-click</b> another key to change the combination.</p>
+    <div class="row"><div>
+      <label>On press</label><select id="mcact">
+        <option value="suppress" ${a[0]==='suppress'?'selected':''}>Nothing (swallow)</option>
+        <option value="keymods" ${a[0]==='keymods'?'selected':''}>Key with modifiers…</option>
+        <option value="key" ${a[0]==='key'?'selected':''}>Key (no modifiers)…</option>
+        <option value="macro" ${a[0]==='macro'?'selected':''}>Macro…</option>
+        <option value="text" ${a[0]==='text'?'selected':''}>Type text…</option>
+      </select><div id="mcargwrap"></div>
+      <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
+        <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
+        ${capBoxHTML()}${searchBoxHTML()}
+        <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
+      </div>
+      ${osScopeHTML('mcos',os)}
+    </div><div>
+      <button id="mcdel" style="margin-top:.2rem">🗑 Delete shortcut</button>
+    </div></div>`;
+  const modBoxes=m=>[[0x01,'Ctrl'],[0x02,'Shift'],[0x04,'Alt/Opt'],[0x08,'Cmd/Win']]
+    .map(([b,n])=>`<label style="display:inline-flex;align-items:center;gap:.2rem;margin-right:.5rem">
+      <input type="checkbox" data-mcmod="${b}" ${m&b?'checked':''}>${n}</label>`).join('');
+  const refresh=()=>{
+    const k=$('mcact').value,w=$('mcargwrap');
+    const c2=(findModChord(sel.mods,sel.canon)||{}).action||['suppress'];
+    const outKey=c2[0]==='keymods'||c2[0]==='key'?c2[1]:(ui.pressKey||0x28);
+    const outMods=c2[0]==='keymods'?(c2[2]||0):0;
+    w.innerHTML=
+      k==='keymods'?`<div style="margin:.2rem 0">${modBoxes(outMods)}</div><select id="mcarg">${keyOpts(outKey)}</select>`:
+      k==='key'?`<select id="mcarg">${keyOpts(outKey)}</select>`:
+      k==='macro'?`<select id="mcarg">${macOpts(c2[0]==='macro'?c2[1]:(ui.pressMacro||1))}</select>`:
+      k==='text'?`<input type="text" id="mcarg" value="${esc(c2[0]==='text'?(c2[1]||''):'')}" placeholder="text">`:'';
+    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress')?'':'none';
+    bindArgs();};
+  const commit=()=>{
+    const k=$('mcact').value,el=$('mcarg'),v=el?el.value:null;
+    let act;
+    if(k==='suppress')act=['suppress'];
+    else if(k==='text')act=['text',v==null?'':v];
+    else if(k==='macro')act=['macro',+v||1];
+    else if(k==='key')act=['key',+v||0x28];
+    else{let m=0;document.querySelectorAll('[data-mcmod]:checked').forEach(x=>m|=+x.dataset.mcmod);
+      act=['keymods',+v||0x28,m];}
+    const newOs=($('mcos')&&$('mcos').value)||'';
+    // move between OS scopes if needed, then write
+    for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
+      delete t[key];
+    mcTable(newOs)[key]=act;
+    sel.os=newOs;
+    toast('shortcut updated — ⬆ Save to device to apply');};
+  const bindArgs=()=>ed.querySelectorAll('#mcargwrap select,#mcargwrap input')
+    .forEach(x=>{x.onchange=()=>{commit();renderMapTable();};});
+  refresh();
+  ed.querySelectorAll('#mcact,#mcos').forEach(x=>x.onchange=()=>{
+    if(x.id==='mcact')refresh();commit();renderMapTable();});
+  bindEditorCommon(a2=>{
+    for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
+      delete t[key];
+    mcTable(($('mcos')&&$('mcos').value)||'')[key]=a2;});
+  $('mcdel').onclick=()=>{
+    for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
+      delete t[key];
+    sel=null;render();toast('shortcut deleted — ⬆ Save to device');};}
 function renderComboEd(ed){
   const c=cfg.combos[sel.id];
   if(!c){sel=null;return renderEditor();}
@@ -2369,10 +2523,11 @@ function renderEditor(){
   Shift-click keys = combo · Alt-click = typed sequence · ✎ Layout edits only the
   wireframe drawing, never the mapping.</p>`;}return;}
   positionEditor();
-  $('editortitle').textContent=sel.type==='wheel'?'Wheel':sel.type==='stepper'?'E9 stepper':sel.type==='combo'?'Combo':'Mapping editor';
+  $('editortitle').textContent=sel.type==='wheel'?'Wheel':sel.type==='stepper'?'E9 stepper':sel.type==='combo'?'Combo':sel.type==='modchord'?'Modifier shortcut':'Mapping editor';
   if(sel.type==='wheel'){return renderWheelEd(ed);}
   if(sel.type==='stepper'){return renderStepperEd(ed);}
   if(sel.type==='combo'){return renderComboEd(ed);}
+  if(sel.type==='modchord'){return renderModChordEd(ed);}
   const isBtn=sel.type==='btn';
   const selDev=sel.dev||'';
   const canon=isBtn?sel.id:baselineOf(selDev,sel.id);
