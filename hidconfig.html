@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.3 BF1</title>
+<title>HID Config 19.4</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -60,6 +60,9 @@ svg .region.held{fill:rgba(239,68,68,.55)!important}
 outline:3px solid var(--warn)!important;outline-offset:1px}
 svg .region.flash-pass{fill:rgba(239,68,68,.6)!important;
 stroke:var(--warn)!important;stroke-width:3!important}
+.lyrhead{height:5.2rem;vertical-align:bottom;padding:0;width:1.6rem}
+.lyrhead span{display:inline-block;transform:rotate(-45deg);transform-origin:left bottom;
+  white-space:nowrap;font-weight:700;font-size:.72rem;margin-left:1.05rem}
 .chipchord{position:absolute;left:1px;bottom:-1px;font-size:.55rem;color:var(--hi);
 font-weight:700;pointer-events:none}
 .chip{position:absolute;right:1px;bottom:-1px;font-size:.56rem;color:var(--ok);max-width:100%;
@@ -863,8 +866,23 @@ function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wh
 'port2_kbd','tap_hold','button_inputs','button_labels',
 'baseline','combos','mapping_groups','stepper_by_layer',
 'kbd_mappings_by_device','os_profiles','layer_keys'])if(!cfg[k])cfg[k]={};
-migrateDevices();migrateByDevice();
+migrateDevices();migrateByDevice();repairGroupMembers();
 if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};}
+/* 19.4 #1.4 repair: earlier imports filed combos and modifier shortcuts under
+   "kbd:*,<key>" -- a wildcard matching that key on EVERY layer.  That is why
+   unrelated rules (CapsLock+Right) turned up inside imported groups.  Drop
+   those wildcards from any group that also holds real chord/combo members,
+   which is the signature of the bad import. */
+function repairGroupMembers(){
+  let fixed=0;
+  for(const[name,g]of Object.entries(cfg.mapping_groups||{})){
+    const mem=g.members||[];
+    const hasRules=mem.some(m=>m.startsWith('mc:')||m.startsWith('combo:'));
+    if(!hasRules)continue;
+    const clean=mem.filter(m=>!/^(kbd|mouse):\*,/.test(m));
+    if(clean.length!==mem.length){fixed+=mem.length-clean.length;g.members=clean;}}
+  if(fixed)setTimeout(()=>toast(`cleaned ${fixed} over-broad group member${fixed>1?'s':''} — ⬆ Save to device`),400);
+  return fixed;}
 
 /* ============ names ============ */
 const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:'H',0x0c:'I',
@@ -1859,13 +1877,122 @@ function asgDeleteRow(r){
 function asgApply(inp,L,act){
   const key=`${L},${inp.id}`,tbl=inp.type==='key'?cfg.kbd_mappings:cfg.mouse_mappings;
   if(act===null||act===undefined)delete tbl[key];else tbl[key]=act;}
-function asgMember(r){
+// Every member id a row could legitimately be filed under.  A key mapping is
+// identified by LAYER + key, so "S on layer 0" and "S on layer 1" are distinct
+// group members; the bare "kbd:*,id" wildcard is still honoured for older
+// configs but is no longer written by anything.
+function asgMemberIds(r){
+  if(r.kind==='combo')return['combo:'+r.id];
+  if(r.kind==='mc')return['mc:'+r.id];
+  const pfx=r.type==='key'?'kbd:':'mouse:';
+  const out=[...r.layers].map(L=>`${pfx}${L},${r.id}`);
+  out.push(`${pfx}*,${r.id}`);          // legacy wildcard
+  return out;}
+function asgMember(r){          // the id NEW group assignments are written to
   if(r.kind==='combo')return 'combo:'+r.id;
   if(r.kind==='mc')return 'mc:'+r.id;
-  return (r.type==='key'?'kbd:*,':'mouse:*,')+r.id;}
+  const pfx=r.type==='key'?'kbd:':'mouse:';
+  const L=r.layers.size?[...r.layers][0]:layer;
+  return `${pfx}${L},${r.id}`;}
+/* 19.4 #1.2: one picker for EVERY input. Collapsible sections cover the three
+   kinds; the backend shape (plain mapping / combo / mod-chord) is chosen from
+   what you pick, so you are never locked into a "type" up front. */
+function openInputPicker(anchorEl,r){
+  document.querySelectorAll('.asgsearch').forEach(x=>x.remove());
+  const box=document.createElement('div');box.className='asgsearch';
+  box.style.maxHeight='60vh';box.style.overflow='auto';box.style.width='320px';
+  const keyOptsList=[...Object.entries(KEYS),...Object.entries(MODS)];
+  box.innerHTML=`
+    <input type="text" id="ipfilter" placeholder="filter keys…" style="width:100%">
+    <details open style="margin-top:.35rem"><summary style="cursor:pointer;font-weight:600">⌨ Single key</summary>
+      <div id="ipkeys" style="max-height:150px;overflow:auto;margin:.25rem 0"></div></details>
+    <details style="margin-top:.25rem"><summary style="cursor:pointer;font-weight:600">🖱 Mouse button</summary>
+      <div id="ipbtns" style="margin:.25rem 0"></div></details>
+    <details style="margin-top:.25rem"><summary style="cursor:pointer;font-weight:600">⌘ Modifier shortcut</summary>
+      <div style="margin:.25rem 0">
+        <div>${[[0x01,'Ctrl'],[0x02,'Shift'],[0x04,'Alt/Opt'],[0x08,'Cmd/Win']].map(([b,n])=>
+          `<label style="display:inline-flex;align-items:center;gap:.2rem;margin-right:.5rem">
+            <input type="checkbox" data-ipmod="${b}" ${r.kind==='mc'&&(r.mods&b)?'checked':''}>${n}</label>`).join('')}</div>
+        <div style="display:flex;gap:.3rem;margin-top:.25rem">
+          <select id="ipmckey" style="flex:1">${keyOpts(r.kind==='mc'?r.canon:0x2b)}</select>
+          <button id="ipmcgo">Use</button></div>
+        <div class="muted" style="font-size:.72rem">e.g. Cmd + Tab. Fires on any layer.</div>
+      </div></details>
+    <details style="margin-top:.25rem"><summary style="cursor:pointer;font-weight:600">⧉ Combo (keys pressed together)</summary>
+      <div style="margin:.25rem 0">
+        <div style="display:flex;gap:.3rem">
+          <select id="ipc1" style="flex:1">${keyOpts(r.kind==='combo'?(r.keys[0]||0x04):0x04)}</select>
+          <select id="ipc2" style="flex:1">${keyOpts(r.kind==='combo'?(r.keys[1]||0x05):0x05)}</select>
+          <button id="ipcgo">Use</button></div>
+        <div class="muted" style="font-size:.72rem">Two non-modifier keys struck together. Use a Modifier shortcut if one of them is Ctrl/Cmd/Alt/Shift.</div>
+      </div></details>`;
+  document.body.appendChild(box);
+  const rc=anchorEl.getBoundingClientRect();
+  box.style.left=(rc.left+window.scrollX)+'px';box.style.top=(rc.bottom+window.scrollY+3)+'px';
+  const close=()=>box.remove();
+  const fillKeys=q=>{
+    q=(q||'').toLowerCase();
+    const hits=keyOptsList.filter(([u,n])=>!q||n.toLowerCase().includes(q)).slice(0,120);
+    $('ipkeys').innerHTML=hits.map(([u,n])=>
+      `<a class="mlink" data-ipkey="${u}" style="display:inline-block;min-width:3.2rem">${esc(n)}</a>`).join(' ');
+    $('ipkeys').querySelectorAll('[data-ipkey]').forEach(a=>a.onclick=()=>{
+      close();asgRetype(r,{kind:'key',id:+a.dataset.ipkey});});};
+  fillKeys('');
+  $('ipfilter').oninput=()=>fillKeys($('ipfilter').value);
+  $('ipfilter').focus();
+  $('ipbtns').innerHTML=[1,2,3,4,5].map(b=>
+    `<a class="mlink" data-ipbtn="${b}" style="display:inline-block;min-width:4rem">${esc(btnLabel(b))}</a>`).join(' ');
+  $('ipbtns').querySelectorAll('[data-ipbtn]').forEach(a=>a.onclick=()=>{
+    close();asgRetype(r,{kind:'btn',id:+a.dataset.ipbtn});});
+  $('ipmcgo').onclick=()=>{
+    let m=0;box.querySelectorAll('[data-ipmod]:checked').forEach(x=>m|=+x.dataset.ipmod);
+    if(!m){toast('pick at least one modifier',true);return;}
+    close();asgRetype(r,{kind:'mc',mods:m,canon:+$('ipmckey').value});};
+  $('ipcgo').onclick=()=>{
+    const a=+$('ipc1').value,b=+$('ipc2').value;
+    if(a===b){toast('pick two different keys',true);return;}
+    close();asgRetype(r,{kind:'combo',keys:[a,b]});};
+  setTimeout(()=>document.addEventListener('click',function h(ev){
+    if(!box.contains(ev.target)&&ev.target!==anchorEl){close();document.removeEventListener('click',h);}}),80);}
+/* Convert a row to a different input kind, carrying its action and note. */
+function asgRetype(r,to){
+  const act=r.out,note=getNote(rowNoteKey(r));
+  const layers=r.layers&&r.layers.size?[...r.layers]:[layer];
+  asgDeleteRow(r);                                   // remove the old shape
+  if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
+  let newRow=null;
+  if(to.kind==='mc'){
+    const k=`-1,${to.mods},${to.canon}`;
+    mcTable(r.os||'')[k]=act||['suppress'];
+    if(note)setNote(noteKey('mc',k),note);
+    sel={type:'modchord',mods:to.mods,canon:to.canon,keys:[to.canon],mcKey:k,os:r.os||''};
+  }else if(to.kind==='combo'){
+    const id=comboIdFor(to.keys);
+    cfg.combos=cfg.combos||{};
+    cfg.combos[id]={keys:to.keys,action:act||['suppress'],window_ms:60};
+    if(r.os)cfg.combos[id].os=[r.os];
+    if(note)setNote(noteKey('combo',id),note);
+    sel={type:'combo',id};
+  }else{
+    const type=to.kind==='btn'?'btn':'key';
+    if(act===undefined){                             // still being built
+      window._asgPending=window._asgPending||[];
+      window._asgPending.push({type,id:to.id});
+    }else for(const L of layers)asgApply({type,id:to.id},L,act);
+    if(note)setNote(noteKey(type==='key'?'kbd':'mouse',layers[0],to.id),note);
+  }
+  render();toast('input changed — ⬆ Save to device');}
+function rowNoteKey(r){
+  if(r.kind==='combo')return noteKey('combo',r.id);
+  if(r.kind==='mc')return noteKey('mc',r.id);
+  const L=r.layers.size?[...r.layers][0]:layer;
+  return noteKey(r.type==='key'?'kbd':'mouse',L,r.id);}
+const NEWSEC='◆ New — finish these';
 function asgGroupsOf(r){
-  const member=asgMember(r);
-  const gs=Object.keys(cfg.mapping_groups||{}).filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
+  if(r.pending)return[NEWSEC];        // 19.4 #1.1: never bury a new row
+  const ids=asgMemberIds(r);
+  const gs=Object.keys(cfg.mapping_groups||{}).filter(n=>
+    (cfg.mapping_groups[n].members||[]).some(m=>ids.includes(m)));
   return gs.length?gs:['(ungrouped)'];}
 function renderAssignTable(){
   const host=$('asgtbl');if(!host||!cfg)return;
@@ -1873,10 +2000,15 @@ function renderAssignTable(){
   // 19.2R #5: partition rows into collapsible sections, one per mapping group
   const buckets={};
   rows.forEach((r,ri)=>{for(const g of asgGroupsOf(r)){(buckets[g]=buckets[g]||[]).push(ri);}});
+  const rank=n=>n===NEWSEC?2:n==='(ungrouped)'?1:0;
   const names=Object.keys(buckets).sort((a,b)=>
-    a==='(ungrouped)'?1:b==='(ungrouped)'?-1:a.localeCompare(b));
+    rank(a)-rank(b)||a.localeCompare(b));
   window._asgRows=rows;
-  const head=`<tr><td><b>Input</b></td><td><b>Output</b></td>${LAYER_NAMES.map((n,L)=>`<td title="layer ${L}" style="text-align:center"><b>${esc(n)}</b></td>`).join('')}<td><b>Group</b></td><td></td></tr>`;
+  // 19.4 #1.3: layer headers rotated 45 deg so the checkbox columns pack
+  // tightly, freeing horizontal room for the Explanation column.
+  const head=`<tr><td><b>Input</b></td><td><b>Output</b></td>`
+    +LAYER_NAMES.map((n,L)=>`<td class="lyrhead" title="layer ${L}"><span>${esc(n)}</span></td>`).join('')
+    +`<td><b>Explanation</b></td><td><b>Group</b></td><td></td></tr>`;
   let h='';
   if(!rows.length)h='<span class="muted" style="font-size:.8rem">No mappings yet — use ＋ Add mapping, or click a key on a wireframe.</span>';
   for(const g of names){
@@ -1893,21 +2025,22 @@ function renderAssignTable(){
       const member=asgMember(r);
       const special=r.kind==='combo'||r.kind==='mc';
       const inGroups=Object.keys(cfg.mapping_groups||{}).filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
-      const inputSel=special
-        ? `<a class="mlink" data-asgsel="${ri}" title="edit this ${r.kind==='combo'?'combo':'modifier shortcut'}">${
-            r.kind==='combo'?'⧉':'⌘'} ${esc(asgInputLabel(r))}</a>`
-            +(r.os?` <span class="muted" style="font-size:.7rem">[${esc(r.os)}]</span>`:'')
-        : `<select data-asginput="${ri}" style="width:auto;max-width:140px">`
-        +asgAllInputs().map(o=>`<option value="${o.v}" ${o.v===key?'selected':''}>${esc(o.label)}</option>`).join('')+`</select>`;
+      // one uniform control: click the input to change it to ANY kind
+      const icon=r.kind==='combo'?'⧉ ':r.kind==='mc'?'⌘ ':'';
+      const inputSel=`<a class="mlink" data-asgpick="${ri}" title="click to change this input — single key, combo or modifier shortcut">`
+        +`${icon}${esc(asgInputLabel(r))||'(choose…)'}</a>`
+        +(r.os?` <span class="muted" style="font-size:.7rem">[${esc(r.os)}]</span>`:'')
+        +(special?` <a class="mlink" data-asgsel="${ri}" style="font-size:.72rem" title="open the full editor">✎</a>`:'');
       const outLbl=r.out===undefined?'<span class="muted">(set…)</span>':esc(asgActLabel(r.out));
       let cells='';
-      if(special)cells=`<td colspan="6" style="text-align:center" class="muted">${
-        r.kind==='mc'&&!r.layers.has(0)?'':'all layers'}</td>`;
+      if(special)cells=`<td colspan="${LAYER_NAMES.length}" style="text-align:center" class="muted" title="fires on any layer">all</td>`;
       else for(let L=0;L<6;L++)cells+=`<td style="text-align:center"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
       h+=`<tr>
         <td>${inputSel}</td>
         <td data-asgout="${ri}" style="cursor:pointer"><a class="mlink">${outLbl}</a></td>
         ${cells}
+        <td><input type="text" data-asgnote="${esc(rowNoteKey(r))}" value="${esc(getNote(rowNoteKey(r)))}"
+          placeholder="what this does" style="width:100%;min-width:150px" maxlength="160"></td>
         <td><input type="text" data-asggrp="${esc(member)}" list="grouplist" placeholder="group" value="" style="width:80px" maxlength="60">
           ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}</td>
         <td><button data-asgdel="${ri}" title="remove this Input→Output">✕</button></td></tr>`;}
@@ -1920,6 +2053,7 @@ function renderAssignTable(){
     if(r.pending&&r.__p){r.__p.type=nt;r.__p.id=+nid;}
     render();toast('input changed — ⬆ Save to device');});
   host.querySelectorAll('[data-asgsel]').forEach(a=>a.onclick=()=>asgSelect(R(a.dataset.asgsel)));
+  host.querySelectorAll('[data-asgpick]').forEach(a=>a.onclick=()=>openInputPicker(a,R(a.dataset.asgpick)));
   host.querySelectorAll('[data-asgout]').forEach(td=>td.onclick=()=>{
     const r=R(td.dataset.asgout);
     if(r.kind==='combo'||r.kind==='mc'){asgSelect(r);return;}   // edit in its own editor
@@ -1939,6 +2073,8 @@ function renderAssignTable(){
     asgDeleteRow(r);
     if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
     render();toast('mapping removed — ⬆ Save to device');});
+  host.querySelectorAll('input[data-asgnote]').forEach(ni=>{
+    ni.onchange=()=>{setNote(ni.dataset.asgnote,ni.value);toast('note saved — ⬆ Save to device');};});
   host.querySelectorAll('input[data-asggrp]').forEach(gi=>{
     const commit=()=>{if(!gi.value.trim())return;
       addToGroup(gi.value,gi.dataset.asggrp);gi.value='';};
@@ -1947,18 +2083,14 @@ function renderAssignTable(){
     e.preventDefault();e.stopPropagation();exportAddition(b.dataset.asgexp,buckets[b.dataset.asgexp].map(i=>rows[i]));});
   const add=$('asgnewadd');
   if(add)add.onclick=()=>{
-    // 19.3 #5: Add mapping can create a plain key, a combo, or a modifier
-    // shortcut -- the three kinds this list now shows.
-    const kind=prompt('Add which kind?\n  1 = single key / button\n  2 = combo (two keys pressed together)\n  3 = modifier shortcut (e.g. Cmd + Tab)','1');
-    if(kind===null)return;
-    if(kind.trim()==='2'){
-      toast('click a key on a wireframe, then Shift-click a second key to build the combo');
-      return;}
-    if(kind.trim()==='3'){
-      toast('click a key on a wireframe, then Shift-click a modifier (Cmd/Ctrl/Alt/Shift) to build the shortcut');
-      return;}
+    // 19.4 #1.1: no modal quiz -- drop a blank row into the "New" section and
+    // let the user click its Input to choose whatever kind they want.
     window._asgPending=window._asgPending||[];
-    window._asgPending.push({type:'key',id:0x04});render();};
+    window._asgPending.push({type:'key',id:0x04});
+    render();
+    setTimeout(()=>{const rows=document.querySelectorAll('[data-asgpick]');
+      const el=rows[rows.length-1];
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.click();}},60);};
   const imp=$('asgimport'),impf=$('asgimportfile');
   if(imp&&impf){imp.onclick=()=>impf.click();
     impf.onchange=async e=>{const f=e.target.files[0];if(!f)return;
@@ -2022,7 +2154,7 @@ window.importAddition=obj=>{
         skipped.push(`device mapping for unknown device "${e.device||'?'}"`);continue;}
       cfg.kbd_mappings_by_device[e.device]=cfg.kbd_mappings_by_device[e.device]||{};
       cfg.kbd_mappings_by_device[e.device][`${e.layer},${e.id}`]=e.action;
-      addMember(`kbd:*,${e.id}`);note(noteKey('kbd',e.layer,e.id),e);applied++;continue;}
+      addMember(`kbd:${e.layer},${e.id}`);note(noteKey('kbd',e.layer,e.id),e);applied++;continue;}
     if(e.scope==='modremap'){          // 19.2 BF3: source-level modifier swap
       const tb=os?modRemapTable(os):(cfg.mod_remap=cfg.mod_remap||{});
       for(const[k,v]of Object.entries(e.map||{}))tb[k]=+v;
@@ -2030,7 +2162,10 @@ window.importAddition=obj=>{
     if(e.scope==='modchord'){
       const t=scopeTable(os,'mod_chords');
       const mk=`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`;
-      t[mk]=e.action;addMember(`kbd:*,${e.id}`);note(noteKey('mc',mk),e);applied++;continue;}
+      // 19.4 #1.4: tag the CHORD itself, never "this key on every layer" --
+      // the old wildcard made unrelated rules (CapsLock+Right) appear inside
+      // imported groups.
+      t[mk]=e.action;addMember(`mc:${mk}`);note(noteKey('mc',mk),e);applied++;continue;}
     if(e.scope==='combo'){
       cfg.combos=cfg.combos||{};
       const id=e.id||('combo-'+(e.keys||[]).join('-'));
@@ -2038,12 +2173,12 @@ window.importAddition=obj=>{
       if(os)cfg.combos[id].os=[os];
       if(e.device)cfg.combos[id].dev=e.device;
       note(noteKey('combo',id),e);
-      (e.keys||[]).forEach(u=>addMember(`kbd:*,${u}`));
+      addMember(`combo:${id}`);
       applied++;continue;}
     // default: shared custom mapping
     const table=e.table||'kbd_mappings';
     scopeTable(os,table)[`${e.layer},${e.id}`]=e.action;
-    addMember(`${table==='mouse_mappings'?'mouse':'kbd'}:*,${e.id}`);
+    addMember(`${table==='mouse_mappings'?'mouse':'kbd'}:${e.layer},${e.id}`);
     note(noteKey(table==='mouse_mappings'?'mouse':'kbd',e.layer,e.id),e);
     applied++;}
   if(!grp.members.length)delete cfg.mapping_groups[gname];
