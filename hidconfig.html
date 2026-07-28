@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.3</title>
+<title>HID Config 19.3 BF1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -1258,6 +1258,15 @@ function renderLayoutKbd(d,w){
     const custChip=eff.v!==undefined?`<span class="chip">${
       Array.isArray(eff.v)?esc(actShort(eff.v)):
       eff.v===0?'∅':esc(KEYS[eff.v]||MODS[eff.v]||'?')}</span>`:'';
+    // 19.3 #3: keys carrying modifier shortcuts get a chord badge, so the
+    // wireframe shows chord remaps the same way it shows Base/Custom.
+    const _ch=chordsForKey(eff.canon);
+    const chordChip=_ch.length
+      ? `<span class="chipchord" title="${esc(_ch.map(c=>
+          modsName(c.mods)+'+'+(KEYS[eff.canon]||MODS[eff.canon]||'?')+' \u2192 '
+          +(actShort(c.act)||'swallow')+(c.os?' ['+c.os+' only]':'')).join(' \u00b7 '))}">\u2318${
+          _ch.length>1?_ch.length:''}</span>`
+      : '';
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
       +baseChip+`<span class="kcenter">${centerName}</span>`+custChip+chordChip+elLayerBadge('key',eff.canon);
