@@ -3,7 +3,7 @@
  "version": 2,
  "name": "macOS shortcuts on Windows",
  "created": "2026-07-28",
- "description": "Use Mac muscle memory on a Windows host. Works in two layers: (1) a MODIFIER SWAP (Cmd<->Ctrl) so every Cmd+letter shortcut becomes its Ctrl equivalent natively -- correct hold, repeat and timing, no per-key rewriting; (2) a short list of chords for the cases a swap can't express, such as Cmd+Tab -> Alt+Tab which must keep the modifier HELD so the app switcher stays open. Windows only. NOTE: after the swap your physical Ctrl sends Cmd/Win, so if you use the window-move chord set it to match (OS tab -> Window mode).",
+ "description": "Use Mac muscle memory on a Windows host. Works in two layers: (1) a MODIFIER SWAP (Cmd<->Ctrl) so every Cmd+letter shortcut becomes its Ctrl equivalent natively -- correct hold, repeat and timing, no per-key rewriting; (2) a short list of chords for the cases a swap can't express, such as Cmd+Tab -> Alt+Tab which must keep the modifier HELD so the app switcher stays open. Shift is passed through to those held rules, so Cmd+Shift+Tab cycles backwards. Windows only. NOTE: after the swap your physical Ctrl sends Cmd/Win, so if you use the window-move chord set it to match (OS tab -> Window mode).",
  "requires": {
   "engine": "mod_remap + mod_chords with holdmods (19.2 BF3 or later)"
  },
@@ -28,7 +28,7 @@
     43
    ],
    "os": "win",
-   "note": "Cmd+Tab -> Alt+Tab, held: keep holding Cmd and tap Tab to cycle the switcher"
+   "note": "Cmd+Tab -> Alt+Tab, held: keep Cmd down and tap Tab to cycle; add Shift to cycle backwards"
   },
   {
    "scope": "modchord",
@@ -37,11 +37,11 @@
    "id": 53,
    "action": [
     "holdmods",
-    4,
-    41
+    1,
+    43
    ],
    "os": "win",
-   "note": "Cmd+` -> Alt+Esc, held: cycle windows of the current app"
+   "note": "Cmd+` -> Ctrl+Tab, held: cycle TABS within the current app (add Shift to go backwards)"
   },
   {
    "scope": "modchord",
