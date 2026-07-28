@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.2 BF1 </title>
+<title>HID Config 19.2 BF2</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -187,6 +187,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   && sudo systemctl restart expander hidconfig</code><br>
   Then check <code>journalctl -u expander -n 20</code> for Python errors and reconnect here.
 </div>
+<div id="oswarn" style="display:none;border:2px solid var(--warn);border-radius:10px;
+  padding:.6rem .8rem;margin:.5rem 0;font-size:.85rem">
+  <b>⚠ <span id="oswarntxt"></span></b>
+  <button id="oswarnfix" class="primary" style="margin-left:.6rem">Switch device to <span id="oswarnos"></span></button>
+  <div class="muted" style="font-size:.78rem;margin-top:.3rem">OS-scoped rules (imported shortcut sets, per-OS remaps, mac/win-only expansions) only fire when the engine's active OS matches. Until then they are silently inactive.</div>
+</div>
 <div class="bar" id="profbar">
   <span class="muted"><b>On-device profiles:</b></span>
   <span id="curprof" class="status" title="the profile this config was last saved as / loaded from">working config (unsaved)</span>
@@ -244,11 +250,11 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
  </details>
  <div id="maprow">
  <div style="flex:1;min-width:0">
-  <div class="bar" style="margin:.2rem 0;align-items:center">
-    <button id="showkeys">▶ Show key presses</button>
+  <div class="bar" style="margin:.2rem 0;align-items:center;flex-wrap:wrap;gap:.4rem">
+    <div class="pills" id="layers" style="margin:0"></div>
+    <button id="showkeys" style="margin-left:auto">▶ Show key presses</button>
     <span class="muted" id="showkeysinfo"></span>
   </div>
-  <div class="pills" id="layers"></div>
   <div id="chordbar">
     <b>Chord:</b><span id="chordinfo"></span>
     <span class="pluspill" id="pluspill" draggable="true" title="Drag onto a key/button to add it to this layer">＋</span>
@@ -449,7 +455,7 @@ let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let editMulti=new Set();   // 19.1 #6: marquee-selected key indices in the layout editor
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
-let _showGroups=true,_groupsCollapsed=false;   // 6.9 master highlight toggle + collapse
+let _showGroups=false,_groupsCollapsed=true;   // 19.2 BF2 #4iii: off by default   // 6.9 master highlight toggle + collapse
 const _heldKeys=new Set(),_heldBtns=new Set();  // 6.10 keys/buttons currently held down
 let expSets=null,curSet=null;
 function esc(x){return String(x??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));}
@@ -590,7 +596,22 @@ function updateOsBtn(){
   const icon=ui==='win'?'🪟':ui==='mac'?'':'💻';
   b.textContent=`${icon} ${ui}`+(eng&&eng!==ui?' ⚠':'');
   b.title=(eng&&eng!==ui)?`UI has ${ui} but the engine is running ${eng} — ⬆ Save to device`:
-    'Active OS profile. Click to cycle; full control in the OS tab.';}
+    'Active OS profile. Click to cycle; full control in the OS tab.';
+  // 19.2 BF2 #3: the engine running the WRONG OS silently disables every
+  // OS-scoped rule -- the real reason imported shortcut sets "did nothing".
+  const w=$('oswarn');if(!w)return;
+  const bos=detectBrowserOS();
+  const want=bos&&osKnown().includes(bos)?bos:null;
+  const mismatch=want&&eng&&eng!==want;
+  if(mismatch){
+    $('oswarntxt').textContent=`This computer is ${want}, but the device is running its ${eng} profile — ${want}-only rules are NOT active.`;
+    $('oswarnos').textContent=want;
+    w.style.display='block';
+    $('oswarnfix').onclick=()=>{cfg.active_os=want;updateOsBtn();
+      recordChanges();putFile(0,cfg);
+      toast('switching device to '+want+' — reloads in ~2 s');
+      setTimeout(()=>getFile(3),2500);};
+  }else w.style.display='none';}
 $('ostoggle').onclick=()=>{
   if(!cfg){toast('connect first',true);return;}
   const oses=osKnown();const i=oses.indexOf(cfg.active_os||'win');
@@ -616,13 +637,28 @@ function eventsOn(seconds){
 $('evon').onclick=e=>{eventsOn(60);clickFx(e.target);};
 // show-keys 3-state: 60s -> indefinite -> off
 let _showKeysState=0;
+function showKeysIdle(){        // 19.2 BF2 #4i: single place that resets the button
+  _showKeysState=0;clearTimeout(_showKeysTimer);
+  const b=$('showkeys');if(!b)return;
+  b.classList.remove('rec');b.textContent='▶ Show key presses';
+  $('showkeysinfo').textContent='';}
+let _showKeysTimer=null;
 $('showkeys').onclick=()=>{
   _showKeysState=(_showKeysState+1)%3;
-  if(_showKeysState===1){eventsOn(60);$('showkeys').textContent='⏱ Showing 60 s (click: keep on)';
-    $('showkeysinfo').textContent='keys stay lit while held; outputs flash';}
-  else if(_showKeysState===2){eventsOn(0);$('showkeys').textContent='● Showing until stopped (click: stop)';}
+  const b=$('showkeys');
+  clearTimeout(_showKeysTimer);
+  if(_showKeysState===1){eventsOn(60);
+    b.classList.add('rec');                       // red, like the Debug monitor
+    b.textContent='⏱ Showing 60 s (click: keep on)';
+    $('showkeysinfo').textContent='keys stay lit while held; outputs flash';
+    // revert the label when the 60 s window actually lapses
+    _showKeysTimer=setTimeout(()=>{showKeysIdle();
+      toast('key-press display stopped after 60 s');},60000);}
+  else if(_showKeysState===2){eventsOn(0);
+    b.classList.add('rec');
+    b.textContent='● Showing until stopped (click: stop)';}
   else{send([EVENTS_OFF]);$('evon').classList.remove('rec');$('evon').textContent='▶ Events';
-    $('showkeys').textContent='▶ Show key presses';$('showkeysinfo').textContent='';}};
+    showKeysIdle();}};
 $('evoff').onclick=e=>{send([EVENTS_OFF]);$('evon').classList.remove('rec');
   $('evon').textContent='▶ Events';clickFx(e.target);};
 $('clear').onclick=e=>{$('log').innerHTML='';$('outlog').innerHTML='';clickFx(e.target);};
@@ -1462,6 +1498,25 @@ function renderPalette(){
     layouts[d.id]=JSON.parse(JSON.stringify(lib[nm]));editSel=null;render();
     toast('loaded layout "'+nm+'" — ⬆ Save to device');};}
 /* ---- Shift = combo (built live in the Mapping Editor), Alt = sequence ---- */
+/* 19.2 BF2 #2: per-rule "Explanation" notes.  Keyed by a stable rule id so a
+   note survives edits: kbd:<layer>,<id> | mouse:<layer>,<id> |
+   mc:<layer>,<mods>,<canon> | combo:<id>.  Imported additions carry their own
+   "note" per entry, so a shortcut pack explains itself in the UI. */
+function noteKey(kind,a,b,c){
+  if(kind==='mc')return `mc:${a}`;            // a = the mod_chords table key
+  if(kind==='combo')return `combo:${a}`;
+  return `${kind}:${a},${b}`;}                 // kbd/mouse: layer,id
+function getNote(k){return (cfg&&cfg.notes&&cfg.notes[k])||'';}
+function setNote(k,v){if(!cfg)return;cfg.notes=cfg.notes||{};
+  v=(v||'').trim();if(v)cfg.notes[k]=v;else delete cfg.notes[k];}
+function noteFieldHTML(k){
+  return `<label style="margin-top:.4rem">Explanation <span class="muted" style="font-weight:400;font-size:.74rem">(what this does — shown in lists)</span></label>
+    <input type="text" id="rulenote" value="${esc(getNote(k))}" placeholder="e.g. Cmd+Tab -> Alt+Tab (app switch)" maxlength="160">`;}
+function bindNoteField(k){const el=$('rulenote');if(!el)return;
+  el.onchange=()=>{setNote(k,el.value);renderMapTable();
+    toast('note saved — ⬆ Save to device');};}
+function noteBadge(k){const n=getNote(k);
+  return n?` <span class="muted" style="font-size:.72rem" title="${esc(n)}">— ${esc(n.length>60?n.slice(0,60)+'…':n)}</span>`:'';}
 /* 19.2 BF1: modifiers NEVER reach the combo detector -- the engine handles
    them on the MODMAP path and they only ever set the modifier bitmask.  So a
    "combo" like Cmd+` could never fire.  When the selected keys include one or
@@ -1603,7 +1658,7 @@ function renderMapTable(){
   $('mtlayers').innerHTML='<span style="opacity:.6">Layer columns show the output on each layer; click a cell to edit it.</span>';
   const cb=$('mtcombos');let ch='';
   for(const[id,c]of Object.entries(cfg.combos||{}))
-    ch+=`<div>⧉ combo ${c.keys.map(u=>KEYS[u]||'?').join('+')} → ${actShort(c.action)||'(swallow)'}${c.os?' <span class="muted">['+[].concat(c.os).join('/')+' only]</span>':''} <a class="mlink" onclick='sel={type:"combo",id:"${id}"};render()'>edit</a></div>`;
+    ch+=`<div>⧉ combo ${c.keys.map(u=>KEYS[u]||'?').join('+')} → ${actShort(c.action)||'(swallow)'}${c.os?' <span class="muted">['+[].concat(c.os).join('/')+' only]</span>':''}${noteBadge(noteKey('combo',id))} <a class="mlink" onclick='sel={type:"combo",id:"${id}"};render()'>edit</a></div>`;
   // 19.2 BF1: modifier shortcuts live in mod_chords (shared + per-OS overlays)
   const mcSources=[['',cfg.mod_chords||{}]].concat(
     Object.entries(cfg.os_profiles||{}).map(([os,p])=>[os,(p&&p.mod_chords)||{}]));
@@ -1611,7 +1666,7 @@ function renderMapTable(){
     for(const[k,act]of Object.entries(tbl)){
       const[L,m,u]=k.split(',').map(Number);
       ch+=`<div>⌘ ${esc(modsName(m))}+${esc(KEYS[u]||MODS[u]||'?')} → ${esc(actShort(act)||'(swallow)')}`
-        +(os?` <span class="muted">[${esc(os)} only]</span>`:'')
+        +(os?` <span class="muted">[${esc(os)} only]</span>`:'')+noteBadge(noteKey('mc',k))
         +` <a class="mlink" onclick='sel={type:"modchord",mods:${m},canon:${u},keys:[${u}],mcKey:${JSON.stringify(k)},os:${JSON.stringify(os)}};render()'>edit</a></div>`;}
   cb.innerHTML=ch;}
 
@@ -1821,8 +1876,10 @@ function exportAddition(name,rows){
     for(const L of r.layers){
       const key=`${L},${r.id}`;
       const kind=r.type==='key'?'kbd_mappings':'mouse_mappings';
+      const nk=noteKey(r.type==='key'?'kbd':'mouse',L,r.id);
       entries.push({scope:'custom',table:kind,layer:L,id:r.id,
-        action:r.out,os:scopeOf(kind,key)||undefined});}}
+        action:r.out,os:scopeOf(kind,key)||undefined,
+        note:getNote(nk)||undefined});}}
   downloadAddition({kind:ADDITION_KIND,version:1,name,
     created:new Date().toISOString(),entries});}
 function downloadAddition(obj){
@@ -1835,6 +1892,16 @@ window.importAddition=obj=>{
   if(!obj||obj.kind!==ADDITION_KIND||!Array.isArray(obj.entries))
     throw new Error('not a HID Expander addition file');
   let applied=0,skipped=[];
+  // 19.2 BF2 #1: everything imported lands in a group named after the file,
+  // so it shows up as its own collapsible section and can be toggled/exported
+  // as a unit straight away.
+  const gname=(obj.name||'imported').slice(0,60);
+  cfg.mapping_groups=cfg.mapping_groups||{};
+  const grp=cfg.mapping_groups[gname]=cfg.mapping_groups[gname]||
+    {members:[],color:GROUP_COLORS[Object.keys(cfg.mapping_groups).length%GROUP_COLORS.length]};
+  grp.members=grp.members||[];
+  const addMember=m=>{if(!grp.members.includes(m))grp.members.push(m);};
+  const note=(k,e)=>{if(e.note)setNote(k,e.note);};
   for(const e of obj.entries){
     const os=e.os||'';
     if(os&&!osKnown().includes(os)){skipped.push(`${os}-only entry (no such OS profile)`);continue;}
@@ -1848,22 +1915,31 @@ window.importAddition=obj=>{
       if(!e.device||!(cfg.devices||[]).some(d=>d.id===e.device)){
         skipped.push(`device mapping for unknown device "${e.device||'?'}"`);continue;}
       cfg.kbd_mappings_by_device[e.device]=cfg.kbd_mappings_by_device[e.device]||{};
-      cfg.kbd_mappings_by_device[e.device][`${e.layer},${e.id}`]=e.action;applied++;continue;}
+      cfg.kbd_mappings_by_device[e.device][`${e.layer},${e.id}`]=e.action;
+      addMember(`kbd:*,${e.id}`);note(noteKey('kbd',e.layer,e.id),e);applied++;continue;}
     if(e.scope==='modchord'){
       const t=scopeTable(os,'mod_chords');
-      t[`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`]=e.action;applied++;continue;}
+      const mk=`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`;
+      t[mk]=e.action;addMember(`kbd:*,${e.id}`);note(noteKey('mc',mk),e);applied++;continue;}
     if(e.scope==='combo'){
       cfg.combos=cfg.combos||{};
       const id=e.id||('combo-'+(e.keys||[]).join('-'));
       cfg.combos[id]={keys:e.keys,action:e.action,window_ms:e.window_ms||60};
       if(os)cfg.combos[id].os=[os];
       if(e.device)cfg.combos[id].dev=e.device;
+      note(noteKey('combo',id),e);
+      (e.keys||[]).forEach(u=>addMember(`kbd:*,${u}`));
       applied++;continue;}
     // default: shared custom mapping
     const table=e.table||'kbd_mappings';
-    scopeTable(os,table)[`${e.layer},${e.id}`]=e.action;applied++;}
+    scopeTable(os,table)[`${e.layer},${e.id}`]=e.action;
+    addMember(`${table==='mouse_mappings'?'mouse':'kbd'}:*,${e.id}`);
+    note(noteKey(table==='mouse_mappings'?'mouse':'kbd',e.layer,e.id),e);
+    applied++;}
+  if(!grp.members.length)delete cfg.mapping_groups[gname];
+  groupOn[gname]=true;
   render();
-  toast(`imported "${obj.name||'addition'}": ${applied} entries`+
+  toast(`imported "${obj.name||'addition'}" into group "${gname}": ${applied} entries`+
     (skipped.length?` · ${skipped.length} skipped`:'')+' — ⬆ Save to device');
   if(skipped.length)console.warn('addition skipped:',skipped);};
 
@@ -2301,6 +2377,7 @@ function renderModChordEd(ed){
         <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
       </div>
       ${osScopeHTML('mcos',os)}
+      ${noteFieldHTML(noteKey('mc',key))}
     </div><div>
       <button id="mcdel" style="margin-top:.2rem">🗑 Delete shortcut</button>
     </div></div>`;
@@ -2340,6 +2417,7 @@ function renderModChordEd(ed){
   refresh();
   ed.querySelectorAll('#mcact,#mcos').forEach(x=>x.onchange=()=>{
     if(x.id==='mcact')refresh();commit();renderMapTable();});
+  bindNoteField(noteKey('mc',key));
   bindEditorCommon(a2=>{
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
@@ -2382,6 +2460,7 @@ function renderComboEd(ed){
       </div>
       <label style="margin-top:.5rem">Window (ms)</label><input type="number" id="cwin" value="${c.window_ms||60}" min="20" max="500">
       ${osScopeHTML('cbos',(c.os&&[].concat(c.os)[0])||'')}
+      ${noteFieldHTML(noteKey('combo',sel.id))}
     </div><div>
       <button id="cdel" style="margin-top:.2rem">🗑 Delete combo</button>
     </div></div>`;
@@ -2422,6 +2501,7 @@ function renderComboEd(ed){
     commit();renderMapTable();renderAssignTable();});
   // Press-key-to-assign, search-actions, and ＋New macro all set the combo action
   // (identical to the key editor). Multi-key press auto-builds a macro.
+  bindNoteField(noteKey('combo',sel.id));
   bindEditorCommon(a2=>{c.action=a2;});
   $('cdel').onclick=()=>{delete cfg.combos[sel.id];
     if(window._comboMemberDevs)delete window._comboMemberDevs[sel.id];
@@ -2596,6 +2676,7 @@ function renderEditor(){
       <option value="macro" ${ui.release==='macro'?'selected':''}>Macro…</option>
     </select><div id="relArg"></div>
     ${devScoped?'':osScopeHTML('osscope',scopeOf(isBtn?'mouse_mappings':'kbd_mappings',key))}
+    ${noteFieldHTML(noteKey(isBtn?'mouse':'kbd',layer,isBtn?sel.id:canon))}
     ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
   </div></div>`;
   function setLayerSource(L){
@@ -2660,6 +2741,7 @@ function renderEditor(){
         pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value}));
       render();});
   bindEditorCommon(apply);
+  bindNoteField(noteKey(isBtn?'mouse':'kbd',layer,isBtn?sel.id:canon));
   bindEditorOsOverride(isBtn,isBtn?sel.id:canon);
   const member=(isBtn?'mouse:':'kbd:')+key;
   const gwrap=document.createElement('div');
@@ -3170,6 +3252,15 @@ function liveOut(txt){
   if(km&&km[1])for(const h of km[1].split(',')){const u=parseInt(h.replace(/['" ]/g,''),16);
     const els=document.querySelectorAll(`.key[data-canon="${u}"],.key[data-usage="${u}"]`);
     (els.length?[...els]:[]).forEach(el=>flash(el,cls));}
+  // 19.2 BF2 #3: modifiers travel in the MODS BITMASK, not the keys array, so
+  // a rewritten shortcut's Ctrl/Alt/Win never lit up -- making a working
+  // mod-chord look broken. Flash them too.
+  const mm=txt.match(/kbd mods=(0x[0-9a-f]+)/i);
+  if(mm){const bits=parseInt(mm[1],16);
+    [[0x01,0xe0],[0x02,0xe1],[0x04,0xe2],[0x08,0xe3],
+     [0x10,0xe4],[0x20,0xe5],[0x40,0xe6],[0x80,0xe7]].forEach(([b,u])=>{
+      if(bits&b)document.querySelectorAll(`.key[data-canon="${u}"],.key[data-usage="${u}"]`)
+        .forEach(el=>flash(el,cls));});}
   if(txt.startsWith('stepper')){
     const dm=txt.match(/stepper ([+-]\d+)/);
     if(dm){const dir=+dm[1]>0?'up':'down';
