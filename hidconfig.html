@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.4</title>
+<title>HID Config 19.5</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -63,6 +63,10 @@ stroke:var(--warn)!important;stroke-width:3!important}
 .lyrhead{height:5.2rem;vertical-align:bottom;padding:0;width:1.6rem}
 .lyrhead span{display:inline-block;transform:rotate(-45deg);transform-origin:left bottom;
   white-space:nowrap;font-weight:700;font-size:.72rem;margin-left:1.05rem}
+.stgnew{background:rgba(34,197,94,.10)}
+.stgdup{background:rgba(148,163,184,.14)}
+.stgclash{background:rgba(245,158,11,.16)}
+tr.fromadd{background:rgba(59,130,246,.07)}
 .chipchord{position:absolute;left:1px;bottom:-1px;font-size:.55rem;color:var(--hi);
 font-weight:700;pointer-events:none}
 .chip{position:absolute;right:1px;bottom:-1px;font-size:.56rem;color:var(--ok);max-width:100%;
@@ -144,7 +148,10 @@ align-items:center;justify-content:center}
 .wfbody.editing .kabs{cursor:crosshair}
 .rubber{position:absolute;border:1px dashed var(--hi);background:rgba(59,130,246,.15);
   pointer-events:none;z-index:50}
-.key.multisel{outline:2px solid var(--hi)!important;outline-offset:2px}
+.key.multisel{outline:3px solid var(--hi)!important;outline-offset:2px;
+  box-shadow:inset 0 0 0 2px rgba(59,130,246,.55)!important;
+  position:relative;z-index:8}
+.wfbody.editing .key.multisel{background:rgba(59,130,246,.22)!important}
 #palette{position:fixed;right:1.1rem;bottom:1.1rem;z-index:60;background:Canvas;color:CanvasText;
 border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.35);
 padding:.8rem .9rem;width:250px;display:none}
@@ -297,6 +304,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <details id="asgpanel" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Assignments (add / edit / remove)</summary>
         <p class="muted" style="font-size:.78rem;margin:.3rem 0">Each row is one input. Pick its Input and Output; the layer columns show what fires on each layer (click to change). Group is optional. ✕ removes the row.</p>
         <div id="asgtbl"></div>
+        <div id="asgstage"></div>
         <div class="bar" style="margin-top:.4rem">
           <button id="asgnewadd">＋ Add mapping</button>
           <button id="asgimport">📥 Import addition…</button>
@@ -1221,6 +1229,7 @@ function renderLayoutKbd(d,w){
   lay.keys.forEach((k,idx)=>{
     const el=document.createElement('div');
     const kind=k.wheel?'wheel':k.stepper?'stepper':k.pad?'pad':(k.btn!=null?'btn':'key');
+    el.dataset.eidx=idx;          // 19.3 #1i: lets a group drag find siblings
     el.style.left=((k.x+offx)*unit)+'px';el.style.top=((k.y+offy)*unit)+'px';
     el.style.width=((k.w||1)*unit-4)+'px';
     if(k.h)el.style.height=(k.h*unit-4)+'px';
@@ -1230,7 +1239,7 @@ function renderLayoutKbd(d,w){
     if(kind==='pad'){el.className='key';el.style.opacity=.35;
       el.style.height=((k.h||1.6)*unit)+'px';el.textContent=k.label||'trackpad';
       if(editing)bindEditKey(el,d,idx);div.appendChild(el);return;}
-    if(kind==='wheel'){el.className='key';el.innerHTML=(k.label||'⇅')
+    if(kind==='wheel'){el.className='key';el.dataset.wheel='1';el.innerHTML=(k.label||'⇅')
         +(cfg.wheel_by_layer&&cfg.wheel_by_layer[layer]&&cfg.wheel_by_layer[layer][0]!=='pass'?`<span class="chip">${esc((cfg.wheel_by_layer[layer]||[]).join(' '))}</span>`:'');
       el.title='scroll wheel';
       if(editing)bindEditKey(el,d,idx);else el.onclick=()=>{sel={type:'wheel',dev:d.id};render();};
@@ -1394,17 +1403,26 @@ function bindEditKey(el,d,idx){
     // wireframe DOM and destroys `el` mid-gesture, which drops pointer capture
     // and freezes the drag after a few px. Instead translate `el` visually and
     // commit + re-render (with the drag-above normalize) only on pointerup.
+    // 19.3 #1i: if this key is part of a marquee selection, translate EVERY
+    // selected element live -- previously only the dragged one moved and the
+    // rest teleported into place on release.
+    const groupEls=editMulti.has(idx)
+      ? [...editMulti].map(i2=>({i:i2,el:div.querySelector(`[data-eidx="${i2}"]`)}))
+          .filter(x=>x.el)
+      : [{i:idx,el}];
     const move=ev=>{
       const rawx=ev.clientX-sx,rawy=ev.clientY-sy;
       if(Math.abs(rawx)>5||Math.abs(rawy)>5)moved=true;
       const dx=Math.round((rawx/unit)*4)/4*unit;   // ¼-unit snap, in px
       const dy=Math.round((rawy/unit)*4)/4*unit;
-      el.style.transform=`translate(${dx}px,${dy}px)`+(k.rot?` rotate(${k.rot}deg)`:'');
-      el.style.zIndex='90';};
+      for(const g of groupEls){
+        const kk=lay.keys[g.i];
+        g.el.style.transform=`translate(${dx}px,${dy}px)`+(kk&&kk.rot?` rotate(${kk.rot}deg)`:'');
+        g.el.style.zIndex='90';}};
     const up=ev=>{
       window.removeEventListener('pointermove',move);
       window.removeEventListener('pointerup',up);
-      el.style.transform='';el.style.zIndex='';
+      for(const g of groupEls){g.el.style.transform='';g.el.style.zIndex='';}
       if(moved){
         const dx=(ev.clientX-sx)/unit,dy=(ev.clientY-sy)/unit;
         // 19.1 #6: if this key is part of a marquee selection, move the WHOLE
@@ -1772,14 +1790,6 @@ function asgRowVals(inp){
     if(inp.type==='key'){if(cfg.kbd_mappings[k]!==undefined)vals[L]=cfg.kbd_mappings[k];}
     else if(cfg.mouse_mappings[k]!==undefined)vals[L]=cfg.mouse_mappings[k];}
   return vals;}
-function asgApply(inp,L,act){
-  const k=`${L},${inp.id}`;
-  if(inp.type==='key'){
-    if(act===null)delete cfg.kbd_mappings[k];
-    else cfg.kbd_mappings[k]=act;}
-  else{
-    if(act===null)delete cfg.mouse_mappings[k];
-    else cfg.mouse_mappings[k]=act;}}
 function asgOpenSearch(cell,inp,mode,onPick){
   document.querySelectorAll('.asgsearch').forEach(x=>x.remove());
   const box=document.createElement('div');box.className='asgsearch';
@@ -1894,6 +1904,177 @@ function asgMember(r){          // the id NEW group assignments are written to
   const pfx=r.type==='key'?'kbd:':'mouse:';
   const L=r.layers.size?[...r.layers][0]:layer;
   return `${pfx}${L},${r.id}`;}
+/* ===== 19.4 (vii+): staged Addition review ==================================
+   An imported pack is NOT applied on sight.  It is staged above the Import
+   button, every line classified against your profile, and only written when
+   you press "Add this".  Packs then live as their own file on the Pi
+   (additions/<name>.json, fid 5) -- the profile only refers to them. */
+let _stage=null;                       // {name,desc,entries[],state[]}
+const RISK={
+  text:'Types text straight into the host — check what it types before enabling.',
+  macro:'Runs a macro on the host; macros can type arbitrary keystrokes.',
+  baseline:'Changes what a physical key IS on a device. If it disables or moves a modifier you may lose the shortcut you would use to undo it.',
+  modremap:'Swaps modifiers system-wide on this OS. Legitimate, but any chord written in pre-swap terms will stop matching.'};
+function entryRisk(e){
+  // Deliberately narrow: only things that bite later. Ordinary key/chord
+  // remaps are NOT flagged -- flagging everything trains you to ignore it.
+  if(e.scope==='baseline')return RISK.baseline;
+  if(e.scope==='modremap')return RISK.modremap;
+  const a=e.action;
+  if(Array.isArray(a)){if(a[0]==='text')return RISK.text;
+    if(a[0]==='macro')return RISK.macro;}
+  return '';}
+// identity of the rule a line would write, so we can compare with the profile
+function entryRuleKey(e){
+  if(e.scope==='modchord')return 'mc:'+`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`;
+  if(e.scope==='combo')return 'combo:'+(e.id||('combo-'+(e.keys||[]).join('-')));
+  if(e.scope==='baseline')return 'base:'+e.device+','+e.usage;
+  if(e.scope==='modremap')return 'modremap:'+(e.os||'');
+  return (e.table==='mouse_mappings'?'mouse:':'kbd:')+`${e.layer},${e.id}`;}
+function profileRuleAction(e){
+  const os=e.os||'';
+  const from=(t)=>os?((cfg.os_profiles||{})[os]||{})[t]:cfg[t];
+  if(e.scope==='modchord'){
+    const k=`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`;
+    const t=from('mod_chords')||{};return t[k];}
+  if(e.scope==='combo'){
+    const want=(e.keys||[]).slice().sort().join(',');
+    for(const c of Object.values(cfg.combos||{}))
+      if((c.keys||[]).slice().sort().join(',')===want)return c.action;
+    return undefined;}
+  if(e.scope==='baseline')return ((cfg.baseline||{})[e.device]||{})[e.usage];
+  if(e.scope==='modremap')return undefined;
+  const t=from(e.table||'kbd_mappings')||{};return t[`${e.layer},${e.id}`];}
+function sameAction(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+function classifyEntry(e){
+  const mine=profileRuleAction(e);
+  if(mine===undefined)return{cls:'new'};
+  return sameAction(mine,e.action)?{cls:'dup',mine}:{cls:'clash',mine};}
+window.stageAddition=obj=>{
+  if(!cfg){toast('connect / load a config first',true);return;}
+  if(!obj||obj.kind!==ADDITION_KIND||!Array.isArray(obj.entries))
+    throw new Error('not a HID Expander addition file');
+  if(obj.entries.length>500)throw new Error('addition too large (>500 entries)');
+  _stage={name:(obj.name||'imported').slice(0,60),desc:obj.description||'',
+    entries:obj.entries,
+    // default ON for new lines; OFF for anything that touches your profile
+    // or carries a risk flag -- you opt in deliberately.
+    state:obj.entries.map(e=>{const c=classifyEntry(e);
+      return{on:c.cls==='new'&&!entryRisk(e),cls:c.cls,mine:c.mine};})};
+  renderAssignTable();
+  setTimeout(()=>{const el=$('asgstage');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},60);
+  toast(`"${_stage.name}" staged — review, then press “Add this”`);};
+function stageCounts(){
+  const c={new:0,dup:0,clash:0,risk:0,on:0};
+  if(!_stage)return c;
+  _stage.entries.forEach((e,i)=>{const st=_stage.state[i];
+    c[st.cls]++;if(entryRisk(e))c.risk++;if(st.on)c.on++;});
+  return c;}
+function renderStageAddition(){
+  const host=$('asgstage');if(!host)return;
+  if(!_stage){host.innerHTML='';return;}
+  const c=stageCounts();
+  const addBtn=(id)=>`<button id="${id}" class="primary">✓ Add this (${c.on} of ${_stage.entries.length})</button>`;
+  let h=`<details class="asggrp" open style="margin:.5rem 0;border:2px solid var(--hi);border-radius:8px;padding:.4rem .6rem;background:rgba(59,130,246,.06)">
+    <summary style="cursor:pointer;font-weight:600">📥 ${esc(_stage.name)}
+      <span class="muted" style="font-weight:400;font-size:.78rem">· staged, not yet applied</span></summary>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.3rem 0">
+      <div class="muted" style="font-size:.78rem;flex:1;min-width:220px">${esc(_stage.desc).slice(0,400)}</div>
+      <div>${addBtn('stgadd1')} <button id="stgcancel">✕ Discard</button></div>
+    </div>
+    <div style="font-size:.78rem;margin:.2rem 0">
+      <span class="stgnew">${c.new} new</span> ·
+      <span class="stgdup">${c.dup} already in your profile</span> ·
+      <span class="stgclash">${c.clash} conflicting</span>
+      ${c.risk?` · <span style="color:var(--err);font-weight:700">⚠ ${c.risk} need a look</span>`:''}
+    </div>
+    <div class="bar" style="margin:.2rem 0"><button id="stgall">Tick all safe</button>
+      <button id="stgnone">Untick all</button></div>
+    <table style="width:100%;font-size:.82rem">
+      <tr><td></td><td><b>Rule</b></td><td><b>Status</b></td><td><b>Explanation</b></td></tr>`;
+  _stage.entries.forEach((e,i)=>{
+    const st=_stage.state[i],risk=entryRisk(e);
+    const cls=st.cls==='new'?'stgnew':st.cls==='dup'?'stgdup':'stgclash';
+    const status=st.cls==='new'?'new'
+      :st.cls==='dup'?`same as yours — ticking MOVES it into this pack`
+      :`conflicts with <b>${esc(asgActLabel(st.mine))}</b> — ticking DISABLES yours`;
+    h+=`<tr class="${cls}">
+      <td><input type="checkbox" data-stg="${i}" ${st.on?'checked':''}></td>
+      <td>${esc(entryLabel(e))}${risk?` <span style="color:var(--err);font-weight:700;cursor:help" title="${esc(risk)}">⚠</span>`:''}</td>
+      <td class="muted" style="font-size:.75rem">${status}</td>
+      <td class="muted" style="font-size:.75rem">${esc(e.note||'')}</td></tr>`;});
+  h+=`</table><div style="text-align:right;margin-top:.4rem">${addBtn('stgadd2')}</div></details>`;
+  host.innerHTML=h;
+  host.querySelectorAll('[data-stg]').forEach(cb=>cb.onchange=()=>{
+    _stage.state[+cb.dataset.stg].on=cb.checked;renderStageAddition();});
+  $('stgall').onclick=()=>{_stage.entries.forEach((e,i)=>{
+    _stage.state[i].on=_stage.state[i].cls==='new'&&!entryRisk(e);});renderStageAddition();};
+  $('stgnone').onclick=()=>{_stage.state.forEach(st=>st.on=false);renderStageAddition();};
+  $('stgcancel').onclick=()=>{_stage=null;renderAssignTable();toast('discarded');};
+  const apply=()=>applyStagedAddition();
+  $('stgadd1').onclick=apply;$('stgadd2').onclick=apply;}
+function entryLabel(e){
+  if(e.scope==='modchord')return modsName(e.mods)+' + '+(KEYS[e.id]||MODS[e.id]||'?')
+    +' → '+(actShort(e.action)||'swallow')+(e.os?` [${e.os}]`:'');
+  if(e.scope==='combo')return (e.keys||[]).map(u=>KEYS[u]||MODS[u]||'?').join(' + ')
+    +' → '+(actShort(e.action)||'swallow');
+  if(e.scope==='modremap')return 'Modifier swap'+(e.os?` [${e.os}]`:'')+': '
+    +Object.entries(e.map||{}).map(([a,b])=>modsName(+a)+'→'+modsName(+b)).join(', ');
+  if(e.scope==='baseline')return `Baseline ${e.device}: ${KEYS[e.usage]||MODS[e.usage]||e.usage} → ${asgActLabel(e.value)}`;
+  const nm=e.table==='mouse_mappings'?btnLabel(e.id):(KEYS[e.id]||MODS[e.id]||'?');
+  return `${nm} (layer ${e.layer}) → ${asgActLabel(e.action)}`+(e.os?` [${e.os}]`:'');}
+/* Write the ticked lines: the pack becomes its own file on the Pi, and any
+   profile rule it supersedes is either PARKED (conflict) or REMOVED (exact
+   duplicate -- you chose to let the pack own it). */
+function applyStagedAddition(){
+  if(!_stage)return;
+  const name=_stage.name;
+  cfg.superseded=cfg.superseded||{};
+  const entries=[];
+  _stage.entries.forEach((e,i)=>{
+    const st=_stage.state[i];
+    const out={...e,off:!st.on};
+    if(st.on&&st.cls!=='new'){
+      out.override=true;                       // engine: beat the profile
+      const rk=entryRuleKey(e);
+      if(st.cls==='clash'){                    // park mine so nothing is lost
+        cfg.superseded[rk]={action:st.mine,by:name,ts:Date.now()};}
+      removeProfileRule(e);                    // dup -> just remove; clash -> parked above
+    }
+    entries.push(out);});
+  cfg.addition_refs=cfg.addition_refs||{};
+  cfg.addition_refs[name]={active:true,added:new Date().toISOString(),
+    disabled:entries.map((x,i)=>x.off?i:-1).filter(i=>i>=0)};
+  _pendingAdditions=_pendingAdditions||{};
+  _pendingAdditions[name]={kind:ADDITION_KIND,name,active:true,
+    description:_stage.desc,entries};
+  _stage=null;
+  render();
+  putFile(0,cfg);                              // profile (refs + parked rules)
+  setTimeout(()=>saveAdditions(),400);         // pack file itself (fid 5)
+  toast(`"${name}" added — writing to the Pi…`);}
+function removeProfileRule(e){
+  const os=e.os||'';
+  const tbl=t=>os?((cfg.os_profiles||{})[os]||{})[t]:cfg[t];
+  if(e.scope==='modchord'){
+    const k=`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`;
+    const t=tbl('mod_chords');if(t)delete t[k];return;}
+  if(e.scope==='combo'){
+    const want=(e.keys||[]).slice().sort().join(',');
+    for(const[id,c]of Object.entries(cfg.combos||{}))
+      if((c.keys||[]).slice().sort().join(',')===want)delete cfg.combos[id];
+    return;}
+  if(e.scope==='baseline'){
+    if(cfg.baseline&&cfg.baseline[e.device])delete cfg.baseline[e.device][e.usage];return;}
+  if(e.scope==='modremap')return;
+  const t=tbl(e.table||'kbd_mappings');if(t)delete t[`${e.layer},${e.id}`];}
+let _pendingAdditions=null;
+async function saveAdditions(){
+  if(!device){toast('connect to save additions to the Pi',true);return;}
+  const bundle={additions:{}};
+  for(const[n,a]of Object.entries(_pendingAdditions||{}))bundle.additions[n]=a;
+  await putFile(5,bundle);
+  toast('additions saved to the Pi — restart not needed, engine reloads');}
 /* 19.4 #1.2: one picker for EVERY input. Collapsible sections cover the three
    kinds; the backend shape (plain mapping / combo / mod-chord) is chosen from
    what you pick, so you are never locked into a "type" up front. */
@@ -2091,10 +2272,11 @@ function renderAssignTable(){
     setTimeout(()=>{const rows=document.querySelectorAll('[data-asgpick]');
       const el=rows[rows.length-1];
       if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.click();}},60);};
+  renderStageAddition();
   const imp=$('asgimport'),impf=$('asgimportfile');
   if(imp&&impf){imp.onclick=()=>impf.click();
     impf.onchange=async e=>{const f=e.target.files[0];if(!f)return;
-      try{importAddition(JSON.parse(await f.text()));}
+      try{stageAddition(JSON.parse(await f.text()));}
       catch(err){toast('import failed: '+err.message,true);}
       impf.value='';};}}
 
@@ -3466,6 +3648,17 @@ const RAW_MBTN_BOX     = {276:7, 275:8};                            // real BTN_
 const RAW_PORT2_CHORD_BOX = {125:9};                                // LWin half of button 9's Win+D
 
 function liveRaw(txt){
+  // 19.3 #2: RAW wheel motion (engine now emits "wheel delta=N dev=X").
+  const wm=txt.match(/^wheel delta=(-?\d+)(?: dev=(\S+))?/);
+  if(wm){
+    const dev=wm[2]||'';
+    const sel=dev?`.devcard[data-dev="${dev}"] .key[data-wheel]`:'.key[data-wheel]';
+    let els=[...document.querySelectorAll(sel)];
+    if(!els.length)els=[...document.querySelectorAll('.key[data-wheel]')];
+    els.forEach(e=>flash(e,'flash-red'));
+    const svg=document.getElementById(+wm[1]>0?'scrollup':'scrolldn');
+    if(svg)flash(svg,'flash-red');
+    return;}
   // 6.10: press (val 1/2) = hold the highlight on; release (val 0) = turn it off.
   const mb=txt.match(/mbtn code=(\d+) val=([012])/);
   if(mb){
