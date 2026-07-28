@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.5</title>
+<title>HID Config 19.6</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -60,13 +60,24 @@ svg .region.held{fill:rgba(239,68,68,.55)!important}
 outline:3px solid var(--warn)!important;outline-offset:1px}
 svg .region.flash-pass{fill:rgba(239,68,68,.6)!important;
 stroke:var(--warn)!important;stroke-width:3!important}
-.lyrhead{height:5.2rem;vertical-align:bottom;padding:0;width:1.6rem}
-.lyrhead span{display:inline-block;transform:rotate(-45deg);transform-origin:left bottom;
-  white-space:nowrap;font-weight:700;font-size:.72rem;margin-left:1.05rem}
+.lyrhead{height:4.6rem;vertical-align:bottom;padding:0;width:1.35rem;position:relative;
+  overflow:visible}
+/* absolute + overflow:visible lets the rotated labels OVERLAP each other, so
+   the column itself can shrink to checkbox width (the 45deg alone did not
+   reclaim any space because the label still reserved its full box). */
+.lyrhead span{position:absolute;left:50%;bottom:.25rem;transform-origin:left bottom;
+  transform:rotate(-55deg);white-space:nowrap;font-weight:700;font-size:.7rem;
+  pointer-events:none}
+.asgcell{width:1.35rem;padding:0;text-align:center}
 .stgnew{background:rgba(34,197,94,.10)}
 .stgdup{background:rgba(148,163,184,.14)}
 .stgclash{background:rgba(245,158,11,.16)}
+.asgnote{width:100%;min-width:150px;resize:none;overflow:hidden;height:1.6rem;
+  line-height:1.35;font:inherit;transition:height .12s}
+.asgnote:focus{height:auto;min-height:4.2rem;white-space:pre-wrap}
 tr.fromadd{background:rgba(59,130,246,.07)}
+tr.addoff{opacity:.45}
+tr.addoff td{text-decoration:line-through}
 .chipchord{position:absolute;left:1px;bottom:-1px;font-size:.55rem;color:var(--hi);
 font-weight:700;pointer-events:none}
 .chip{position:absolute;right:1px;bottom:-1px;font-size:.56rem;color:var(--ok);max-width:100%;
@@ -199,6 +210,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   && sudo systemctl restart expander hidconfig</code><br>
   Then check <code>journalctl -u expander -n 20</code> for Python errors and reconnect here.
 </div>
+<div id="bkpane" class="panel" style="display:none;margin:.4rem 0">
+  <div class="bar"><b style="font-size:.9rem">🕘 Backups on the Pi</b>
+    <span class="muted" style="font-size:.78rem">written automatically on every ⬆ Save to device</span>
+    <span style="flex:1"></span><button id="bkclose">✕</button></div>
+  <table style="width:100%;font-size:.82rem" id="bktable"></table>
+</div>
 <div id="oswarn" style="display:none;border:2px solid var(--warn);border-radius:10px;
   padding:.6rem .8rem;margin:.5rem 0;font-size:.85rem">
   <b>⚠ <span id="oswarntxt"></span></b>
@@ -212,7 +229,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <button id="profload" disabled>Load selected</button>
   <input type="text" id="profname" placeholder="new profile name" style="width:170px">
   <button id="profsave" disabled>Save current as profile</button>
-  <span class="muted">Every "Save to device" also makes a timestamped backup on the Pi automatically.</span>
+  <button id="profbackups" disabled title="every Save to device writes a timestamped backup on the Pi">🕘 Backups…</button>
   <span style="flex:1"></span>
   <label style="margin:0;display:inline">🕓 <select id="tzsel" style="width:auto"></select></label>
   <label style="margin:0;display:inline" title="How an expansion removes the trigger text. Shift+Left selects (safer outside text fields); Backspace deletes.">⌫ <select id="erasesel" style="width:auto"><option value="backspace">Backspace</option><option value="shift_left">Shift+Left select</option></select></label>
@@ -228,7 +245,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="log">Changes</div>
 </div>
 
-<details class="dbg" id="debugmon"><summary>🐞 Debug monitors</summary>
+<details class="dbg" id="debugmon" data-uikey="debug"><summary>🐞 Debug monitors</summary>
   <div style="padding:0 1rem 1rem">
   <div class="bar"><button id="evon" disabled>▶ Events</button>
     <button id="evoff" disabled>⏸ Stop</button><button id="clear" disabled>Clear</button>
@@ -244,12 +261,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </details>
 
 <div id="page-map">
- <details id="devsection" style="margin:.2rem 0 .5rem">
+ <details id="devsection" data-uikey="devices" style="margin:.2rem 0 .5rem">
    <summary style="cursor:pointer;font-weight:600">🖧 Devices <span class="muted" id="devsummary" style="font-weight:400;font-size:.8rem"></span></summary>
    <div style="padding:.5rem 0">
      <div id="devattached"></div>
      <div id="devavail" style="margin-top:.6rem"></div>
-     <details id="devadvanced" style="margin-top:.7rem">
+     <details id="devadvanced" data-uikey="devadv" style="margin-top:.7rem">
        <summary style="cursor:pointer;font-weight:600;font-size:.9rem">⚙ Advanced — device table</summary>
        <div style="padding:.4rem 0">
          <p class="muted" style="font-size:.78rem">Raw entries: pins, gesture-node pin, USB-id match, wireframe. For troubleshooting; most setups won't need this — use the pickers above.</p>
@@ -279,7 +296,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <svg id="chordsvg"></svg>
     <div class="devrow" id="devcards"></div>
   </div>
-  <details id="legend" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
+  <details id="legend" data-uikey="legend" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
     <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
       <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
       <span style="background:rgba(245,158,11,.55);padding:0 .3rem;border-radius:3px">yellow flash</span> key sent to the PC ·
@@ -294,14 +311,14 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <b>Modifier swaps live in Baseline:</b> to make a keyboard's <b>LAlt</b> act as <b>LWin</b> (Option/Command feel), click that key and set Baseline · LAlt → LWin. It then shows red LAlt → grey LWin. Nothing is swapped by default.
     </div>
   </details>
-  <details class="dbg" id="remappanel" open><summary>📋 All Custom Remappings</summary>
+  <details class="dbg" id="remappanel" data-uikey="remap" open><summary>📋 All Custom Remappings</summary>
     <div style="padding:0 1rem 1rem">
-      <details id="ovpanel" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Overview</summary>
+      <details id="ovpanel" data-uikey="overview" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Overview</summary>
         <div id="mtlayers" class="muted" style="margin:.3rem 0"></div>
         <table style="width:100%;font-size:.82rem" id="maptbl"></table>
         <div class="muted" id="mtcombos" style="margin-top:.4rem"></div>
       </details>
-      <details id="asgpanel" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Assignments (add / edit / remove)</summary>
+      <details id="asgpanel" data-uikey="assign" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Assignments (add / edit / remove)</summary>
         <p class="muted" style="font-size:.78rem;margin:.3rem 0">Each row is one input. Pick its Input and Output; the layer columns show what fires on each layer (click to change). Group is optional. ✕ removes the row.</p>
         <div id="asgtbl"></div>
         <div id="asgstage"></div>
@@ -479,6 +496,7 @@ let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let editMulti=new Set();   // 19.1 #6: marquee-selected key indices in the layout editor
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
+let additions={},_addsChannelOk=false;   // 19.6: packs living in additions/ on the Pi
 let _showGroups=false,_groupsCollapsed=true;   // 19.2 BF2 #4iii: off by default   // 6.9 master highlight toggle + collapse
 const _heldKeys=new Set(),_heldBtns=new Set();  // 6.10 keys/buttons currently held down
 let expSets=null,curSet=null;
@@ -545,6 +563,13 @@ function onReport(e){
         expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
         _setsChannelOk=!!(obj&&'sets'in obj);
         $('setsave').disabled=false;renderSets();}
+      else if(curFile===5){
+        // 19.6 BUGFIX: the UI never read additions back, so an applied pack
+        // vanished from view -- its rules had been moved OUT of the profile
+        // and into a file the UI couldn't see. That is why "nothing happened".
+        additions=(obj&&obj.additions&&typeof obj.additions==='object')?obj.additions:{};
+        _addsChannelOk=!!(obj&&'additions'in obj);
+        render();}
       else{exps=obj&&typeof obj==='object'?obj:{};renderExp();toast('✓ expansions read');}
     }catch(err){toast('read error: '+err.message,true);
       try{log('read error @ fid '+curFile+': '+err.message,'er','log');}catch(_){}}
@@ -596,6 +621,7 @@ $('connect').onclick=async()=>{
   setTimeout(()=>btCmd('list',true),1500);   // primes MAC dropdowns + status chips
   setTimeout(()=>getFile(3),1900);           // engine status -> adopt built-ins
   setTimeout(()=>getFile(4),2300);           // expansion sets bundle
+  setTimeout(()=>getFile(5),2700);           // 19.6: addition packs
   setTimeout(applyBrowserOS,2600);           // this browser's OS == the host OS
   // config-read watchdog: if the Pi never answers, say so instead of
   // letting the page sit half-dead
@@ -696,6 +722,8 @@ function updateCurProf(){
   el.textContent=nm?`${nm}${when?' · '+fmtWhen(when):''}`:'working config (unsaved)';
   el.className='status'+(nm?' on':'');}
 function pfResult(text){
+  if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
+  if(text.startsWith('restored')){toast('✓ '+text);return;}
   if(text.startsWith('saved')||text.startsWith('loaded')){
     toast('\u2713 '+text); pfCmd('list');
     if(text.startsWith('loaded'))setTimeout(()=>getFile(0),800);  // refresh editor
@@ -703,9 +731,12 @@ function pfResult(text){
   if(text.includes('failed')||text.includes('unknown')){toast('\u2717 '+text,true);return;}
   // otherwise: a list
   const sel=$('proflist'); sel.disabled=false; sel.innerHTML='';
+  $('profbackups').disabled=false;      // 19.6: backups browser available too
   for(const name of text.split('\n')){
     const o=document.createElement('option'); o.textContent=name; sel.appendChild(o);}
 }
+$('profbackups').onclick=()=>showBackups();
+$('bkclose').onclick=()=>{$('bkpane').style.display='none';};
 $('profload').onclick=()=>{const n=$('proflist').value;
   if(n&&!n.startsWith('('))pfCmd('load '+n);};
 $('profsave').onclick=()=>{const n=$('profname').value.trim();
@@ -1860,12 +1891,34 @@ function asgRows(){
     const[L,m,u]=k.split(',').map(Number);
     rows.push({kind:'mc',id:k,type:'mc',mods:m,canon:u,out:act,os,
                layers:new Set(L===-1?ALL_LAYERS:[L])});}
+  // 19.6: rules that live in an ADDITION pack (their own file on the Pi).
+  // They are shown alongside your own so the list is the whole truth, tinted
+  // and grouped under the pack name, each line individually switchable.
+  for(const[an,pack]of Object.entries(additions||{})){
+    if(!pack||!Array.isArray(pack.entries))continue;
+    pack.entries.forEach((e,ei)=>{
+      const base={fromAdd:an,addIdx:ei,addOff:!!e.off,os:e.os||''};
+      if(e.scope==='modchord')
+        rows.push({...base,kind:'mc',type:'mc',
+          id:`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`,
+          mods:e.mods,canon:e.id,out:e.action,layers:new Set(ALL_LAYERS)});
+      else if(e.scope==='combo')
+        rows.push({...base,kind:'combo',type:'combo',
+          id:e.id||('combo-'+(e.keys||[]).join('-')),keys:e.keys||[],
+          out:e.action,layers:new Set(ALL_LAYERS)});
+      else if(e.scope==='modremap'||e.scope==='baseline')
+        rows.push({...base,kind:'special',type:'special',id:'sp'+ei,
+          label:entryLabel(e),out:undefined,layers:new Set()});
+      else rows.push({...base,kind:'add',
+          type:e.table==='mouse_mappings'?'btn':'key',id:e.id,
+          out:e.action,layers:new Set([e.layer])});});}
   for(const r of (window._asgPending||[]))
     rows.push({type:r.type,id:r.id,out:undefined,layers:new Set(),pending:true,__p:r});
   return rows;}
 const ALL_LAYERS=[0,1,2,3,4,5];
 // label for any row's INPUT column
 function asgInputLabel(r){
+  if(r.kind==='special')return r.label||'(pack setting)';
   if(r.kind==='combo')return (r.keys||[]).map(u=>KEYS[u]||MODS[u]||'?').join(' + ')
     +(r.dev?` (${devName(r.dev)})`:'');
   if(r.kind==='mc')return modsName(r.mods)+' + '+(KEYS[r.canon]||MODS[r.canon]||'?');
@@ -1989,6 +2042,7 @@ function renderStageAddition(){
       ${c.risk?` · <span style="color:var(--err);font-weight:700">⚠ ${c.risk} need a look</span>`:''}
     </div>
     <div class="bar" style="margin:.2rem 0"><button id="stgall">Tick all safe</button>
+      <button id="stgevery">Tick ALL</button>
       <button id="stgnone">Untick all</button></div>
     <table style="width:100%;font-size:.82rem">
       <tr><td></td><td><b>Rule</b></td><td><b>Status</b></td><td><b>Explanation</b></td></tr>`;
@@ -2009,6 +2063,8 @@ function renderStageAddition(){
     _stage.state[+cb.dataset.stg].on=cb.checked;renderStageAddition();});
   $('stgall').onclick=()=>{_stage.entries.forEach((e,i)=>{
     _stage.state[i].on=_stage.state[i].cls==='new'&&!entryRisk(e);});renderStageAddition();};
+  $('stgevery').onclick=()=>{_stage.state.forEach(st=>st.on=true);renderStageAddition();
+    toast('all lines ticked — conflicts will disable your versions, duplicates will move into the pack',true);};
   $('stgnone').onclick=()=>{_stage.state.forEach(st=>st.on=false);renderStageAddition();};
   $('stgcancel').onclick=()=>{_stage=null;renderAssignTable();toast('discarded');};
   const apply=()=>applyStagedAddition();
@@ -2045,14 +2101,33 @@ function applyStagedAddition(){
   cfg.addition_refs=cfg.addition_refs||{};
   cfg.addition_refs[name]={active:true,added:new Date().toISOString(),
     disabled:entries.map((x,i)=>x.off?i:-1).filter(i=>i>=0)};
-  _pendingAdditions=_pendingAdditions||{};
-  _pendingAdditions[name]={kind:ADDITION_KIND,name,active:true,
+  // show it straight away -- don't wait for a round trip
+  additions[name]={kind:ADDITION_KIND,name,active:true,
     description:_stage.desc,entries};
   _stage=null;
   render();
-  putFile(0,cfg);                              // profile (refs + parked rules)
-  setTimeout(()=>saveAdditions(),400);         // pack file itself (fid 5)
-  toast(`"${name}" added — writing to the Pi…`);}
+  // 19.6: await in sequence. Firing both writes at once let them interleave
+  // on the vendor-HID transport and one could be lost.
+  (async()=>{
+    try{
+      await putFile(0,cfg);                    // profile (refs + parked rules)
+      await new Promise(r=>setTimeout(r,250));
+      await saveAdditions();
+      toast(`"${name}" added and saved`);
+      gotoAdditionGroup(name);                 // 2.3.1: jump to what you added
+    }catch(err){toast('save failed: '+err.message,true);}
+  })();}
+// 2.3.1: open and scroll to the group an addition landed in
+function gotoAdditionGroup(name){
+  setTimeout(()=>{
+    const secs=[...document.querySelectorAll('#asgtbl details.asggrp')];
+    const hit=secs.find(d=>(d.querySelector('summary')||{}).textContent
+      &&d.querySelector('summary').textContent.includes(name));
+    if(hit){hit.open=true;hit.scrollIntoView({behavior:'smooth',block:'center'});
+      hit.style.transition='box-shadow .3s';
+      hit.style.boxShadow='0 0 0 3px var(--hi)';
+      setTimeout(()=>{hit.style.boxShadow='';},1800);}
+  },250);}
 function removeProfileRule(e){
   const os=e.os||'';
   const tbl=t=>os?((cfg.os_profiles||{})[os]||{})[t]:cfg[t];
@@ -2068,13 +2143,72 @@ function removeProfileRule(e){
     if(cfg.baseline&&cfg.baseline[e.device])delete cfg.baseline[e.device][e.usage];return;}
   if(e.scope==='modremap')return;
   const t=tbl(e.table||'kbd_mappings');if(t)delete t[`${e.layer},${e.id}`];}
-let _pendingAdditions=null;
+
 async function saveAdditions(){
   if(!device){toast('connect to save additions to the Pi',true);return;}
-  const bundle={additions:{}};
-  for(const[n,a]of Object.entries(_pendingAdditions||{}))bundle.additions[n]=a;
-  await putFile(5,bundle);
-  toast('additions saved to the Pi — restart not needed, engine reloads');}
+  await putFile(5,{additions});}
+/* 19.6 #1.1: browse the timestamped backups the Pi already writes on every
+   save, and restore one.  Reuses the existing profile command channel, so no
+   new transport.  Restoring stages the file into bridge_config.json on the Pi;
+   the engine hot-reloads and the UI re-reads it. */
+let _bkList=null;
+window.showBackups=()=>{
+  if(!device){toast('connect first',true);return;}
+  $('bkpane').style.display='block';
+  $('bktable').innerHTML='<tr><td class="muted">loading…</td></tr>';
+  pfCmd('backups');
+  $('bkpane').scrollIntoView({behavior:'smooth',block:'nearest'});};
+function renderBackups(lines){
+  _bkList=[];
+  const t=$('bktable');if(!t)return;
+  for(const ln of lines){
+    const p=ln.split('\t');
+    if(p.length<2)continue;
+    _bkList.push({name:p[0],ts:+p[1]*1000,size:+(p[2]||0)});}
+  if(!_bkList.length){t.innerHTML='<tr><td class="muted">No backups yet — they appear after your first ⬆ Save to device.</td></tr>';return;}
+  // group by what the backup is of, newest first
+  t.innerHTML='<tr><td><b>When</b></td><td><b>File</b></td><td><b>Size</b></td><td></td></tr>'
+    +_bkList.map((b,i)=>{
+      const isCfg=/^bridge_config\.json/.test(b.name);
+      return `<tr>
+        <td>${esc(fmtWhen(new Date(b.ts).toISOString()))}</td>
+        <td>${esc(b.name)}${isCfg?'':' <span class="muted" style="font-size:.72rem">(set/pack)</span>'}</td>
+        <td class="muted">${(b.size/1024).toFixed(1)} KB</td>
+        <td style="text-align:right">${isCfg
+          ?`<button data-bkdiff="${i}">👁 What changed</button> <button data-bkload="${i}" class="primary">↩ Restore</button>`
+          :'<span class="muted" style="font-size:.72rem">restored with its set</span>'}</td></tr>`;}).join('');
+  t.querySelectorAll('[data-bkload]').forEach(b=>b.onclick=()=>{
+    const bk=_bkList[+b.dataset.bkload];
+    if(!confirm(`Restore ${bk.name}?\n\nYour current config is backed up first, so this is reversible.`))return;
+    pfCmd('restore '+bk.name);
+    setTimeout(()=>{getFile(0);toast('restored — re-reading config');},1500);});
+  t.querySelectorAll('[data-bkdiff]').forEach(b=>b.onclick=()=>{
+    const bk=_bkList[+b.dataset.bkdiff];
+    // The change log already records what each save altered; jump there and
+    // highlight the entry closest to this backup's timestamp.
+    switchTab('log');
+    setTimeout(()=>{
+      const es=(cfg&&cfg._changelog)||[];
+      if(!es.length){toast('no change history recorded yet',true);return;}
+      let best=0,bd=Infinity;
+      es.forEach((e,i)=>{const d=Math.abs(new Date(e.ts).getTime()-bk.ts);
+        if(d<bd){bd=d;best=i;}});
+      const el=$('logbody');
+      if(el){el.scrollTop=0;
+        toast('showing the change-log entry nearest '+fmtWhen(new Date(bk.ts).toISOString()));}
+    },120);});}
+/* 19.6 #1.2: remember hide/show state across reads.  Kept as one small map
+   in the profile (cfg._ui.open) so collapsing a group sticks even after
+   "Read device"; anonymous panels fall back to a per-browser store. */
+function uiOpenMap(){if(!cfg)return{};cfg._ui=cfg._ui||{};
+  cfg._ui.open=cfg._ui.open||{};return cfg._ui.open;}
+function uiRestoreOpen(root){
+  const m=uiOpenMap();
+  (root||document).querySelectorAll('details[data-uikey]').forEach(d=>{
+    const k=d.dataset.uikey;
+    if(m[k]!==undefined)d.open=!!m[k];
+    if(!d._uiBound){d._uiBound=true;
+      d.addEventListener('toggle',()=>{uiOpenMap()[d.dataset.uikey]=d.open;});}});}
 /* 19.4 #1.2: one picker for EVERY input. Collapsible sections cover the three
    kinds; the backend shape (plain mapping / combo / mod-chord) is chosen from
    what you pick, so you are never locked into a "type" up front. */
@@ -2171,6 +2305,7 @@ function rowNoteKey(r){
 const NEWSEC='◆ New — finish these';
 function asgGroupsOf(r){
   if(r.pending)return[NEWSEC];        // 19.4 #1.1: never bury a new row
+  if(r.fromAdd)return['📦 '+r.fromAdd];   // 19.6: pack rows group by pack name
   const ids=asgMemberIds(r);
   const gs=Object.keys(cfg.mapping_groups||{}).filter(n=>
     (cfg.mapping_groups[n].members||[]).some(m=>ids.includes(m)));
@@ -2194,7 +2329,7 @@ function renderAssignTable(){
   if(!rows.length)h='<span class="muted" style="font-size:.8rem">No mappings yet — use ＋ Add mapping, or click a key on a wireframe.</span>';
   for(const g of names){
     const ris=buckets[g];
-    h+=`<details class="asggrp" open style="margin:.3rem 0;border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem">
+    h+=`<details class="asggrp" data-uikey="grp:${esc(g)}" open style="margin:.3rem 0;border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem">
       <summary style="cursor:pointer;font-weight:600">${esc(g)}
         <span class="muted" style="font-weight:400;font-size:.78rem">· ${ris.length} mapping${ris.length>1?'s':''}</span>
         <button data-asgexp="${esc(g)}" style="margin-left:.5rem;font-size:.72rem"
@@ -2215,13 +2350,13 @@ function renderAssignTable(){
       const outLbl=r.out===undefined?'<span class="muted">(set…)</span>':esc(asgActLabel(r.out));
       let cells='';
       if(special)cells=`<td colspan="${LAYER_NAMES.length}" style="text-align:center" class="muted" title="fires on any layer">all</td>`;
-      else for(let L=0;L<6;L++)cells+=`<td style="text-align:center"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
-      h+=`<tr>
-        <td>${inputSel}</td>
+      else for(let L=0;L<6;L++)cells+=`<td class="asgcell"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
+      h+=`<tr class="${r.fromAdd?'fromadd':''}${r.addOff?' addoff':''}">
+        <td>${r.fromAdd?`<input type="checkbox" data-addon="${ri}" ${r.addOff?'':'checked'} title="switch this pack line on/off"> `:''}${inputSel}</td>
         <td data-asgout="${ri}" style="cursor:pointer"><a class="mlink">${outLbl}</a></td>
         ${cells}
-        <td><input type="text" data-asgnote="${esc(rowNoteKey(r))}" value="${esc(getNote(rowNoteKey(r)))}"
-          placeholder="what this does" style="width:100%;min-width:150px" maxlength="160"></td>
+        <td><textarea data-asgnote="${esc(rowNoteKey(r))}" rows="1" class="asgnote"
+          placeholder="what this does" maxlength="160">${esc(getNote(rowNoteKey(r)))}</textarea></td>
         <td><input type="text" data-asggrp="${esc(member)}" list="grouplist" placeholder="group" value="" style="width:80px" maxlength="60">
           ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}</td>
         <td><button data-asgdel="${ri}" title="remove this Input→Output">✕</button></td></tr>`;}
@@ -2235,6 +2370,12 @@ function renderAssignTable(){
     render();toast('input changed — ⬆ Save to device');});
   host.querySelectorAll('[data-asgsel]').forEach(a=>a.onclick=()=>asgSelect(R(a.dataset.asgsel)));
   host.querySelectorAll('[data-asgpick]').forEach(a=>a.onclick=()=>openInputPicker(a,R(a.dataset.asgpick)));
+  host.querySelectorAll('[data-addon]').forEach(cb=>cb.onchange=()=>{
+    const r=R(cb.dataset.addon),pack=additions[r.fromAdd];
+    if(!pack)return;
+    pack.entries[r.addIdx].off=!cb.checked;
+    saveAdditions().then(()=>render());
+    toast('pack line '+(cb.checked?'enabled':'disabled')+' — saved');});
   host.querySelectorAll('[data-asgout]').forEach(td=>td.onclick=()=>{
     const r=R(td.dataset.asgout);
     if(r.kind==='combo'||r.kind==='mc'){asgSelect(r);return;}   // edit in its own editor
@@ -2254,7 +2395,12 @@ function renderAssignTable(){
     asgDeleteRow(r);
     if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
     render();toast('mapping removed — ⬆ Save to device');});
-  host.querySelectorAll('input[data-asgnote]').forEach(ni=>{
+  host.querySelectorAll('[data-asgnote]').forEach(ni=>{
+    const grow=()=>{ni.style.height='auto';
+      ni.style.height=Math.min(160,Math.max(26,ni.scrollHeight))+'px';};
+    ni.onfocus=grow;
+    ni.oninput=grow;
+    ni.onblur=()=>{ni.style.height='';};        // 2.1: shrink back when done
     ni.onchange=()=>{setNote(ni.dataset.asgnote,ni.value);toast('note saved — ⬆ Save to device');};});
   host.querySelectorAll('input[data-asggrp]').forEach(gi=>{
     const commit=()=>{if(!gi.value.trim())return;
@@ -2272,6 +2418,7 @@ function renderAssignTable(){
     setTimeout(()=>{const rows=document.querySelectorAll('[data-asgpick]');
       const el=rows[rows.length-1];
       if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.click();}},60);};
+  uiRestoreOpen(host);
   renderStageAddition();
   const imp=$('asgimport'),impf=$('asgimportfile');
   if(imp&&impf){imp.onclick=()=>impf.click();
@@ -4055,7 +4202,7 @@ function switchTab(t){
   if(t==='log')renderChangelog();
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
-  if(t==='map'){renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
+  if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
 $('editorclose').onclick=closeEditor;
 $('editorrevert').onclick=revertEditor;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('editor').style.display==='block')closeEditor();});
