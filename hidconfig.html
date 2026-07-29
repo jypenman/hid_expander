@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.9</title>
+<title>HID Config 19.9 BF1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -220,6 +220,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   padding:.6rem .8rem;margin:.5rem 0;font-size:.85rem">
   <b>⚠ <span id="oswarntxt"></span></b>
   <button id="oswarnfix" class="primary" style="margin-left:.6rem">Switch device to <span id="oswarnos"></span></button>
+  <button id="oswarndismiss" style="margin-left:.3rem">Not now</button>
   <div class="muted" style="font-size:.78rem;margin-top:.3rem">OS-scoped rules (imported shortcut sets, per-OS remaps, mac/win-only expansions) only fire when the engine's active OS matches. Until then they are silently inactive.</div>
 </div>
 <div class="bar" id="profbar">
@@ -242,7 +243,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="expr">Expressions</div>
   <div class="tab" data-t="os">OS</div>
   <div class="tab" data-t="bt">Bluetooth</div>
-  <div class="tab" data-t="clip">Copy</div>
   <div class="tab" data-t="log">Changes</div>
 </div>
 
@@ -259,6 +259,33 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div><div class="muted"><b>⬅ RAW</b> from keyboard/mouse</div><div class="logbox" id="log"></div></div>
     <div><div class="muted"><b>➡ SENT</b> to this PC</div><div class="logbox" id="outlog"></div></div>
   </div></div>
+</details>
+
+<details class="dbg" id="clipdock" data-uikey="clipdock"><summary>📋 Copy / Paste</summary>
+  <div style="padding:0 1rem 1rem">
+  <div class="panel">
+    <h2 style="font-size:1rem">Copy / Paste — carry text between computers</h2>
+    <p class="muted" style="font-size:.82rem">Text stored on the Pi in its own
+    <code>copy_paste/</code> files. Open this page on the other computer, press
+    <b>📋 Copy</b>, and paste. Nothing is typed out key-by-key, so length costs a
+    one-off transfer rather than minutes of keystrokes.</p>
+    <p class="muted" style="font-size:.78rem"><b>Kept apart on purpose:</b> this has its own
+    storage and its own transfer channel, and <i>no</i> part of the remapping engine reads it —
+    so anything wrong with a saved item cannot affect your keys, macros or expansions.</p>
+    <div class="bar">
+      <button id="clipnew" class="primary">＋ New</button>
+      <button id="clipsave" disabled>⬆ Save all to device</button>
+      <button id="clipreload">↻ Reload from device</button>
+      <span class="muted" id="clipinfo" style="font-size:.78rem"></span>
+    </div>
+    <div id="cliplist" style="margin-top:.5rem"></div>
+    <p class="muted" style="font-size:.76rem;margin-top:.5rem">
+      Items are <b>read-only</b> until you press <b>✎ Edit</b>. Up to
+      <b>32 KB</b> per item and <b>128 KB</b> in total; transfer runs at roughly
+      9 KB/s, so a 30 KB script takes about 3 seconds to save. Text is stored and
+      returned verbatim — no character sequence is interpreted.</p>
+  </div>
+  </div>
 </details>
 
 <div id="page-map">
@@ -344,30 +371,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
  </div>
 </div>
 
-<div id="page-clip" style="display:none">
-  <div class="panel">
-    <h2 style="font-size:1rem">Copy / Paste — carry text between computers</h2>
-    <p class="muted" style="font-size:.82rem">Text stored on the Pi in its own
-    <code>copy_paste/</code> files. Open this page on the other computer, press
-    <b>📋 Copy</b>, and paste. Nothing is typed out key-by-key, so length costs a
-    one-off transfer rather than minutes of keystrokes.</p>
-    <p class="muted" style="font-size:.78rem"><b>Kept apart on purpose:</b> this has its own
-    storage and its own transfer channel, and <i>no</i> part of the remapping engine reads it —
-    so anything wrong with a saved item cannot affect your keys, macros or expansions.</p>
-    <div class="bar">
-      <button id="clipnew" class="primary">＋ New</button>
-      <button id="clipsave" disabled>⬆ Save all to device</button>
-      <button id="clipreload">↻ Reload from device</button>
-      <span class="muted" id="clipinfo" style="font-size:.78rem"></span>
-    </div>
-    <div id="cliplist" style="margin-top:.5rem"></div>
-    <p class="muted" style="font-size:.76rem;margin-top:.5rem">
-      Items are <b>read-only</b> until you press <b>✎ Edit</b>. Up to
-      <b>32 KB</b> per item and <b>128 KB</b> in total; transfer runs at roughly
-      9 KB/s, so a 30 KB script takes about 3 seconds to save. Text is stored and
-      returned verbatim — no character sequence is interpreted.</p>
-  </div>
-</div>
 <div id="page-log" style="display:none">
   <div class="panel">
     <h2 style="font-size:1rem">Change history <span class="muted" id="logcount" style="font-weight:400;font-size:.8rem"></span></h2>
@@ -469,7 +472,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="panel">
     <h3 style="font-size:.95rem;margin:.2rem 0">Unicode typing method <span class="muted">(how ☑ / Δ are typed)</span></h3>
     <table style="width:100%;font-size:.84rem" id="osuni"></table>
-    <p class="muted" style="font-size:.76rem">macOS needs the <b>“Unicode Hex Input”</b> source enabled &amp; selected for <code>mac_option_hex</code>. Windows <code>win_alt_hex</code> needs the EnableHexNumpad registry setting + Num Lock.</p>
+    <p class="muted" style="font-size:.76rem">macOS needs the <b>“Unicode Hex Input”</b> source enabled &amp; selected for <code>mac_option_hex</code>. Windows <code>win_alt_hex</code> needs the EnableHexNumpad registry setting + Num Lock.<br>
+    <b>Symbols wrong in Word / Outlook / OneNote?</b> Office intercepts the Alt+numpad chord and can land on the wrong code point (☑ U+2611 arriving as ਲ਼ U+0A33). Choose <code>win_alt_x</code>: it types the hex digits then <b>Alt+X</b>, which Office converts reliably. Note Alt+X works inside Office and most editors but <i>not</i> in every app — <code>win_alt_hex</code> remains the better default for browsers and the Start menu.</p>
   </div>
   <div class="panel">
     <h3 style="font-size:.95rem;margin:.2rem 0">Macro / mapping differences</h3>
@@ -598,7 +602,7 @@ function onReport(e){
       else if(curFile===6){
         clips=(obj&&obj.clips&&typeof obj.clips==='object')?obj.clips:{};
         _clipsChannelOk=!!(obj&&'clips'in obj);
-        if($('page-clip')&&$('page-clip').style.display!=='none')renderClips();}
+        renderClips();}
       else if(curFile===5){
         // 19.6 BUGFIX: the UI never read additions back, so an applied pack
         // vanished from view -- its rules had been moved OUT of the profile
@@ -689,11 +693,20 @@ function updateOsBtn(){
   const w=$('oswarn');if(!w)return;
   const bos=detectBrowserOS();
   const want=bos&&osKnown().includes(bos)?bos:null;
-  const mismatch=want&&eng&&eng!==want;
+  // 19.9 #7: only warn when it CHANGES something -- i.e. this host's OS has
+  // rules that are currently inactive. Previously any mismatch nagged on every
+  // unrelated edit, which trained you to ignore it. Dismissible per session.
+  const p=(cfg.os_profiles||{})[want]||{};
+  const scoped=['kbd_mappings','mouse_mappings','mod_chords','mod_remap']
+    .reduce((n,k)=>n+Object.keys(p[k]||{}).length,0);
+  const mismatch=want&&eng&&eng!==want&&scoped>0&&window._osWarnDismissed!==want;
   if(mismatch){
     $('oswarntxt').textContent=`This computer is ${want}, but the device is running its ${eng} profile — ${want}-only rules are NOT active.`;
     $('oswarnos').textContent=want;
+    $('oswarntxt').textContent=`This computer is ${want}, but the device is running its ${eng} profile — ${scoped} ${want}-only rule(s) are NOT active.`;
     w.style.display='block';
+    const dis=$('oswarndismiss');
+    if(dis)dis.onclick=()=>{window._osWarnDismissed=want;w.style.display='none';};
     $('oswarnfix').onclick=()=>{cfg.active_os=want;updateOsBtn();
       recordChanges();putFile(0,cfg);
       toast('switching device to '+want+' — reloads in ~2 s');
@@ -1119,10 +1132,17 @@ function chordsForKey(canon){
     if(u===canon)out.push({mods:m,act,os:o,key:k});}
   return out;}
 /* ---- STAGE 2: shared Custom Mappings looked up on the canonical key ---- */
-function effKey(dev,L,u){const canon=remapModUsage(baselineOf(dev,u));
+function effKey(dev,L,u){
+  // 19.9 #6 FIX: keep LOOKUP and DISPLAY separate.  Mappings are keyed on the
+  // BASELINE canonical usage (exactly as the engine keys them); a per-OS
+  // modifier swap only changes what finally reaches the host.  Folding the
+  // swap into `canon` (19.3) made clicking a swapped modifier select the
+  // wrong key and look mappings up under the swapped usage.
+  const canon=baselineOf(dev,u);          // for lookups + selection
+  const sends=remapModUsage(canon);       // for the grey centre label only
   const dd=dev&&cfg.kbd_mappings_by_device&&cfg.kbd_mappings_by_device[dev];
   const dv=dd?dd[`${L},${canon}`]:undefined;
-  return{canon,base:canon!==u,
+  return{canon,sends,base:(canon!==u)||(sends!==canon),
     v:dv!==undefined?dv:cfg.kbd_mappings[`${L},${canon}`],
     devScoped:dv!==undefined};}
 function effMouse(dev,L,b){return (cfg.mouse_mappings||{})[`${L},${b}`];}
@@ -1353,7 +1373,7 @@ function renderLayoutKbd(d,w){
     el.dataset.usage=u;el.dataset.canon=eff.canon;el.dataset.i=idx;el.dataset.dev=d.id;
     // corner scheme: red top-left = ORIGINAL (only if baseline changed it);
     // grey center = current identity; green bottom-right = custom output.
-    const centerName=k.label||MODS[eff.canon]||KEYS[eff.canon]||'?';
+    const centerName=k.label||MODS[eff.sends]||KEYS[eff.sends]||MODS[eff.canon]||KEYS[eff.canon]||'?';
     const baseChip=eff.base?`<span class="chipbase" title="original ${esc(KEYS[u]||MODS[u]||'?')} before this device's Baseline">${esc(KEYS[u]||MODS[u]||'?')}</span>`:'';
     const custChip=eff.v!==undefined?`<span class="chip">${
       Array.isArray(eff.v)?esc(actShort(eff.v)):
@@ -2230,7 +2250,7 @@ window.saveOneSet=async()=>{
    Nothing is ever typed: you read it in this UI on the other machine and copy
    it with one click, so size costs a transfer, not minutes of keystrokes.
    All rendering uses textContent / .value, never innerHTML. */
-let clips={},_clipsChannelOk=false,_clipEdit={};
+let clips={},_clipsChannelOk=false,_clipEdit={},_clipOpen={};
 const CLIP_MAX=32768;        // per slot  (~3.5 s to send)
 const CLIP_TOTAL_MAX=131072; // all slots (~15 s)
 function clipBytes(){
@@ -2256,7 +2276,12 @@ function renderClips(){
     const c=clips[key]||{};
     const editing=!!_clipEdit[key];
     const box=document.createElement('details');
-    box.className='asggrp';box.open=editing;
+    box.className='asggrp';
+    // 19.9 #1.2: remember each item's own open state -- opening or saving one
+    // must never collapse another, and saving keeps the item open.
+    if(_clipOpen[key]===undefined)_clipOpen[key]=editing;
+    box.open=!!_clipOpen[key]||editing;
+    box.addEventListener('toggle',()=>{_clipOpen[key]=box.open;});
     box.style.cssText='margin:.35rem 0;border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem';
     const sum=document.createElement('summary');
     sum.style.cssText='cursor:pointer;font-weight:600';
@@ -2289,8 +2314,11 @@ function renderClips(){
     ta.rows=editing?16:8;
     ta.readOnly=!editing;                    // read-only until you press Edit
     ta.spellcheck=false;
-    ta.style.cssText='width:100%;font-family:ui-monospace,monospace;font-size:.8rem'
-      +(editing?'':';opacity:.9;background:var(--panel)');
+    // 19.9 #1.1: grey background when read-only, black when editing
+    ta.style.cssText='width:100%;font-family:ui-monospace,monospace;font-size:.8rem;'
+      +(editing
+        ?'background:#000;color:#eee;border:1px solid var(--hi)'
+        :'background:#3a3f47;color:#f2f2f2;border:1px solid var(--line)');
     ta.value=c.text||'';                     // .value: never parsed as markup
     if(editing)ta.oninput=()=>{
       if(ta.value.length>CLIP_MAX){ta.value=ta.value.slice(0,CLIP_MAX);
@@ -2312,7 +2340,55 @@ window.saveClip=async(key,text)=>{
   clips[key]=clips[key]||{name:key};
   clips[key].text=text;
   delete _clipEdit[key];
+  _clipOpen[key]=true;              // 19.9 #1.2: stay open after saving
   await saveClips();};
+/* 19.9 #4.1: move one of YOUR rules into an imported pack (and back out), so a
+   pack can be improved over time.  The rule is removed from the profile and
+   written into the pack file, which is then saved to the Pi. */
+window.moveRuleIntoPack=async(r,packName)=>{
+  const pack=additions[packName];
+  if(!pack||!Array.isArray(pack.entries)){toast('unknown pack',true);return;}
+  if(r.fromAdd){toast('that rule is already in a pack',true);return;}
+  const e=ruleToEntry(r);
+  if(!e){toast("that kind of rule can't be packed yet",true);return;}
+  const note=getNote(rowNoteKey(r));
+  if(note)e.note=note;
+  pack.entries.push(e);
+  removeProfileRule(e);                      // it now lives in the pack
+  await saveAdditions();
+  render();
+  toast(`moved into “${packName}” — the pack now owns it`);};
+window.moveRuleOutOfPack=async(r)=>{
+  const pack=additions[r.fromAdd];
+  if(!pack)return;
+  const e=pack.entries[r.addIdx];
+  if(!e)return;
+  pack.entries.splice(r.addIdx,1);
+  // write it back into the profile so nothing is lost
+  const os=e.os||'';
+  if(e.scope==='modchord')
+    mcTable(os)[`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`]=e.action;
+  else if(e.scope==='combo'){
+    cfg.combos=cfg.combos||{};
+    const id=e.id||('combo-'+(e.keys||[]).join('-'));
+    cfg.combos[id]={keys:e.keys,action:e.action,window_ms:e.window_ms||60};
+    if(os)cfg.combos[id].os=[os];}
+  else scopeTable(os,e.table||'kbd_mappings')[`${e.layer},${e.id}`]=e.action;
+  await saveAdditions();
+  render();
+  toast('moved back into your profile — ⬆ Save to device');};
+/* turn an Assignments row into an addition entry */
+function ruleToEntry(r){
+  const os=r.os||'';
+  if(r.kind==='mc'){
+    const[L,m,u]=String(r.id).split(',').map(Number);
+    return{scope:'modchord',layer:L,mods:m,id:u,action:r.out,os:os||undefined};}
+  if(r.kind==='combo')
+    return{scope:'combo',id:r.id,keys:r.keys,action:r.out,window_ms:60,os:os||undefined};
+  if(r.out===undefined)return null;
+  const L=r.layers.size?[...r.layers][0]:layer;
+  return{scope:'custom',table:r.type==='btn'?'mouse_mappings':'kbd_mappings',
+         layer:L,id:r.id,action:r.out,os:os||undefined};}
 window.saveClips=async()=>{
   if(!device){toast('connect first',true);return;}
   const b=clipBytes();
@@ -2510,20 +2586,29 @@ function renderAssignTable(){
       <summary style="cursor:pointer;font-weight:600">${esc(g)}
         <span class="muted" style="font-weight:400;font-size:.78rem">· ${ris.length} mapping${ris.length>1?'s':''}</span>
         <button data-asgexp="${esc(g)}" style="margin-left:.5rem;font-size:.72rem"
-          title="save this group as an importable addition file">⬇ Export group</button></summary>
+          title="save this group as an importable addition file">⬇ Export group</button>
+        ${g.startsWith('📦 ')?`<span class="muted" style="font-weight:400;font-size:.72rem">
+          · type “${esc(g.slice(2))}” in any row's Group box to move that rule in here</span>`:''}</summary>
       <table style="width:100%;font-size:.82rem">${head}`;
     for(const ri of ris){
       const r=rows[ri];
       const key=r.type+':'+r.id;
       const member=asgMember(r);
       const special=r.kind==='combo'||r.kind==='mc';
-      const inGroups=Object.keys(cfg.mapping_groups||{}).filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
+      // 19.9 #3(grouping): the pills used a SINGLE member id while grouping
+      // used the full id set, so a row filed under one id showed no removable
+      // pill in its own section. Match the same way, and always list every
+      // group the row belongs to so you can add one and remove the other.
+      const _ids=asgMemberIds(r);
+      const inGroups=Object.keys(cfg.mapping_groups||{}).filter(n=>
+        (cfg.mapping_groups[n].members||[]).some(m=>_ids.includes(m)));
       // one uniform control: click the input to change it to ANY kind
       const icon=r.kind==='combo'?'⧉ ':r.kind==='mc'?'⌘ ':'';
       const inputSel=`<a class="mlink" data-asgpick="${ri}" title="click to change this input — single key, combo or modifier shortcut">`
         +`${icon}${esc(asgInputLabel(r))||'(choose…)'}</a>`
         +(r.os?` <span class="muted" style="font-size:.7rem">[${esc(r.os)}]</span>`:'')
-        +(special?` <a class="mlink" data-asgsel="${ri}" style="font-size:.72rem" title="open the full editor">✎</a>`:'');
+        +(special?` <a class="mlink" data-asgsel="${ri}" style="font-size:.72rem" title="open the full editor">✎</a>`:'')
+        +(r.fromAdd?` <a class="mlink" data-asgunpack="${ri}" style="font-size:.72rem" title="move this rule out of the pack and back into your profile">⤴ un-pack</a>`:'');
       const outLbl=r.out===undefined?'<span class="muted">(set…)</span>':esc(asgActLabel(r.out));
       let cells='';
       if(special)cells=`<td colspan="${LAYER_NAMES.length}" style="text-align:center" class="muted" title="fires on any layer">all</td>`;
@@ -2535,7 +2620,9 @@ function renderAssignTable(){
         <td><textarea data-asgnote="${esc(rowNoteKey(r))}" rows="1" class="asgnote"
           placeholder="what this does" maxlength="160">${esc(getNote(rowNoteKey(r)))}</textarea></td>
         <td><input type="text" data-asggrp="${esc(member)}" list="grouplist" placeholder="group" value="" style="width:80px" maxlength="60">
-          ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}</td>
+          ${inGroups.map(n=>{
+            const held=(cfg.mapping_groups[n].members||[]).find(m=>_ids.includes(m))||member;
+            return `<span class="grouppill" title="remove from ${esc(n)}" onclick="groupRemove('${esc(n)}','${esc(held)}')">${esc(n)} ✕</span>`;}).join('')}</td>
         <td><button data-asgdel="${ri}" title="remove this Input→Output">✕</button></td></tr>`;}
     h+='</table></details>';}
   host.innerHTML=h;
@@ -2547,6 +2634,7 @@ function renderAssignTable(){
     render();toast('input changed — ⬆ Save to device');});
   host.querySelectorAll('[data-asgsel]').forEach(a=>a.onclick=()=>asgSelect(R(a.dataset.asgsel)));
   host.querySelectorAll('[data-asgpick]').forEach(a=>a.onclick=()=>openInputPicker(a,R(a.dataset.asgpick)));
+  host.querySelectorAll('[data-asgunpack]').forEach(a=>a.onclick=()=>moveRuleOutOfPack(R(a.dataset.asgunpack)));
   host.querySelectorAll('[data-addon]').forEach(cb=>cb.onchange=()=>{
     const r=R(cb.dataset.addon),pack=additions[r.fromAdd];
     if(!pack)return;
@@ -2581,7 +2669,14 @@ function renderAssignTable(){
     ni.onchange=()=>{setNote(ni.dataset.asgnote,ni.value);toast('note saved — ⬆ Save to device');};});
   host.querySelectorAll('input[data-asggrp]').forEach(gi=>{
     const commit=()=>{if(!gi.value.trim())return;
-      addToGroup(gi.value,gi.dataset.asggrp);gi.value='';};
+      const want=gi.value.trim();
+      // 19.9 #4.1: typing a PACK's name moves the rule into that pack file, so
+      // an imported set can be grown and refined over time instead of frozen.
+      const packName=Object.keys(additions||{}).find(n=>
+        n.toLowerCase()===want.toLowerCase()||('📦 '+n)===want);
+      if(packName){moveRuleIntoPack(R(gi.closest('tr').querySelector('[data-asgpick]').dataset.asgpick),packName);
+        gi.value='';return;}
+      addToGroup(want,gi.dataset.asggrp);gi.value='';};
     gi.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commit();}};gi.onblur=commit;});
   host.querySelectorAll('[data-asgexp]').forEach(b=>b.onclick=e=>{
     e.preventDefault();e.stopPropagation();exportAddition(b.dataset.asgexp,buckets[b.dataset.asgexp].map(i=>rows[i]));});
@@ -4233,7 +4328,7 @@ function renderOsTab(){
         onchange="osScrollSet('${esc(o)}','${d.id}',this.checked)"> invert</label></td>`;}).join('')+'</tr>';}
   $('osscroll').innerHTML=sh;
   // unicode method
-  const methods=['','none','mac_option_hex','win_alt_hex','win_alt_dec','linux_ctrl_shift_u'];
+  const methods=['','none','mac_option_hex','win_alt_hex','win_alt_x','win_alt_dec','linux_ctrl_shift_u'];
   let uh=`<tr><td><b>OS</b></td><td><b>Unicode method</b></td></tr>`;
   for(const o of oses){
     const cur=(cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].unicode_method)||'';
@@ -4399,10 +4494,9 @@ function initTz(){
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt','log','clip'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log'])$('page-'+p).style.display=p===t?'':'none';
   if(t==='os')renderOsTab();
   if(t==='log')renderChangelog();
-  if(t==='clip'){if(device)getFile(6);renderClips();}
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
