@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.8 BF1</title>
+<title>HID Config 19.9</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -1404,13 +1404,22 @@ function renderGroupsCard(c){
       <a class="mlink" id="grpcollapse" title="collapse/expand" style="font-weight:600">${_groupsCollapsed?'▸':'▾'}</a>
       <h2 style="margin:0">🗂 Groups</h2>
       <label style="display:flex;align-items:center;gap:.3rem;font-weight:600;margin-left:.4rem;cursor:pointer">
-        <input type="checkbox" id="grpshow" ${_showGroups?'checked':''}> Show Groups</label></div>
+        <input type="checkbox" id="grpshow" ${_showGroups?'checked':''}> Show Groups</label>
+      <button id="grpselall" style="font-size:.74rem;padding:.1rem .5rem" title="highlight every group">Select all</button>
+      <button id="grpselnone" style="font-size:.74rem;padding:.1rem .5rem" title="clear all highlighting">Deselect all</button></div>
     <div id="grpbody" style="${_groupsCollapsed?'display:none':''}">
       ${names.length?pills:'<span class="muted">No groups yet — assign one from the mapping editor below.</span>'}
       <div class="muted" style="font-size:.75rem;margin-top:.3rem">“Show Groups” toggles all highlight coloring. Per-group checkbox = enable/disable that group's mappings (stays in the config; ⬆ Save to device to apply). 👁 toggles one group's highlight.</div>
     </div>`;
   host.innerHTML='';host.appendChild(card);
   $('grpshow').onchange=()=>{_showGroups=$('grpshow').checked;render();};
+  // 19.9 #2: bulk highlight control, right where the per-group 👁 toggles are
+  $('grpselall').onclick=()=>{_showGroups=true;
+    Object.keys(cfg.mapping_groups||{}).forEach(n=>{groupOn[n]=true;});
+    render();toast('all groups highlighted');};
+  $('grpselnone').onclick=()=>{
+    Object.keys(cfg.mapping_groups||{}).forEach(n=>{groupOn[n]=false;});
+    render();toast('highlighting cleared');};
   $('grpcollapse').onclick=()=>{_groupsCollapsed=!_groupsCollapsed;render();};
   card.querySelectorAll('[data-gact]').forEach(cb=>cb.onchange=()=>{
     const n=cb.dataset.gact,g=cfg.mapping_groups[n];if(!g)return;
@@ -1479,11 +1488,17 @@ function bindEditKey(el,d,idx){
     // 19.3 #1i: if this key is part of a marquee selection, translate EVERY
     // selected element live -- previously only the dragged one moved and the
     // rest teleported into place on release.
-    const groupEls=editMulti.has(idx)
-      ? [...editMulti].map(i2=>({i:i2,el:div.querySelector(`[data-eidx="${i2}"]`)}))
+    // 19.9 BUGFIX: this used `div`, a local of renderLayoutKbd that is NOT in
+    // scope here -- so grabbing a multi-selected key threw a ReferenceError on
+    // pointerdown and the drag never started. Find the container from the
+    // element itself instead.
+    const cont=el.closest('.kabs')||el.parentNode;
+    const groupEls=(editMulti.has(idx)&&cont)
+      ? [...editMulti].map(i2=>({i:i2,el:cont.querySelector(`[data-eidx="${i2}"]`)}))
           .filter(x=>x.el)
       : [{i:idx,el}];
     const move=ev=>{
+      try{
       const rawx=ev.clientX-sx,rawy=ev.clientY-sy;
       if(Math.abs(rawx)>5||Math.abs(rawy)>5)moved=true;
       const dx=Math.round((rawx/unit)*4)/4*unit;   // ¼-unit snap, in px
@@ -1491,7 +1506,8 @@ function bindEditKey(el,d,idx){
       for(const g of groupEls){
         const kk=lay.keys[g.i];
         g.el.style.transform=`translate(${dx}px,${dy}px)`+(kk&&kk.rot?` rotate(${kk.rot}deg)`:'');
-        g.el.style.zIndex='90';}};
+        g.el.style.zIndex='90';}
+      }catch(err){console.error('layout drag:',err);}};
     const up=ev=>{
       window.removeEventListener('pointermove',move);
       window.removeEventListener('pointerup',up);
@@ -1563,6 +1579,13 @@ function renderPalette(){
      <label style="flex:1;margin:0">↻°<input type="number" id="palsr" value="${selk.rot||0}" step="15"></label></div>
    <button id="paldel" style="margin-top:.4rem;width:100%">🗑 Remove element</button>`:''}
   <button id="palnav" style="margin-top:.35rem;width:100%">＋ Back / Forward buttons</button>
+  ${(()=>{const dn=detectedNodesFor(d.id);
+    if(!dn.length)return `<div class="muted" style="font-size:.72rem;margin-top:.35rem">
+      (connect the device to add its detected keys)</div>`;
+    // 19.9 #3: ONE BUTTON PER SUB-DEVICE, and they ADD rather than replace
+    return dn.map((n,ni)=>`<button data-paladdnode="${ni}" style="margin-top:.3rem;width:100%"
+      title="add this interface's elements below what is already here">＋ ${esc(nodeShort(n.name).slice(0,34))}${
+        n.role==='pointer'?' (mouse)':(n.keys?` (${n.keys.length} keys)`:'')}</button>`).join('');})()}
   <hr><label>Start over from template</label>
   <div style="display:flex;gap:.4rem"><button id="palansi" style="flex:1">ANSI</button>
   <button id="palsplit" style="flex:1">Split</button>
@@ -1571,7 +1594,7 @@ function renderPalette(){
     return lib.length?`<div class="muted" style="font-size:.72rem;margin-top:.35rem">Saved layouts</div>
       <div style="display:flex;flex-wrap:wrap;gap:.3rem">${lib.map(n=>
         `<button data-libtpl="${esc(n)}" style="flex:1 0 45%">${esc(n)}</button>`).join('')}</div>`:'';})()}
-  <button id="paldetect" style="margin-top:.35rem;width:100%">🔎 Detected keys (from device)</button>
+
   <hr><label>Background image <span class="muted" style="font-weight:400">(SVG/PNG behind the keys)</span></label>
   <div style="display:flex;gap:.4rem">
     <button id="palbg" style="flex:1">🖼 ${lay.bg?'Replace':'Add'} background</button>
@@ -1611,24 +1634,20 @@ function renderPalette(){
     lay.keys.push({btn:4,x:0,y:Math.round(maxy*4)/4,w:1.5,label:'Back'},
                   {btn:5,x:1.6,y:Math.round(maxy*4)/4,w:1.5,label:'Forward'});
     editSel=lay.keys.length-1;render();toast('added Back (btn4) and Forward (btn5) — drag into place');};
-  $('paldetect').onclick=()=>{
+  // 19.9 #3: add ONE sub-device's elements, APPENDED below whatever is already
+  // in the wireframe (never a replace -- that lives under "Start over from
+  // template"). Each detected interface gets its own button.
+  p.querySelectorAll('[data-paladdnode]').forEach(b=>b.onclick=()=>{
     const dn=detectedNodesFor(d.id);
-    const us=detectedKeysFor(d.id);
-    if(!dn.length){toast('This entry isn\'t claiming any input node yet — check Devices → Add a device (and ⬆ Save + restart the engine after adding).',true);return;}
-    // multi-node (composite) -> combined kbd+mouse sections; else keyboard grid
-    if(dn.length>1||dn.some(n=>n.role==='pointer')){
-      if(confirm('Rebuild this wireframe from the '+dn.length+' detected interface(s) (keyboard + mouse sections)?')){
-        layouts[d.id]=compositeLayout(dn);editSel=null;render();
-        toast('rebuilt from '+dn.length+' detected interface(s) — drag sections to arrange');}
+    const n=dn[+b.dataset.paladdnode];
+    if(!n){toast('that interface is no longer connected',true);return;}
+    const lay=editableLayout(d);
+    const added=appendNodeElements(lay,n);
+    if(!added){
+      toast(`“${nodeShort(n.name)}” reports no placeable keys — it's likely a media/consumer-only interface. Use ＋ Add element to place buttons manually.`,true);
       return;}
-    if(!us.length){
-      // node exists but exposes no usages we can place (e.g. a consumer-only
-      // sub-interface). Say so instead of silently doing nothing.
-      toast('“'+nodeShort(dn[0].name)+'” reports no placeable keys — it\'s likely a consumer/media-only interface. Use ＋ Add element to place buttons manually.',true);
-      return;}
-    if(confirm('Replace this layout with the '+us.length+' keys detected on the device?')){
-      layouts[d.id]=keysLayout(us);editSel=null;render();
-      toast('prefilled '+us.length+' detected keys — drag to arrange, then ⬆ Save to device');}};
+    editSel=null;render();
+    toast(`added ${added} element(s) from “${nodeShort(n.name)}” below the existing layout`);});
   p.querySelectorAll('[data-libtpl]').forEach(b=>b.onclick=()=>{
     const nm=b.dataset.libtpl,lib=(cfg.layout_library||{})[nm];if(!lib)return;
     if(confirm('Replace this layout with saved layout "'+nm+'"?')){
@@ -3828,6 +3847,30 @@ function nodeShort(name){return (name||'').replace(/^bridge-/i,'');}
 // 19.1 #1: build a combined wireframe with one labeled SECTION per evdev node
 // (keyboard node -> its key grid; pointer node -> a mouse cluster), stacked so
 // the user can drag sections into the arrangement they want.
+/* 19.9 #3: append one detected interface's elements UNDER the current layout,
+   leaving everything already placed untouched. Returns how many were added. */
+function appendNodeElements(lay,n){
+  lay.keys=lay.keys||[];
+  const below=lay.keys.length
+    ? Math.max(...lay.keys.map(k=>k.y+((k.h||1)*1.12)))+0.5 : 0;
+  const before=lay.keys.length;
+  // a labelled divider so you can see where each interface starts
+  lay.keys.push({pad:1,x:0,y:below,w:Math.max(4,Math.min(10,(n.keys||[]).length?8:4)),
+                 h:0.55,label:nodeShort(n.name).slice(0,44)});
+  const top=below+0.75;
+  if(n.role==='pointer'){
+    lay.keys.push({btn:1,x:0,y:top,w:1.6,label:'Left'},
+                  {wheel:1,x:1.7,y:top,w:0.9},
+                  {btn:2,x:2.7,y:top,w:1.6,label:'Right'},
+                  {btn:3,x:1.55,y:top+1.1,w:1.5,label:'Mid'},
+                  {btn:4,x:4.4,y:top,w:1.5,label:'Back'},
+                  {btn:5,x:4.4,y:top+1.1,w:1.5,label:'Forward'});
+  }else{
+    const us=(n.keys||[]).filter(u=>KEYS[u]||MODS[u]);
+    if(!us.length){lay.keys.length=before;return 0;}   // nothing placeable: undo the divider
+    const kl=keysLayout(us);
+    kl.keys.forEach(k=>lay.keys.push({...k,y:top+((k.y||0)/1.12)*1.12}));}
+  return lay.keys.length-before;}
 function compositeLayout(nodes){
   const keys=[];let y=0;
   // keyboards first, then pointers, for a predictable stack
