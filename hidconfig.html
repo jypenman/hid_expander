@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 19.9 BF1</title>
+<title>HID Config 20.0</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
 *{box-sizing:border-box}
-body{font-family:system-ui,sans-serif;margin:0;padding:1rem;max-width:1200px;margin-inline:auto}
+body{font-family:system-ui,sans-serif;margin:0;padding:1rem;max-width:none;margin-inline:auto}
 h1{font-size:1.25rem;margin:.2rem 0}.muted{opacity:.65;font-size:.82rem}
 button{padding:.45rem .9rem;cursor:pointer;border-radius:8px;border:1px solid var(--line);
 background:var(--panel);color:inherit;font-size:.88rem}
@@ -320,10 +320,23 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <button onclick="clearChordSel()">✕</button>
   </div>
   <div id="groupshost" style="margin:.3rem 0"></div>
-  <div class="panel" id="stage">
-    <svg id="chordsvg"></svg>
-    <div class="devrow" id="devcards"></div>
-  </div>
+  <details id="wfsection" data-uikey="wireframes" open class="panel" style="padding:.5rem .7rem">
+    <summary style="cursor:pointer;font-weight:600">🖼 Wireframes
+      <span class="muted" id="wfcount" style="font-weight:400;font-size:.8rem"></span></summary>
+    <div id="stage" style="position:relative">
+      <svg id="chordsvg"></svg>
+      <details id="wfconn" data-uikey="wf-connected" open style="margin:.3rem 0">
+        <summary style="cursor:pointer;font-weight:600;font-size:.88rem">✅ Connected
+          <span class="muted" id="wfconncount" style="font-weight:400;font-size:.78rem"></span></summary>
+        <div class="devrow" id="devcards"></div>
+      </details>
+      <details id="wfdisc" data-uikey="wf-disconnected" style="margin:.3rem 0">
+        <summary style="cursor:pointer;font-weight:600;font-size:.88rem">⭘ Not connected
+          <span class="muted" id="wfdisccount" style="font-weight:400;font-size:.78rem"></span></summary>
+        <div class="devrow" id="devcardsoff"></div>
+      </details>
+    </div>
+  </details>
   <details id="legend" data-uikey="legend" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
     <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
       <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
@@ -472,8 +485,38 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="panel">
     <h3 style="font-size:.95rem;margin:.2rem 0">Unicode typing method <span class="muted">(how ☑ / Δ are typed)</span></h3>
     <table style="width:100%;font-size:.84rem" id="osuni"></table>
-    <p class="muted" style="font-size:.76rem">macOS needs the <b>“Unicode Hex Input”</b> source enabled &amp; selected for <code>mac_option_hex</code>. Windows <code>win_alt_hex</code> needs the EnableHexNumpad registry setting + Num Lock.<br>
-    <b>Symbols wrong in Word / Outlook / OneNote?</b> Office intercepts the Alt+numpad chord and can land on the wrong code point (☑ U+2611 arriving as ਲ਼ U+0A33). Choose <code>win_alt_x</code>: it types the hex digits then <b>Alt+X</b>, which Office converts reliably. Note Alt+X works inside Office and most editors but <i>not</i> in every app — <code>win_alt_hex</code> remains the better default for browsers and the Start menu.</p>
+    <details data-uikey="unimethods" style="margin-top:.3rem">
+      <summary style="cursor:pointer;font-weight:600;font-size:.85rem">❓ Which method should I pick?</summary>
+      <div style="font-size:.78rem;line-height:1.6;padding:.4rem 0">
+        Characters with no key on your layout (☑, Δ, →) have to be typed as a
+        numeric escape. Windows has two, and <b>no single one works everywhere</b> —
+        pick the one matching where you type most.
+        <table style="width:100%;margin:.4rem 0;font-size:.78rem">
+          <tr><td><b>Method</b></td><td><b>Sends</b></td><td><b>Works in</b></td><td><b>Fails in</b></td></tr>
+          <tr><td><code>win_alt_hex</code></td><td>Alt + numpad&nbsp;<b>+</b> then hex (2611)</td>
+              <td>Browsers, Teams, Start menu, most apps</td>
+              <td><b>Office</b> — it ignores the “+” and reads the digits as
+                  <i>decimal</i>, so 2611 becomes U+0A33&nbsp;ਲ਼</td></tr>
+          <tr><td><code>win_alt_dec</code></td><td>Alt + decimal (9745)</td>
+              <td><b>Office</b> (Word, Outlook, OneNote) — full Unicode</td>
+              <td>Browsers — they wrap it to one byte, so 9745 → ◄</td></tr>
+          <tr><td><code>win_alt_x</code></td><td>types 2611 then Alt+X</td>
+              <td>Office and many editors; no registry setting needed</td>
+              <td>Anywhere without Alt+X support (browsers, dialogs)</td></tr>
+          <tr><td><code>mac_option_hex</code></td><td>Option + 4 hex digits</td>
+              <td>macOS everywhere</td>
+              <td>Needs the “Unicode Hex Input” source enabled <i>and selected</i></td></tr>
+          <tr><td><code>linux_ctrl_shift_u</code></td><td>Ctrl+Shift+U, hex, Space</td>
+              <td>GTK / IBus apps</td><td>Qt apps and some terminals</td></tr>
+        </table>
+        <b>Rule of thumb:</b> mostly in Office → <code>win_alt_dec</code>;
+        mostly in a browser → <code>win_alt_hex</code> (needs the
+        <code>EnableHexNumpad</code> registry value and Num&nbsp;Lock on).
+        Values above U+FFFF are unreliable with every Alt method.
+        <br><b>Always reliable alternative:</b> put the character in a
+        <b>Copy / Paste</b> item and paste it — no escape sequence involved.
+      </div>
+    </details>
   </div>
   <div class="panel">
     <h3 style="font-size:.95rem;margin:.2rem 0">Macro / mapping differences</h3>
@@ -1231,8 +1274,17 @@ function mregion(id,shape){
 .replace('DID',`data-btn="${id}"`);}
 function renderMouse(w,devid){   // retired: E9 now uses the unified renderLayoutKbd engine
   const d=allDevices().find(x=>x.id===devid);if(d)renderLayoutKbd(d,w);}
+// 20.0 #2.1: a device is "connected" when the engine has claimed an input
+// node for it, or its Bluetooth link reports connected.
+function devIsConnected(d){
+  const nodes=(lastEng&&lastEng.all_nodes)||[];
+  if(nodes.some(n=>n.device===d.id))return true;
+  if(d.mac&&btStat[d.mac]===true)return true;
+  if(!lastEng&&!d.mac)return true;          // not connected yet: don't hide things
+  return false;}
 function renderStage(){
   const c=$('devcards');if(!c)return;c.innerHTML='';
+  const cOff=$('devcardsoff');if(cOff)cOff.innerHTML='';
   const devs=allDevices();
   lastOrder=devs.map(d=>d.id).join(',');
   for(const d of devs){
@@ -1255,8 +1307,17 @@ function renderStage(){
           title="the engine sees a trackpad/pointer node on this device — add it to the wireframe">＋ trackpad</button>`:'';})()}
       <span class="constat" data-constat="${d.id}"></span></div>
       <div class="wfbody ${editing?'editing':''}" id="wrap-${d.id}"></div>`;
-    c.appendChild(card);
+    (devIsConnected(d)?c:(cOff||c)).appendChild(card);
     renderLayoutKbd(d,$('wrap-'+d.id));}
+  // counts in the headers, and auto-open the disconnected group only if it
+  // is the only place anything lives
+  const nOn=c.children.length,nOff=cOff?cOff.children.length:0;
+  const set=(id,txt)=>{const el=$(id);if(el)el.textContent=txt;};
+  set('wfcount',`· ${nOn+nOff} device${nOn+nOff===1?'':'s'}`);
+  set('wfconncount',`· ${nOn}`);
+  set('wfdisccount',`· ${nOff}`);
+  const dsec=$('wfdisc');
+  if(dsec&&nOn===0&&nOff>0&&!dsec.open)dsec.open=true;
   window._supSet=suppressedMembers();
   renderGroupsCard(c);
   c.querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>toggleEdit(b.dataset.ed));
