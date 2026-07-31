@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.1</title>
+<title>HID Config 20.2 BF1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -1165,6 +1165,14 @@ function remapModUsage(u){
   const base=BIT2MODUSAGE[to];
   return base===undefined?u:(right?base+4:base);}
 // modifier shortcuts (mod-chords) that fire from this canonical key
+/* 20.1 BF1: gesture (port2_kbd) binding for a canonical key on the ACTIVE
+   layer, plus a readable glyph for the arrows/space the E9 sends. */
+const GESTURE_GLYPH={0x50:'⇦ gest',0x4f:'⇨ gest',0x52:'⇧ gest',0x51:'⇩ gest',0x2c:'⎵ gest'};
+function gestureFor(canon){
+  const g=GESTURE_GLYPH[canon];
+  if(!g)return null;
+  const tbl=cfg.port2_kbd||{};
+  return{glyph:g,macro:tbl[`${layer},${canon}`]};}
 function chordsForKey(canon){
   const out=[];const os=cfg.active_os||'win';
   const srcs=[['',cfg.mod_chords||{}]];
@@ -1434,13 +1442,19 @@ function renderLayoutKbd(d,w){
     el.dataset.usage=u;el.dataset.canon=eff.canon;el.dataset.i=idx;el.dataset.dev=d.id;
     // corner scheme: red top-left = ORIGINAL (only if baseline changed it);
     // grey center = current identity; green bottom-right = custom output.
-    const centerName=k.label||MODS[eff.sends]||KEYS[eff.sends]||MODS[eff.canon]||KEYS[eff.canon]||'?';
+    const centerName=(_gest?_gest.glyph:null)
+      ||k.label||MODS[eff.sends]||KEYS[eff.sends]||MODS[eff.canon]||KEYS[eff.canon]||'?';
     const baseChip=eff.base?`<span class="chipbase" title="original ${esc(KEYS[u]||MODS[u]||'?')} before this device's Baseline">${esc(KEYS[u]||MODS[u]||'?')}</span>`:'';
+    const gestChip=(_gest&&_gest.macro)?`<span class="chip" title="gesture on layer ${layer}">${esc(macroLabel(_gest.macro))}</span>`:'';
     const custChip=eff.v!==undefined?`<span class="chip">${
       Array.isArray(eff.v)?esc(actShort(eff.v)):
       eff.v===0?'∅':esc(KEYS[eff.v]||MODS[eff.v]||'?')}</span>`:'';
     // 19.3 #3: keys carrying modifier shortcuts get a chord badge, so the
     // wireframe shows chord remaps the same way it shows Base/Custom.
+    // 20.1 BF1: on a MOUSE device, a key with a gesture (port2_kbd) binding is
+    // shown as a gesture with its arrow, so the wireframe matches what fires.
+    const _isMouseDev=(d.kind==='mouse');
+    const _gest=_isMouseDev?gestureFor(eff.canon):null;
     const _ch=chordsForKey(eff.canon);
     const chordChip=_ch.length
       ? `<span class="chipchord" title="${esc(_ch.map(c=>
@@ -1450,7 +1464,7 @@ function renderLayoutKbd(d,w){
       : '';
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
-      +baseChip+`<span class="kcenter">${centerName}</span>`+custChip+chordChip+elLayerBadge('key',eff.canon);
+      +baseChip+`<span class="kcenter">${centerName}</span>`+(custChip||gestChip)+chordChip+elLayerBadge('key',eff.canon);
     if(editing)bindEditKey(el,d,idx);
     else{
       el.onmousedown=e=>{if(e.shiftKey||e.altKey)e.preventDefault();};
@@ -2611,6 +2625,31 @@ function asgRetype(r,to){
     if(note)setNote(noteKey(type==='key'?'kbd':'mouse',layers[0],to.id),note);
   }
   render();toast('input changed — ⬆ Save to device');}
+/* 20.2: per-rule enable/disable.  cfg.disabled holds rule ids; the engine
+   simply doesn't load them, so a switched-off rule costs nothing at runtime
+   and nothing is lost. */
+function ruleId(r){
+  if(r.kind==='combo')return 'combo:'+r.id;
+  if(r.kind==='mc')return 'mc:'+r.id;
+  const L=r.layers&&r.layers.size?[...r.layers][0]:layer;
+  return (r.type==='key'?'kbd:':'mouse:')+L+','+r.id;}
+function ruleEnabled(r){
+  const ids=(cfg&&cfg.disabled)||[];
+  if(r.fromAdd)return !r.addOff;
+  // a row spanning layers is off only if every one of its ids is off
+  const mine=(r.kind==='combo'||r.kind==='mc')?[ruleId(r)]
+    :[...(r.layers||[])].map(L=>(r.type==='key'?'kbd:':'mouse:')+L+','+r.id);
+  return !mine.length||!mine.every(id=>ids.includes(id));}
+function setRuleEnabled(r,on){
+  if(!cfg)return;
+  cfg.disabled=cfg.disabled||[];
+  const mine=(r.kind==='combo'||r.kind==='mc')?[ruleId(r)]
+    :[...(r.layers||[])].map(L=>(r.type==='key'?'kbd:':'mouse:')+L+','+r.id);
+  for(const id of mine){
+    const i=cfg.disabled.indexOf(id);
+    if(on&&i>=0)cfg.disabled.splice(i,1);
+    else if(!on&&i<0)cfg.disabled.push(id);}
+  if(!cfg.disabled.length)delete cfg.disabled;}
 function rowNoteKey(r){
   if(r.kind==='combo')return noteKey('combo',r.id);
   if(r.kind==='mc')return noteKey('mc',r.id);
@@ -2674,8 +2713,11 @@ function renderAssignTable(){
       let cells='';
       if(special)cells=`<td colspan="${LAYER_NAMES.length}" style="text-align:center" class="muted" title="fires on any layer">all</td>`;
       else for(let L=0;L<6;L++)cells+=`<td class="asgcell"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
-      h+=`<tr class="${r.fromAdd?'fromadd':''}${r.addOff?' addoff':''}">
-        <td>${r.fromAdd?`<input type="checkbox" data-addon="${ri}" ${r.addOff?'':'checked'} title="switch this pack line on/off"> `:''}${inputSel}</td>
+      const _on=ruleEnabled(r);
+      h+=`<tr class="${r.fromAdd?'fromadd':''}${(r.addOff||!_on)?' addoff':''}">
+        <td>${r.fromAdd
+          ?`<input type="checkbox" data-addon="${ri}" ${r.addOff?'':'checked'} title="switch this pack line on/off"> `
+          :`<input type="checkbox" data-ruleon="${ri}" ${_on?'checked':''} title="enable / disable this mapping (kept, just inactive)"> `}${inputSel}</td>
         <td data-asgout="${ri}" style="cursor:pointer"><a class="mlink">${outLbl}</a></td>
         ${cells}
         <td><textarea data-asgnote="${esc(rowNoteKey(r))}" rows="1" class="asgnote"
@@ -2695,6 +2737,9 @@ function renderAssignTable(){
     render();toast('input changed — ⬆ Save to device');});
   host.querySelectorAll('[data-asgsel]').forEach(a=>a.onclick=()=>asgSelect(R(a.dataset.asgsel)));
   host.querySelectorAll('[data-asgpick]').forEach(a=>a.onclick=()=>openInputPicker(a,R(a.dataset.asgpick)));
+  host.querySelectorAll('[data-ruleon]').forEach(cb=>cb.onchange=()=>{
+    setRuleEnabled(R(cb.dataset.ruleon),cb.checked);
+    render();toast('mapping '+(cb.checked?'enabled':'disabled')+' — ⬆ Save to device');});
   host.querySelectorAll('[data-asgunpack]').forEach(a=>a.onclick=()=>moveRuleOutOfPack(R(a.dataset.asgunpack)));
   host.querySelectorAll('[data-addon]').forEach(cb=>cb.onchange=()=>{
     const r=R(cb.dataset.addon),pack=additions[r.fromAdd];
@@ -3285,6 +3330,7 @@ function renderModChordEd(ed){
       </div>
       ${osScopeHTML('mcos',os)}
       ${noteFieldHTML(noteKey('mc',key))}
+      ${groupAssignHTML('mc:'+key)}
     </div><div>
       <button id="mcdel" style="margin-top:.2rem">🗑 Delete shortcut</button>
     </div></div>`;
@@ -3325,6 +3371,7 @@ function renderModChordEd(ed){
   ed.querySelectorAll('#mcact,#mcos').forEach(x=>x.onchange=()=>{
     if(x.id==='mcact')refresh();commit();renderMapTable();});
   bindNoteField(noteKey('mc',key));
+  bindGroupAssign('mc:'+key);
   bindEditorCommon(a2=>{
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
@@ -4266,10 +4313,11 @@ function renderSetTable(){
   bar.style.display='flex';
   const st=expSets[curSet];
   const _oses=osKnown();
-  let h=`<tr><td><b>Trigger</b></td><td><b>Expands to</b></td>
+  let h=`<tr><td><b>On</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td>
     <td><b>Regex</b></td><td><b>Case</b></td>${_oses.length>1?'<td><b>OS</b></td>':''}<td></td></tr>`;
   (st.items||[]).forEach((it,i)=>{
-    h+=`<tr>
+    h+=`<tr${it.off?' class="addoff"':''}>
+      <td><input type="checkbox" data-si="${i}" data-f="off" ${it.off?'':'checked'} title="enable / disable this expansion"></td>
       <td><input type="text" data-si="${i}" data-f="trigger" value="${esc(it.trigger||'')}" style="font-family:ui-monospace,monospace"></td>
       <td><input type="text" data-si="${i}" data-f="value" value="${esc(String(it.value||'').replace(/\n/g,'\\n'))}" style="font-family:ui-monospace,monospace"></td>
       <td><input type="checkbox" data-si="${i}" data-f="regex" ${it.regex?'checked':''}></td>
@@ -4286,6 +4334,7 @@ function renderSetTable(){
     const it=st.items[+el.dataset.si];if(!it)return;
     const f=el.dataset.f;
     markSetsDirty();
+    if(f==='off'){it.off=!el.checked;renderSets();return;}
     if(f==='regex')it.regex=el.checked;
     else if(f==='value')it.value=el.value.replace(/\\n/g,'\n');
     else if(f==='os'){if(el.value)it.os=[el.value];else delete it.os;}   // 19.2R #3
