@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.2 BF1</title>
+<title>HID Config 20.2 BF2</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -1442,6 +1442,13 @@ function renderLayoutKbd(d,w){
     el.dataset.usage=u;el.dataset.canon=eff.canon;el.dataset.i=idx;el.dataset.dev=d.id;
     // corner scheme: red top-left = ORIGINAL (only if baseline changed it);
     // grey center = current identity; green bottom-right = custom output.
+    // 20.1 BF1: on a MOUSE device, a key with a gesture (port2_kbd) binding is
+    // shown as a gesture with its arrow, so the wireframe matches what fires.
+    // NB: declared here, ABOVE first use — const is not hoisted (TDZ).
+    const _isMouseDev=(d.kind==='mouse');
+    // 20.2 BF2: gesture is a fallback -- an explicit Custom binding wins, and
+    // the chip must show the binding, not the gesture, or the wireframe lies.
+    const _gest=(_isMouseDev&&eff.v===undefined)?gestureFor(eff.canon):null;
     const centerName=(_gest?_gest.glyph:null)
       ||k.label||MODS[eff.sends]||KEYS[eff.sends]||MODS[eff.canon]||KEYS[eff.canon]||'?';
     const baseChip=eff.base?`<span class="chipbase" title="original ${esc(KEYS[u]||MODS[u]||'?')} before this device's Baseline">${esc(KEYS[u]||MODS[u]||'?')}</span>`:'';
@@ -1451,10 +1458,6 @@ function renderLayoutKbd(d,w){
       eff.v===0?'∅':esc(KEYS[eff.v]||MODS[eff.v]||'?')}</span>`:'';
     // 19.3 #3: keys carrying modifier shortcuts get a chord badge, so the
     // wireframe shows chord remaps the same way it shows Base/Custom.
-    // 20.1 BF1: on a MOUSE device, a key with a gesture (port2_kbd) binding is
-    // shown as a gesture with its arrow, so the wireframe matches what fires.
-    const _isMouseDev=(d.kind==='mouse');
-    const _gest=_isMouseDev?gestureFor(eff.canon):null;
     const _ch=chordsForKey(eff.canon);
     const chordChip=_ch.length
       ? `<span class="chipchord" title="${esc(_ch.map(c=>
