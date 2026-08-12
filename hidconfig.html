@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.5.1</title>
+<title>HID Config 20.6</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -473,6 +473,9 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 
     <div class="bar txbar" style="margin-top:.1rem">
       <span class="muted" id="txstat">ready</span>
+      <button data-txa="pi-load" title="Fetch transformers and categorizations from the Pi now, instead of waiting for the link to go idle">⬇ Load from Pi</button>
+      <button data-txa="pi-save" title="Store your transformers and categorizations on the Pi so they follow you between browsers">⬆ Save to Pi</button>
+      <span class="muted" id="txpistat">not loaded yet</span>
       <span style="flex:1"></span>
       <button data-txa="swap" title="Feed the output back into the input so you can chain transforms">↺ Output → input</button>
       <button data-txa="copy" title="Copy the output">📋 Copy</button>
@@ -835,6 +838,12 @@ function onReport(e){
         expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
         _setsChannelOk=!!(obj&&'sets'in obj);
         $('setsave').disabled=false;renderSets();}
+      else if(curFile===7){
+        // 20.6: Text Transform storage. Merged rather than assigned, so a
+        // half-written Pi folder can never wipe what is already in this
+        // browser -- the Pi is a sync target here, not the sole authority.
+        txAdoptFromPi(obj);
+      }
       else if(curFile===6){
         clips=(obj&&obj.clips&&typeof obj.clips==='object')?obj.clips:{};
         _clipsChannelOk=!!(obj&&'clips'in obj);
@@ -899,6 +908,11 @@ $('connect').onclick=async()=>{
   setTimeout(()=>getFile(4),2300);           // expansion sets bundle
   setTimeout(()=>getFile(5),2700);           // 19.6: addition packs
   setTimeout(()=>getFile(6),3100);           // 19.8: copy/paste stash
+  // 20.6: Text Transform storage loads LAST and only when the link has gone
+  // quiet. At ~9 KB/s a transformer bundle is seconds of airtime, and this
+  // tab is tooling -- it must never delay the mapping data you actually came
+  // for. The Text Transform tab offers a button to pull it immediately.
+  txScheduleLoad();
   setTimeout(applyBrowserOS,2600);           // this browser's OS == the host OS
   // config-read watchdog: if the Pi never answers, say so instead of
   // letting the page sit half-dead
@@ -5551,11 +5565,102 @@ function txRenderTags(){
   }
 }
 
+/* ---------- Pi storage (fid 7) ---------- */
+const TT_FID = 7;
+let txPiLoaded = false, txPiTimer = null, txPiPending = false, txLoadedLS = false;
+
+/* Wait for the link to be IDLE before asking for the bundle. _readQ is the
+   shared read queue; while anything is in it the Pi is busy with data the
+   user is actually waiting for. Poll cheaply, then fire once. */
+function txScheduleLoad(){
+  clearInterval(txPiTimer);
+  let waited = 0;
+  txPiTimer = setInterval(() => {
+    waited += 600;
+    if(!device){ clearInterval(txPiTimer); return; }
+    const idle = (typeof _readQ === 'undefined') || (!_readQ.length && !_reading);
+    if(idle || waited > 20000){          // safety valve: never wait forever
+      clearInterval(txPiTimer);
+      txLoadFromPi(true);
+    }
+  }, 600);
+}
+function txLoadFromPi(quiet){
+  if(!device){ if(!quiet) toast('connect to the Pi first', true); return; }
+  txPiPending = true;
+  txSetPiStatus('loading…');
+  getFile(TT_FID);
+}
+
+/* Merge, never replace. A transformer you edited in this browser but have not
+   pushed yet must survive a load; the Pi copy wins only where this browser has
+   no opinion. Anything overwritten is reported rather than done silently. */
+function txAdoptFromPi(obj){
+  txPiPending = false;
+  // The Pi bundle can arrive before the Text Transform tab has ever been
+  // opened, and txInit() is what normally loads this browser's saved state.
+  // Without this, "keep what is local" would compare against an EMPTY object
+  // and the Pi copy would silently overwrite edits sitting in localStorage.
+  if(!txLoadedLS){ txLoad(); txLoadedLS = true; }
+  if(!obj || typeof obj !== 'object'){ txSetPiStatus('nothing on the Pi yet'); return; }
+  const xf = obj.transformers || {}, ql = obj.qual || {};
+  let added = 0, skipped = 0, bad = 0;
+  for(const [id, body] of Object.entries(xf)){
+    if(body && body.error){ bad++; continue; }
+    if(!body || typeof body !== 'object') continue;
+    if(TXstate.custom[id] != null && TXstate.custom[id] !== body.code){ skipped++; continue; }
+    if(body.code != null) TXstate.custom[id] = String(body.code);
+    if(body.desc != null) TXstate.desc[id]   = String(body.desc);
+    if(Array.isArray(body.link)) TXstate.link[id] = body.link;
+    added++;
+  }
+  for(const [id, t] of Object.entries(ql)){
+    if(t && t.error){ bad++; continue; }
+    if(!t || typeof t !== 'object') continue;
+    if(TXstate.tags[id] && JSON.stringify(TXstate.tags[id]) !== JSON.stringify(t)){ skipped++; continue; }
+    TXstate.tags[id] = { id, name: String(t.name||id), desc: String(t.desc||''),
+                         color: String(t.color||'#888'),
+                         words: Array.isArray(t.words) ? t.words.map(String) : [] };
+    added++;
+  }
+  txPiLoaded = true;
+  txSave();
+  if($('page-tx') && $('page-tx').dataset.wired){ txBuildTools(); txRenderTags(); }
+  txSetPiStatus(`loaded ${added} from Pi` +
+    (skipped ? ` · ${skipped} kept local (differs)` : '') +
+    (bad ? ` · ${bad} unreadable on the Pi` : ''));
+}
+
+function txSaveToPi(){
+  if(!device){ toast('connect to the Pi first', true); return; }
+  const transformers = {};
+  for(const id of Object.keys(TXstate.custom))
+    transformers[id] = { id, code: TXstate.custom[id],
+                         desc: TXstate.desc[id] || '',
+                         link: TXstate.link[id] || [] };
+  // A transform with only a re-written EXPLANATION or new tag links, and no
+  // code change, still deserves to travel.
+  for(const id of Object.keys(TXstate.desc).concat(Object.keys(TXstate.link)))
+    if(!transformers[id])
+      transformers[id] = { id, code: TXstate.custom[id] || '',
+                           desc: TXstate.desc[id] || '',
+                           link: TXstate.link[id] || [] };
+  const n = Object.keys(transformers).length + Object.keys(TXstate.tags).length;
+  txSetPiStatus('sending…');
+  // putFile resolves once the bytes are on the wire; the Pi's own ack arrives
+  // separately on the status channel. Report what we actually know.
+  putFile(TT_FID, { transformers, qual: TXstate.tags })
+    .then(() => { txSetPiStatus(`sent ${n} item${n===1?'':'s'} to the Pi`);
+                  toast('sent to Pi — check the status line for its reply'); },
+          e => { txSetPiStatus('send failed: ' + e); toast('send failed: ' + e, true); });
+}
+function txSetPiStatus(t){ const el = $('txpistat'); if(el) el.textContent = t; }
+
 function txInit(){
   const root = $('page-tx');
   if(!root || root.dataset.wired) return;
   root.dataset.wired = '1';
-  txLoad();
+  if(!txLoadedLS){ txLoad(); txLoadedLS = true; }
   txBuildTools();
   txRenderTags();
 
@@ -5597,6 +5702,8 @@ function txInit(){
         $('txin').textContent = txOutGet();
         toast('output moved to input'); break;
       case 'clear': $('txin').innerHTML = ''; $('txout').innerHTML = ''; txStat(''); break;
+      case 'pi-load': txLoadFromPi(false); break;
+      case 'pi-save': txSaveToPi(); break;
       case 'tags-open':  $('txtags').style.display = 'block'; txRenderTags(); break;
       case 'tags-close': $('txtags').style.display = 'none'; break;
       case 'edit-close': $('txedit').style.display = 'none'; break;
