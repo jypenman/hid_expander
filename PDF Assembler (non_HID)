@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Org Chart Assembler</title>
+<style>
+  :root {
+    --ink: #1c2321;
+    --paper: #f6f5f1;
+    --panel: #ffffff;
+    --line: #dcd9d0;
+    --accent: #2f5d50;
+    --accent-soft: #e4ede9;
+    --danger: #9a4b3f;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    padding: 28px clamp(20px, 4vw, 48px) 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  header .title-block {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .count {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 3px 9px;
+    border-radius: 20px;
+  }
+
+  .clear-btn {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: #8a8579;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .clear-btn:hover { color: var(--danger); }
+
+  .controls {
+    padding: 20px clamp(20px, 4vw, 48px);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .control-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex: 1;
+    min-width: 260px;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  input[type="text"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  button.action {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button.action:hover { background: #244a40; }
+  button.action.secondary {
+    background: var(--panel);
+    color: var(--accent);
+  }
+  button.action.secondary:hover { background: var(--accent-soft); }
+
+  #file-input { display: none; }
+
+  main {
+    padding: 24px clamp(20px, 4vw, 48px) 60px;
+  }
+
+  .empty-state {
+    margin-top: 60px;
+    text-align: center;
+    color: #9a9484;
+  }
+  .empty-state p:first-child {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .empty-state p { font-size: 13px; margin: 0; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 20px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    gap: 10px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .card-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 2px 7px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .icon-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #9a9484;
+    font-size: 15px;
+    padding: 2px 4px;
+    line-height: 1;
+  }
+  .icon-btn:hover { color: var(--danger); }
+
+  .card iframe, .card embed {
+    width: 100%;
+    height: 520px;
+    border: none;
+    display: block;
+    background: #eceae4;
+  }
+
+  .card-fail {
+    height: 520px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    color: #9a9484;
+    font-size: 13px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  footer {
+    padding: 16px clamp(20px, 4vw, 48px) 30px;
+    font-size: 12px;
+    color: #9a9484;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-block">
+    <h1>Org Chart Assembler</h1>
+    <span class="count" id="count">0 pdfs</span>
+  </div>
+  <button class="clear-btn" id="clear-all">Clear all</button>
+</header>
+
+<div class="controls">
+  <div class="control-group">
+    <input type="text" id="url-input" placeholder="Paste a PDF link, then press Add" />
+    <button class="action" id="add-url">Add link</button>
+  </div>
+  <div class="control-group" style="flex: 0;">
+    <button class="action secondary" id="pick-files">Choose PDF files…</button>
+    <input type="file" id="file-input" accept="application/pdf" multiple />
+  </div>
+</div>
+
+<main>
+  <div class="empty-state" id="empty-state">
+    <p>No PDFs added yet</p>
+    <p>Paste links above, or choose files from your computer, to start piecing the chart together.</p>
+  </div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<footer>
+  Link-based PDFs are saved automatically and reload next time you open this page. Files chosen from your computer stay only for this browsing session — reselect them if you reopen the page.
+</footer>
+
+<script>
+  const grid = document.getElementById('grid');
+  const emptyState = document.getElementById('empty-state');
+  const countEl = document.getElementById('count');
+  const urlInput = document.getElementById('url-input');
+
+  // items: { id, kind: 'url'|'file', src, name }
+  let items = [];
+
+  function updateCount() {
+    countEl.textContent = items.length + (items.length === 1 ? ' pdf' : ' pdfs');
+    emptyState.style.display = items.length ? 'none' : 'block';
+  }
+
+  function render() {
+    grid.innerHTML = '';
+    items.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const head = document.createElement('div');
+      head.className = 'card-head';
+
+      const title = document.createElement('div');
+      title.className = 'card-title';
+      title.textContent = item.name;
+      title.title = item.name;
+
+      const tag = document.createElement('span');
+      tag.className = 'card-tag';
+      tag.textContent = item.kind === 'url' ? 'link' : 'file';
+
+      const actions = document.createElement('div');
+      actions.className = 'card-actions';
+
+      const openBtn = document.createElement('button');
+      openBtn.className = 'icon-btn';
+      openBtn.title = 'Open in new tab';
+      openBtn.textContent = '↗';
+      openBtn.onclick = () => window.open(item.src, '_blank');
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'icon-btn';
+      removeBtn.title = 'Remove';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = () => removeItem(item.id);
+
+      actions.appendChild(openBtn);
+      actions.appendChild(removeBtn);
+
+      head.appendChild(title);
+      head.appendChild(tag);
+      head.appendChild(actions);
+
+      const frame = document.createElement('iframe');
+      frame.src = item.src;
+
+      card.appendChild(head);
+      card.appendChild(frame);
+      grid.appendChild(card);
+    });
+    updateCount();
+  }
+
+  async function persistUrls() {
+    const urlItems = items.filter(i => i.kind === 'url').map(i => ({ name: i.name, src: i.src }));
+    try {
+      await window.storage.set('pdf-urls', JSON.stringify(urlItems), false);
+    } catch (e) {
+      console.error('Could not save link list', e);
+    }
+  }
+
+  async function loadUrls() {
+    try {
+      const result = await window.storage.get('pdf-urls', false);
+      if (result && result.value) {
+        const saved = JSON.parse(result.value);
+        saved.forEach(entry => {
+          items.push({ id: crypto.randomUUID(), kind: 'url', src: entry.src, name: entry.name });
+        });
+        render();
+      }
+    } catch (e) {
+      // no saved data yet, that's fine
+    }
+  }
+
+  function removeItem(id) {
+    items = items.filter(i => i.id !== id);
+    render();
+    persistUrls();
+  }
+
+  document.getElementById('add-url').onclick = () => {
+    const val = urlInput.value.trim();
+    if (!val) return;
+    let name;
+    try { name = decodeURIComponent(val.split('/').pop().split('?')[0]) || val; }
+    catch { name = val; }
+    items.push({ id: crypto.randomUUID(), kind: 'url', src: val, name });
+    urlInput.value = '';
+    render();
+    persistUrls();
+  };
+
+  urlInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('add-url').click();
+  });
+
+  document.getElementById('pick-files').onclick = () => {
+    document.getElementById('file-input').click();
+  };
+
+  document.getElementById('file-input').addEventListener('change', e => {
+    Array.from(e.target.files).forEach(file => {
+      const src = URL.createObjectURL(file);
+      items.push({ id: crypto.randomUUID(), kind: 'file', src, name: file.name });
+    });
+    render();
+    e.target.value = '';
+  });
+
+  document.getElementById('clear-all').onclick = async () => {
+    if (!items.length) return;
+    if (!confirm('Remove all PDFs from this page?')) return;
+    items = [];
+    render();
+    try { await window.storage.set('pdf-urls', JSON.stringify([]), false); } catch (e) {}
+  };
+
+  loadUrls();
+  updateCount();
+</script>
+
+</body>
+</html>
