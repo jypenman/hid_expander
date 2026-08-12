@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.6</title>
+<title>HID Config 20.6.1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -92,78 +92,79 @@ label{display:block;margin:.45rem 0 .1rem;font-size:.84rem;opacity:.85}
 /* labels that sit on the same line as their control (checkbox + caption) */
 label.inl{display:inline-flex;align-items:center;gap:.3rem;margin:.3rem 0 0;cursor:pointer}
 label.inl input{margin:0}
-/* --- Text Transform (20.5.1) --- */
-.txgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-top:.5rem}
-.txeditgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+/* --- Text Transform (20.6.1) --- */
+/* Canvas/CanvasText are SYSTEM colours: they follow the page's color-scheme,
+   so these surfaces stay readable in dark mode. Never hardcode one half of a
+   colour pair -- that is what produced white-on-white in 20.5. */
+.txstripwrap{overflow-x:auto;overflow-y:visible;padding-bottom:.4rem}
+.txstrip{display:flex;gap:.7rem;align-items:stretch;min-width:min-content;margin-top:.5rem}
+.txstage{flex:0 0 auto;width:var(--txw,32rem);max-width:92vw}
 .txpane{display:flex;flex-direction:column;min-width:0}
-/* Canvas/CanvasText are SYSTEM colours: they follow the page's
-   color-scheme, so this is readable in dark mode. The previous rule used
-   var(--bg2,#fff) -- and --bg2 was never defined, so it pinned the surface to
-   white while the text kept inheriting the dark-mode foreground. White on
-   white. Never hardcode one half of a colour pair. */
-.txbox{height:calc(100vh - 24rem);min-height:20rem;width:100%;box-sizing:border-box;
-  overflow:auto;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-  font-size:.82rem;line-height:1.5;padding:.5rem .6rem;border:1px solid var(--line);
-  border-radius:6px;background:Canvas;color:CanvasText;resize:none;tab-size:4}
+.txeditgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.txmanagegrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.4rem}
+.txbox{width:100%;box-sizing:border-box;overflow:auto;white-space:pre-wrap;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;line-height:1.5;
+  padding:.5rem .6rem;border:1px solid var(--line);border-radius:6px;
+  background:Canvas;color:CanvasText;tab-size:4}
+.txstagebox{height:var(--txh,26rem);min-height:10rem;resize:both}
+.txresize{resize:both;min-height:6rem;height:14rem}
 .txbox:focus{outline:2px solid var(--hi);outline-offset:-1px}
-.txeditgrid .txbox{height:16rem;min-height:8rem}
-.txcode{font-size:.78rem;line-height:1.45}
-#txin ul,#txin ol{margin:.2rem 0 .2rem 1.2rem;padding-left:1rem}
-#txin p{margin:.15rem 0}
-
-/* toolbar: wraps to as many rows as it needs, and each button shrinks
-   before it wraps, so narrowing the window degrades smoothly instead of
-   clipping */
+.txcode{font-size:.78rem}
+#txpane0 ul,#txpane0 ol{margin:.2rem 0 .2rem 1.2rem;padding-left:1rem}
+#txpane0 p{margin:.15rem 0}
+.txnext{display:flex;flex-wrap:wrap;gap:.25rem;margin:.15rem 0 .3rem;min-height:1.6rem}
 .txtools{display:flex;flex-wrap:wrap;align-items:stretch;gap:.35rem;margin:.6rem 0}
 .txbtn{position:relative;display:inline-flex;align-items:center;gap:.35rem;
-  padding:.45rem .8rem .45rem .8rem;border:1px solid var(--line);border-radius:8px;
-  background:var(--panel);cursor:pointer;font-size:.86rem;white-space:nowrap;
-  min-width:0;user-select:none}
+  padding:.45rem .8rem;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);cursor:pointer;font-size:.86rem;white-space:nowrap;user-select:none}
 .txbtn:hover{border-color:var(--hi)}
 .txbtn.primary{background:var(--hi);border-color:var(--hi);color:#fff;font-weight:600}
-.txbtn .txlab{overflow:hidden;text-overflow:ellipsis}
-.txbtn .txcar{opacity:.6;font-size:.7rem}
+.txbtn.txmini{padding:.25rem .5rem;font-size:.76rem}
+.txbtn .txcar{opacity:.6;font-size:.7rem;padding:0 .15rem;border-left:1px solid var(--line);margin-left:.1rem}
+.txbtn .txcar:hover{opacity:1;color:var(--hi)}
 .txtagbtn{border-radius:999px;border-style:dashed}
-/* the ✎ pip, top-right of every button */
 .txed{position:absolute;top:-6px;right:-6px;width:1.05rem;height:1.05rem;
-  display:flex;align-items:center;justify-content:center;font-size:.62rem;
-  border-radius:50%;border:1px solid var(--line);background:Canvas;color:CanvasText;
-  opacity:.55;cursor:pointer}
+  display:flex;align-items:center;justify-content:center;font-size:.62rem;border-radius:50%;
+  border:1px solid var(--line);background:Canvas;color:CanvasText;opacity:.55;cursor:pointer}
 .txed:hover{opacity:1;border-color:var(--hi);color:var(--hi)}
 .txgroup{position:relative}
-.txpop{display:none;position:absolute;z-index:40;top:calc(100% + 4px);left:0;
-  min-width:15rem;max-width:min(24rem,90vw);padding:.3rem;border:1px solid var(--line);
+.txpop{display:none;position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:15rem;
+  max-width:min(24rem,90vw);max-height:60vh;overflow:auto;padding:.3rem;border:1px solid var(--line);
   border-radius:10px;background:Canvas;color:CanvasText;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .txpop.on{display:block}
-.txpopitem{position:relative;display:flex;align-items:center;justify-content:space-between;
-  gap:.5rem;padding:.4rem .55rem;border-radius:6px;cursor:pointer;font-size:.84rem}
+.txnextpop{position:absolute;z-index:60;width:20rem}
+.txpopitem{position:relative;display:flex;align-items:center;justify-content:space-between;gap:.5rem;
+  padding:.35rem .5rem;border-radius:6px;cursor:pointer;font-size:.84rem}
 .txpopitem:hover{background:var(--panel)}
 .txpopitem .txed{position:static;margin-left:auto}
-
-/* qualitative coding */
-.txtagcard{border:1px solid var(--line);border-left:4px solid var(--line);
-  border-radius:8px;padding:.5rem .6rem;margin:.4rem 0;background:var(--panel)}
+.txpopgrp{font-size:.72rem;opacity:.6;padding:.3rem .5rem 0;text-transform:uppercase;letter-spacing:.04em}
+.txrail{flex:0 0 auto;display:flex;flex-direction:column;gap:.25rem;align-items:stretch;
+  width:3.6rem;padding-top:1.9rem}
+.txrailhead{font-size:.6rem;opacity:.55;text-align:center;letter-spacing:.08em}
+.txrailbtn{writing-mode:vertical-rl;text-orientation:mixed;flex:1 1 auto;min-height:2.5rem;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem;
+  border-radius:6px;border:1px solid var(--c,var(--line));
+  background:color-mix(in srgb, var(--c,#888) 14%, transparent);color:CanvasText}
+.txrailbtn:hover{background:color-mix(in srgb, var(--c,#888) 30%, transparent)}
+.txmgrp{display:flex;align-items:center;gap:.4rem;margin:.5rem 0 .2rem;font-size:.82rem}
+.txmrow{display:flex;align-items:center;gap:.3rem;margin:.15rem 0}
+.txmrow input[type=text]{flex:1 1 6rem;min-width:5rem;font-size:.8rem}
+.txmrow select{font-size:.78rem;max-width:9rem}
+.txmpin{display:inline-flex;align-items:center;gap:.2rem;font-size:.72rem;margin:0;white-space:nowrap}
+.txtagcard{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;
+  padding:.5rem .6rem;margin:.4rem 0;background:var(--panel)}
 .txmark{position:relative;border-radius:.5em;padding:.05em .28em;
   background:color-mix(in srgb, var(--c) 20%, transparent);
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent)}
-/* user-select:none keeps the chip label out of copy/paste and out of
-   innerText, so "Output -> input" and Copy return the TEXT, never the tag
-   names. A visual annotation must not become part of the document. */
 .txchip{user-select:none;font-size:.58em;vertical-align:super;margin-left:.18em;padding:0 .3em;
   border-radius:999px;background:var(--c);color:#fff;white-space:nowrap;cursor:help;
-  max-width:5.5em;overflow:hidden;text-overflow:ellipsis;display:inline-block;
-  vertical-align:top;line-height:1.5}
-
-/* Narrow: one column, and the group buttons collapse to icons so a row still
-   holds several. Below 480px the popovers become full-width sheets. */
-@media (max-width:900px){.txgrid,.txeditgrid{grid-template-columns:1fr}
-  .txbox{height:auto;min-height:13rem}}
+  max-width:5.5em;overflow:hidden;text-overflow:ellipsis;display:inline-block;line-height:1.5}
+@media (max-width:900px){.txeditgrid,.txmanagegrid{grid-template-columns:1fr}
+  .txstage{width:min(92vw,28rem)}}
 @media (max-width:620px){.txbtn{padding:.4rem .55rem;font-size:.8rem}
   .txbtn .txlab{display:none}
-  .txtagbtn{font-size:0;padding:.4rem .7rem}
-  .txtagbtn::before{content:"\25c8";font-size:.9rem}}
-@media (max-width:480px){.txpop{position:fixed;left:.5rem;right:.5rem;
-  max-width:none;top:auto}}}
+  .txrail{width:2.4rem}}
+@media (max-width:480px){.txpop{position:fixed;left:.5rem;right:.5rem;max-width:none;top:auto}}}
 select,input[type=text],input[type=number],textarea{width:100%;padding:.35rem;border-radius:6px;
 border:1px solid var(--line);background:Field;color:FieldText}
 select option{background:Field;color:FieldText}
@@ -465,64 +466,105 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <h2>Text Transform</h2>
     <p class="muted" style="margin-top:-.3rem">
       Paste on the left — <b>rich text is kept</b>, so Word and PDF list nesting,
-      indents and bold headings are read as structure rather than thrown away.
-      Runs entirely in the browser; works with the device disconnected.
+      indents and bold headings are read as structure. Runs entirely in the
+      browser; works with the device disconnected.
     </p>
 
     <div class="txtools" id="txtools"></div>
 
     <div class="bar txbar" style="margin-top:.1rem">
       <span class="muted" id="txstat">ready</span>
-      <button data-txa="pi-load" title="Fetch transformers and categorizations from the Pi now, instead of waiting for the link to go idle">⬇ Load from Pi</button>
-      <button data-txa="pi-save" title="Store your transformers and categorizations on the Pi so they follow you between browsers">⬆ Save to Pi</button>
+      <button data-txa="pi-load" title="Fetch from the Pi now instead of waiting for the link to go idle">⬇ Load from Pi</button>
+      <button data-txa="pi-save" title="Store your transforms and categorizations on the Pi">⬆ Save to Pi</button>
       <span class="muted" id="txpistat">not loaded yet</span>
       <span style="flex:1"></span>
-      <button data-txa="swap" title="Feed the output back into the input so you can chain transforms">↺ Output → input</button>
-      <button data-txa="copy" title="Copy the output">📋 Copy</button>
+      <button data-txa="manage" title="Add, rename, remove or re-home transforms and categories">⚙ Manage</button>
+      <button data-txa="copy" title="Copy the last pane">📋 Copy</button>
       <button data-txa="clear">✕ Clear</button>
     </div>
 
-    <!-- edit / explain panel, opened by the ✎ on any transform -->
+    <!-- edit / explain panel -->
     <div id="txedit" class="panel" style="display:none">
       <div class="bar" style="margin-top:0">
         <b id="txedit-title">Edit transform</b>
         <span class="muted" id="txedit-sub"></span>
         <span style="flex:1"></span>
         <span class="muted" id="txedit-state"></span>
-        <button data-txa="edit-reset" title="Discard your version and restore the built-in code">⟲ Reset to built-in</button>
+        <button data-txa="edit-next" title="Choose which transforms appear as follow-on buttons above the next pane">⇢ Next steps…</button>
+        <button data-txa="edit-reset" title="Discard your version and restore the built-in code">⟲ Reset</button>
         <button data-txa="edit-save" class="primary">✓ Save</button>
         <button data-txa="edit-close">✕ Close</button>
+      </div>
+      <div class="bar" style="margin-top:0">
+        <label style="margin:0">Name</label>
+        <input type="text" id="txedit-label" style="min-width:14rem">
+        <label style="margin:0">Category</label>
+        <select id="txedit-group"></select>
       </div>
       <div class="txeditgrid">
         <div class="txpane">
           <label for="txedit-code">Code <span class="muted">— a function of
-            <code>(text, H)</code> returning the new text. <code>H</code> holds the
-            shared helpers.</span></label>
-          <textarea id="txedit-code" class="txbox txcode" spellcheck="false"></textarea>
+            <code>(text, H)</code> returning text. <code>H</code> holds the shared helpers.</span></label>
+          <textarea id="txedit-code" class="txbox txcode txresize" spellcheck="false"></textarea>
         </div>
         <div class="txpane">
-          <label for="txedit-desc">Explanation <span class="muted">— what it does, in words</span></label>
-          <textarea id="txedit-desc" class="txbox" spellcheck="false"></textarea>
-          <label style="margin-top:.5rem">Categorizations applied to this transform's output</label>
+          <label for="txedit-desc">Explanation</label>
+          <textarea id="txedit-desc" class="txbox txresize" spellcheck="false"></textarea>
+          <label style="margin-top:.5rem">Categorizations highlighted in this transform's output</label>
           <div id="txedit-tags" class="pills" style="margin:.2rem 0"></div>
           <div class="bar" style="margin:.2rem 0">
             <select id="txedit-tagpick"><option value="">Add a categorization…</option></select>
-            <button data-txa="tag-new">＋ New categorization</button>
+            <button data-txa="tag-new">＋ New</button>
           </div>
           <p class="muted" style="font-size:.76rem;margin:.3rem 0 0">
             Edited code runs in this page, like anything typed into a browser
-            console. Only paste code you understand. Your edits stay in this
-            browser and never reach the Pi.
+            console. Only paste code you understand.
           </p>
         </div>
+      </div>
+    </div>
+
+    <!-- category editor -->
+    <div id="txgedit" class="panel" style="display:none">
+      <div class="bar" style="margin-top:0">
+        <b>Edit category</b><span style="flex:1"></span>
+        <button data-txa="gedit-del">🗑 Delete category</button>
+        <button data-txa="gedit-save" class="primary">✓ Save</button>
+        <button data-txa="gedit-close">✕ Close</button>
+      </div>
+      <div class="bar" style="margin-top:0">
+        <label style="margin:0">Name</label><input type="text" id="txgedit-label" style="min-width:12rem">
+        <label style="margin:0">Icon</label><input type="text" id="txgedit-icon" style="width:4rem" maxlength="2">
+        <label style="margin:0">Runs when the pill is clicked</label>
+        <select id="txgedit-def"></select>
+      </div>
+      <p class="muted" style="font-size:.78rem;margin:.2rem 0 0">
+        Click the pill's <b>text</b> to run that transform; click the <b>▾</b> for
+        the rest of the category.
+      </p>
+    </div>
+
+    <!-- manage everything -->
+    <div id="txmanage" class="panel" style="display:none">
+      <div class="bar" style="margin-top:0">
+        <b>Manage</b><span class="muted">rename, re-home, add or remove</span>
+        <span style="flex:1"></span>
+        <button data-txa="new-transform">＋ New transform</button>
+        <button data-txa="new-group">＋ New category</button>
+        <button data-txa="new-tagcat">＋ New categorization group</button>
+        <button data-txa="manage-close">✕ Close</button>
+      </div>
+      <div class="txmanagegrid">
+        <div><b class="muted">Transforms</b><div id="txmanage-x"></div></div>
+        <div><b class="muted">Qualitative categorizations</b><div id="txmanage-q"></div></div>
       </div>
     </div>
 
     <!-- qualitative coding -->
     <div id="txtags" class="panel" style="display:none">
       <div class="bar" style="margin-top:0">
-        <b>Qualitative coding — categorizations</b>
-        <span class="muted">tag words and phrases; tagged output is highlighted</span>
+        <b>Qualitative coding</b>
+        <span class="muted">select text in any pane, then click a tag in the strip to add it</span>
         <span style="flex:1"></span>
         <button data-txa="tag-new" class="primary">＋ New categorization</button>
         <button data-txa="tags-close">✕ Close</button>
@@ -530,16 +572,14 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <div id="txtaglist"></div>
     </div>
 
-    <div class="txgrid">
-      <div class="txpane">
-        <label for="txin">Input <span class="muted">— paste here (rich text welcome)</span></label>
-        <div id="txin" class="txbox" contenteditable="true" spellcheck="false"></div>
-      </div>
-      <div class="txpane">
-        <label for="txout">Output <span class="muted">— editable; ↺ chains it back into the input</span></label>
-        <div id="txout" class="txbox" contenteditable="true" spellcheck="false"></div>
-      </div>
+    <!-- the pane strip: input, tag rail, then one pane per stage -->
+    <div class="txstripwrap">
+      <div class="txstrip" id="txstrip"></div>
     </div>
+    <p class="muted" style="font-size:.76rem;margin:.3rem 0 0">
+      Shift + scroll scrolls the panes sideways. Dragging any pane's bottom-right
+      corner resizes them all together.
+    </p>
   </div>
 </div>
 
@@ -4854,29 +4894,48 @@ function initTz(){
   const er=$('erasesel');if(er){er.value=(cfg&&cfg.erase_method)||'backspace';
     er.onchange=()=>{if(cfg)cfg.erase_method=er.value;toast('erase method set — ⬆ Save to device');};}}
 
-/* ==================== Text Transform (20.5.1) ========================
+/* ==================== Text Transform (20.6.1) ========================
    Entirely client-side: no device, no Pi, no network.
 
    STRUCTURE-AWARE INPUT. A pasted document already carries its structure and
-   discarding it is what makes reformatting painful. The input is
+   discarding it is what makes reformatting painful. The input pane is
    contenteditable, so Word and PDF paste real <ul>/<ol> nesting, real
-   margin-left indents and real bold runs. txBlocks() reads all three into
-   {text, depth, bold}, and every transform works on that.
+   margin-left indents and real bold runs; txBlocks() reads all three.
 
-   EVERY TRANSFORM IS DATA. Each one is a commented function stored as source
-   in TXDEFS, compiled on demand. That is what makes the ✎ editor honest: the
-   code you are shown is the code that runs, and editing it changes behaviour
-   immediately. Your edits live in this browser (localStorage), never on the Pi.
+   EVERY TRANSFORM IS DATA. Each is a commented function stored as source and
+   compiled on demand, which is what makes the pencil editor honest: the code
+   shown IS the code that runs. Names, categories and membership are data too,
+   so you can rename, re-home, add and remove without touching this file.
+
+   STAGES. The panes are a pipeline: input, then one output pane per transform
+   applied. Each pane offers the follow-on transforms configured for whatever
+   produced it, so a multi-step breakdown stays visible end to end.
    ==================================================================== */
 
 const TX_IND = '    ';
-const TX_LS  = 'hidcfg.tx.v1';
+const TX_LS  = 'hidcfg.tx.v2';
 
-/* ---------- persisted state ---------- */
-let TXstate = { custom:{}, desc:{}, tags:{}, link:{} };
+/* ---------- persisted state ----------
+   custom/desc  : per-transform code + explanation overrides
+   user         : transforms you created outright
+   label/home   : rename and re-home overrides for ANY transform
+   hidden       : transforms removed from the bar (built-ins are never deleted,
+                  only hidden -- deleting code you did not write is not ours to do)
+   groups       : category overrides and additions {label, icon, def}
+   tags/tagcat  : categorizations and the groups they sit in
+   link         : transform id -> categorization ids highlighted in its output
+   next         : transform id -> follow-on transform ids offered on its pane  */
+let TXstate = { custom:{}, desc:{}, user:{}, label:{}, home:{}, hidden:[],
+                pin:{}, groups:{}, tags:{}, tagcat:{}, link:{}, next:{} };
+let txLoadedLS = false;
 function txLoad(){
-  try{ const r = localStorage.getItem(TX_LS); if(r) TXstate = Object.assign(TXstate, JSON.parse(r)); }
-  catch(e){ /* corrupt or unavailable: defaults are fine */ }
+  try{
+    const r = localStorage.getItem(TX_LS) || localStorage.getItem('hidcfg.tx.v1');
+    if(r) TXstate = Object.assign(TXstate, JSON.parse(r));
+  }catch(e){ /* corrupt or unavailable: defaults are fine */ }
+  for(const k of ['custom','desc','user','label','home','pin','groups','tags','tagcat','link','next'])
+    if(!TXstate[k] || typeof TXstate[k] !== 'object') TXstate[k] = {};
+  if(!Array.isArray(TXstate.hidden)) TXstate.hidden = [];
 }
 function txSave(){
   try{ localStorage.setItem(TX_LS, JSON.stringify(TXstate)); }
@@ -4884,26 +4943,22 @@ function txSave(){
 }
 
 /* ---------- reading the input, structure and all ---------- */
-function txBlocks(){
-  const root = $('txin');
+function txBlocks(root){
+  root = root || $('txpane0');
   if(!root) return [];
   const blocks = [];
   const BLOCK = /^(P|DIV|LI|H1|H2|H3|H4|H5|H6|TR|BLOCKQUOTE|PRE)$/;
   const listDepth = el => {
     let d = 0, n = el.parentElement;
     while(n && n !== root){ if(n.tagName === 'UL' || n.tagName === 'OL') d++; n = n.parentElement; }
-    return d;                                     // true nesting; normalised below
+    return d;
   };
-  // Word does not always emit real lists: it uses <p> with margin-left and the
-  // MsoListParagraph class. Both are structure and both are read here.
   const styleDepth = el => {
     const st = (el.getAttribute && el.getAttribute('style')) || '';
     let px = 0;
     const m = /margin-left:\s*(-?[\d.]+)(pt|px|in|cm)/i.exec(st);
-    if(m){
-      const v = parseFloat(m[1]), u = m[2].toLowerCase();
-      px = u === 'pt' ? v*1.333 : u === 'in' ? v*96 : u === 'cm' ? v*37.8 : v;
-    }
+    if(m){ const v = parseFloat(m[1]), u = m[2].toLowerCase();
+           px = u==='pt'? v*1.333 : u==='in'? v*96 : u==='cm'? v*37.8 : v; }
     let d = px > 0 ? Math.round(px/36) : 0;
     if(/MsoListParagraph/i.test((el.className||'')+'') && d === 0) d = 1;
     return d;
@@ -4918,9 +4973,9 @@ function txBlocks(){
     for(const el of node.children){
       if(/^(UL|OL|TABLE|TBODY)$/.test(el.tagName)){ walk(el); continue; }
       if(BLOCK.test(el.tagName)){
-        const txt = (el.innerText||'').replace(/\u00a0/g,' ').trim();
-        blocks.push({ text: txt, depth: Math.max(listDepth(el), styleDepth(el)),
-                      bold: isBold(el), li: el.tagName === 'LI' });
+        blocks.push({ text:(el.innerText||'').replace(/ /g,' ').trim(),
+                      depth: Math.max(listDepth(el), styleDepth(el)),
+                      bold: isBold(el) });
         if(el.querySelector && el.querySelector('ul,ol')) walk(el);
         continue;
       }
@@ -4928,50 +4983,19 @@ function txBlocks(){
     }
   };
   walk(root);
-  // Normalise so the shallowest real line is depth 0: counting nesting honestly
-  // would otherwise waste a level on a document that is nothing but a list.
   const real = blocks.filter(b => b.text);
   if(real.length){
     const min = Math.min(...real.map(b => b.depth));
     if(min > 0) for(const b of blocks) b.depth = Math.max(0, b.depth - min);
   }
   if(!blocks.length){
-    const raw = (root.innerText||'').replace(/\u00a0/g,' ');
-    return raw.split('\n').map(l => ({
+    return (root.innerText||'').replace(/ /g,' ').split('\n').map(l => ({
       text: l.trim(),
       depth: Math.floor(l.match(/^[\t ]*/)[0].replace(/\t/g,'    ').length/4),
-      bold:false, li:false }));
+      bold:false }));
   }
   return blocks;
 }
-function txText(){ return txBlocks().map(b => b.text ? TX_IND.repeat(b.depth)+b.text : '').join('\n'); }
-
-/* ---------- output pane: plain text in, highlighted HTML out ---------- */
-function txOutGet(){
-  // Read the text WITHOUT the tag chips. innerText would include them, so a
-  // highlighted output chained back through "Output -> input" would carry the
-  // categorization names into the document itself. Clone, drop the chips, read.
-  const box = $('txout');
-  if(!box.querySelector('.txchip')) return (box.innerText || '').replace(/\u00a0/g,' ');
-  const c = box.cloneNode(true);
-  c.querySelectorAll('.txchip').forEach(n => n.remove());
-  document.body.appendChild(c);
-  const t = (c.innerText || '').replace(/\u00a0/g,' ');
-  c.remove();
-  return t;
-}
-function txOutSet(text, tagIds){
-  const box = $('txout');
-  const ids = (tagIds && tagIds.length) ? tagIds : null;
-  box.innerHTML = ids ? txHighlight(text, ids) : txEsc(text);
-  txStat(text);
-}
-function txEsc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-function txStat(s){
-  const n = s ? s.split('\n').length : 0;
-  $('txstat').textContent = `${n} line${n===1?'':'s'} · ${s.length} characters`;
-}
-function txSrc(){ const o = txOutGet(); return (o && o.trim()) ? o : txText(); }
 
 /* ---------- helpers shared by every transform ---------- */
 const H = {
@@ -4980,30 +5004,74 @@ const H = {
   strip: l => l.replace(/^[\t ]+/,''),
   lines: (t,f) => t.split('\n').map(f).join('\n'),
   blocks: () => txBlocks(),
-  markRx: /^(?:\(\s*(?:\d+|[A-Za-z]|[ivxlcdm]{1,6})\s*\)|\d+[.)]|[A-Za-z][.)]|[ivxlcdm]{1,6}[.)]|[\u2022\u25aa\u25e6\u00b7\u2023\u2219\u25d8\u25cb\u25cf\u2013\u2014*+-])\s+/i,
+  markRx: /^(?:\(\s*(?:\d+|[A-Za-z]|[ivxlcdm]{1,6})\s*\)|\d+[.)]|[A-Za-z][.)]|[ivxlcdm]{1,6}[.)]|[•▪◦·‣∙◘○●–—*+-])\s+/i,
   marker(line){
     const t = this.strip(line);
     const M = [['pnum',/^\(\s*\d+\s*\)\s+/],['num',/^\d+[.)]\s+/],
                ['proman',/^\(\s*(?=[ivxlcdm]{1,6}\s*\))[ivxlcdm]{1,6}\s*\)\s+/i],
                ['roman',/^(?=[ivxlcdm]{1,6}[.)])[ivxlcdm]{1,6}[.)]\s+/i],
                ['palpha',/^\(\s*[A-Za-z]\s*\)\s+/],['alpha',/^[A-Za-z][.)]\s+/],
-               ['bullet',/^[\u2022\u25aa\u25e6\u00b7\u2023\u2219\u25d8\u25cb\u25cf\u2013\u2014*+-]\s+/]];
+               ['bullet',/^[•▪◦·‣∙◘○●–—*+-]\s+/]];
     for(const [k,re] of M) if(re.test(t)) return k;
     return null;
   },
-  /* Split a list WITHOUT altering a character: each separator, and any "and"
-     or "or" that follows it, stays welded to the end of the fragment before
-     it. That is what keeps the text exactly as drafted. */
+  /* Split a list WITHOUT altering a character: each separator, and any and/or
+     that follows it, stays welded to the fragment before it. */
   splitKeep(rest){
     const parts = []; let last = 0, m;
     const re = /[,;](?:\s+(?:and|or))?(?=\s)/gi;
     while((m = re.exec(rest))){
-      const end = m.index + m[0].length;
-      parts.push(rest.slice(last, end).trim());
-      last = end;
+      const e = m.index + m[0].length;
+      parts.push(rest.slice(last, e).trim()); last = e;
     }
     if(last < rest.length) parts.push(rest.slice(last).trim());
-    return parts.filter(Boolean);
+    if(parts.length > 1) return parts.filter(Boolean);
+    // No commas: split once at the LAST and/or, conjunction kept on the left.
+    let li = -1, x, r2 = /\s+\b(?:and|or)\b\s+/gi;
+    while((x = r2.exec(rest))) li = x.index;
+    if(li < 0) return [rest.trim()].filter(Boolean);
+    const conj = /\s+\b(?:and|or)\b\s+/i.exec(rest.slice(li))[0];
+    return [rest.slice(0, li + conj.length).trim(),
+            rest.slice(li + conj.length).trim()].filter(Boolean);
+  },
+  /* Where does the list begin? First comma/semicolon, else the LAST and/or. */
+  listStart(t){
+    const c = t.search(/[,;]/);
+    if(c >= 0) return c;
+    let last = -1, m, re = /\s+\b(?:and|or)\b\s+/gi;
+    while((m = re.exec(t))) last = m.index;
+    return last;
+  },
+  TRIG: '\\b(?:to|of|in|on|for|with|by|from|at|into|onto|under|over|per|via|' +
+        'between|among|against|through|during|within|regarding|about|upon|as|' +
+        'including(?:,? but not limited to)?|such as|namely|consisting of|' +
+        'comprising|using|providing|describing|ensuring|identifying|specifying|' +
+        'establishing|maintaining|containing|setting out)\\b',
+  BE: '\\b(?:be|been|being|is|are|was|were|shall|must|will|may)\\b',
+  DET: '(?:their|the|a|an|its|his|her|our|your|each|any|all|these|those|this|' +
+       'that|different|various|several|multiple|certain|other|both|either|' +
+       'neither|respective|following|relevant|applicable|specific|own)',
+  /* The split point: the LAST trigger occurring BEFORE the list begins.
+     Derived from Josh's four examples -- "based on their", "with different",
+     "roles as", "measures be" are all the last trigger before the first comma
+     (or before the final and/or when there are no commas). Earliest-trigger
+     and latest-trigger rules each get two of the four wrong. */
+  findSplit(text){
+    const ls = this.listStart(text);
+    if(ls < 0) return null;
+    let best = null, m;
+    const re = new RegExp('(' + this.TRIG + '|' + this.BE + ')', 'gi');
+    while((m = re.exec(text))) if(m.index + m[0].length <= ls) best = m;
+    if(!best) return null;
+    let end = best.index + best[0].length;
+    // Absorb determiners and list-introducing adjectives: the stem is
+    // "based on their", not "based on".
+    const det = new RegExp('^\\s+(?:' + this.DET + '\\s+)*' + this.DET + '\\b', 'i')
+                  .exec(text.slice(end));
+    if(det) end += det[0].length;
+    const items = this.splitKeep(text.slice(end).trim());
+    if(items.length < 2) return null;
+    return { stem: text.slice(0, end).trimEnd(), items };
   },
   roman(n){
     const t=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],
@@ -5011,40 +5079,93 @@ const H = {
     let o=''; for(const [v,r] of t){ while(n>=v){ o+=r; n-=v; } } return o||'I';
   }
 };
+/* ==================== the built-in registry ==================== */
+const TXBUILTIN = [
 
-/* ==================== the transform registry ==================== */
-/* group: fix | outline | parse | case | lines | structure | graph
-   Order within a group is display order. `primary:true` gets its own button. */
-const TXDEFS = [
+{ id:'parse', label:'⑂ Parse', group:'parse', primary:true,
+  desc:'Breaks a sentence into its logical groups and subgroups, recursively, and leaves the wording exactly as drafted.\n\nThe split point is the LAST trigger word before the list begins — a preposition (to, of, in, on, for, with, by, as…), an introducing phrase (including, such as, namely) or a form of "be". Determiners and list-introducing adjectives are absorbed into the stem, so it breaks after "based on their" rather than after "on".\n\nEach item is then parsed again, which is what produces nesting:\n\n  ABC will evaluate var1 based on their\n      relevance,\n      quality,\n      accessibility, and\n      suitability for\n          analysis and\n          linkage\n\nA preposition with a single object is left on the line. Every comma, semicolon and trailing and/or stays welded to the fragment it followed.\n\nWhere a trailing phrase applies to the WHOLE list rather than the last item, use "Parse — lift trailing phrase" instead. That distinction is genuinely ambiguous in English and no rule gets both readings right.',
+  code:
+`(t, H) => {
+  const MAX = 6;                        // recursion guard
+
+  function go(text, depth, level) {
+    const pad = H.IND.repeat(depth);
+    if (level >= MAX) return [pad + text];
+    const s = H.findSplit(text);        // last trigger before the list
+    if (!s) return [pad + text];        // no list here: leave the line alone
+    const out = [pad + s.stem];
+    for (const item of s.items) out.push(...go(item, depth + 1, level + 1));
+    return out;
+  }
+
+  const out = [];
+  for (const line of t.split('\\n')) {
+    if (!line.trim()) { out.push(''); continue; }
+    out.push(...go(H.strip(line), H.depth(line), 0));
+  }
+  return out.join('\\n');
+}` },
+
+{ id:'parselift', label:'⑂ Parse — lift trailing phrase', group:'parse',
+  desc:'Identical to Parse, except that a trailing prepositional phrase on the LAST item is lifted back to the parent level, on the reading that it qualifies the whole list rather than just the final item.\n\n  Are quiggles associated with different\n      average health,\n      capacity, or\n      pembrokes\n  for transitive or appellative citation\n\nWhich reading is correct is a real ambiguity in the English, not a gap in the code: "suitability for analysis and linkage" attaches to its own item, while "for transitive or appellative citation" plausibly covers the lot. Nothing in the surface form distinguishes them, so this is a choice you make per sentence — run Parse, and if the tail belongs to everything, run this instead.',
+  code:
+`(t, H) => {
+  const MAX = 6;
+  const TRIG = new RegExp('(' + H.TRIG + ')', 'i');
+
+  function go(text, depth, level) {
+    const pad = H.IND.repeat(depth);
+    if (level >= MAX) return [pad + text];
+    const s = H.findSplit(text);
+    if (!s) return [pad + text];
+
+    const out = [pad + s.stem];
+    const items = s.items.slice();
+    let tail = null;
+
+    // Detach a trailing prepositional phrase from the final item and emit it
+    // at the PARENT level, where it reads as qualifying every sibling.
+    const last = items[items.length - 1];
+    const m = TRIG.exec(last);
+    if (m && m.index > 0) {
+      items[items.length - 1] = last.slice(0, m.index).trim();
+      tail = last.slice(m.index).trim();
+    }
+
+    for (const item of items) out.push(...go(item, depth + 1, level + 1));
+    if (tail) out.push(pad + tail);
+    return out;
+  }
+
+  const out = [];
+  for (const line of t.split('\\n')) {
+    if (!line.trim()) { out.push(''); continue; }
+    out.push(...go(H.strip(line), H.depth(line), 0));
+  }
+  return out.join('\\n');
+}` },
 
 { id:'clean', label:'🧹 Clean paste', group:'fix', primary:true,
-  desc:'Undoes what PDF and Word do to text on the way out: rejoins lines broken mid-sentence, repairs words hyphenated across a line break, and drops page numbers and repeated running headers.\n\nThe interesting rule is how it decides a line was WRAPPED rather than deliberately short. Checking "does the next line start lowercase" fails on "...set out in / Schedule 2." Joining every unpunctuated line instead glues headings onto the body beneath them. What actually separates the two is WIDTH: a wrapped line sits near the widest line in the document, a heading is short.',
+  desc:'Undoes what PDF and Word do to text on the way out: rejoins lines broken mid-sentence, repairs words hyphenated across a line break, drops page numbers and repeated running headers.\n\nThe interesting rule is how it decides a line was WRAPPED rather than deliberately short. "Does the next line start lowercase" fails on "...set out in / Schedule 2." Joining every unpunctuated line glues headings onto the body beneath. What separates them is WIDTH: a wrapped line sits near the widest line in the document; a heading is short.',
   code:
 `(t, H) => {
   let lines = t.split('\\n');
-
-  // 1. Drop page furniture.
   lines = lines.filter(l => {
     const s = l.trim();
-    if (/^\\d+$/.test(s)) return false;                     // bare page number
+    if (/^\\d+$/.test(s)) return false;
     if (/^page\\s+\\d+(\\s+of\\s+\\d+)?$/i.test(s)) return false;
-    if (/^-\\s*\\d+\\s*-$/.test(s)) return false;             // - 12 -
+    if (/^-\\s*\\d+\\s*-$/.test(s)) return false;
     return true;
   });
-
-  // 2. A short line repeated three or more times is a running header/footer.
   const seen = {};
   for (const l of lines) { const s = l.trim(); if (s.length > 3) seen[s] = (seen[s]||0)+1; }
   const boiler = new Set(Object.keys(seen).filter(k => seen[k] >= 3 && k.length < 80));
   lines = lines.filter(l => !boiler.has(l.trim()));
 
-  // 3. Width test: the 80th-percentile line length stands in for the column
-  //    width. Anything at 80% of that was wrapped, not ended.
   const lens = lines.map(l => l.trim().length).filter(n => n > 0).sort((a,b) => a-b);
   const wide = lens.length ? lens[Math.floor(lens.length * 0.8)] : 0;
   const isFull = s => s.length >= Math.max(40, wide * 0.8);
 
-  // 4. Rejoin.
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     let cur = lines[i];
@@ -5053,11 +5174,9 @@ const TXDEFS = [
       const nxt = lines[i+1];
       if (!nxt.trim()) break;
       const c = cur.trimEnd(), n = nxt.trim();
-      if (/-$/.test(c) && /^[a-z]/.test(n)) {              // word split by hyphen
-        cur = c.replace(/-$/, '') + n; i++; continue;
-      }
-      const ended  = /[.!?:;\u201d"')\\]]$/.test(c);
-      const marked = H.marker(nxt) !== null;               // a list item starts fresh
+      if (/-$/.test(c) && /^[a-z]/.test(n)) { cur = c.replace(/-$/,'') + n; i++; continue; }
+      const ended  = /[.!?:;”"')\\]]$/.test(c);
+      const marked = H.marker(nxt) !== null;
       const cont   = /^[a-z(]/.test(n) || isFull(c.trim());
       if (!ended && cont && !marked) { cur = c + ' ' + n; i++; continue; }
       break;
@@ -5068,125 +5187,47 @@ const TXDEFS = [
 }` },
 
 { id:'indent', label:'⇥ Smart indent', group:'structure', primary:true,
-  desc:'Infers the outline. Marker TYPE decides depth, in order of first appearance: legal drafting goes 1. then (a) then (i), and the marker type is a far more reliable signal than any whitespace that survived the paste. A line ending in a colon introduces the unmarked lines beneath it. Depth already present in the pasted HTML is a floor and is never overridden — if Word said it was nested, it was.',
+  desc:'Infers the outline. Marker TYPE decides depth, in order of first appearance: legal drafting runs 1. then (a) then (i), and marker type is a far more reliable signal than whatever whitespace survived the paste. A line ending in a colon introduces the unmarked lines beneath it. Depth already present in the pasted HTML is a floor and is never overridden.',
   code:
 `(t, H) => {
   const blocks = H.blocks();
-
-  // Depth is assigned by marker TYPE, ranked by the order the types first
-  // appear. A document that runs 1. / (a) / (i) therefore nests 0 / 1 / 2
-  // without anyone having to say so.
   const order = [];
-  for (const b of blocks) {
-    const k = H.marker(b.text);
-    if (k && !order.includes(k)) order.push(k);
-  }
-
+  for (const b of blocks) { const k = H.marker(b.text); if (k && !order.includes(k)) order.push(k); }
   const out = [];
-  let intro = null;                     // depth of the line that ended in ':'
+  let intro = null;
   for (const b of blocks) {
     if (!b.text) { out.push(''); intro = null; continue; }
     const k = H.marker(b.text);
     let d;
-    if (k)                { d = order.indexOf(k); intro = null; }
-    else if (intro !== null) d = intro + 1;      // introduced by a colon above
-    else                  d = b.depth;           // fall back to pasted structure
-
-    d = Math.max(d, b.depth);                    // pasted depth is a floor
-    // A bold, unpunctuated, short line is a heading: pull it to the top.
+    if (k) { d = order.indexOf(k); intro = null; }
+    else if (intro !== null) d = intro + 1;
+    else d = b.depth;
+    d = Math.max(d, b.depth);
     if (b.bold && !k && b.text.length < 90 && !/[.;,]$/.test(b.text)) d = 0;
-
     out.push(H.IND.repeat(d) + b.text);
     if (/:$/.test(b.text)) intro = d;
   }
   return out.join('\\n');
 }` },
 
-{ id:'breaklist', label:'⑂ Break on lists', group:'parse', primary:true,
-  desc:'The main parsing tool. Breaks a sentence wherever a trigger word is followed by a list, putting each item on its own indented line — and leaves the wording untouched.\n\nTriggers are prepositions (to, of, in, for, with, by, from, between, among…), introducing phrases (including, such as, namely, as follows) and gerund verbs (using, providing, describing, ensuring…).\n\nNothing is deleted or reworded. The trigger stays at the end of the line above; every comma, semicolon and trailing "and"/"or" stays welded to the end of the fragment it followed. Recurses so nested lists break too.',
+{ id:'breakconj', label:'⋔ Break on and/or', group:'parse',
+  desc:'Narrower than Parse: splits only on coordinating conjunctions, for pulling every distinct promise out of a compound obligation. The subject and modal stay as a stem so each obligation reads on its own.',
   code:
 `(t, H) => {
-  // Break only where a trigger is FOLLOWED BY A LIST. A preposition with a
-  // single object is just a sentence and should be left alone.
-  const TRIGGER = new RegExp(
-    '\\\\b(' +
-      // prepositions
-      'to|of|in|on|for|with|by|from|at|into|onto|under|over|per|via|' +
-      'between|among|amongst|against|through|during|within|without|' +
-      'regarding|concerning|about|upon|' +
-      // introducing phrases
-      'including(?:,? but not limited to)?|such as|namely|as follows|' +
-      'consisting of|comprising|comprised of|' +
-      // gerunds and reporting verbs
-      'using|providing|describing|ensuring|identifying|specifying|' +
-      'establishing|maintaining|containing|setting out|listing' +
-    ')\\\\b', 'i');
-
-  const MAXDEPTH = 3;                  // recursion guard: deep enough for
-                                       // nested schedules, shallow enough that
-                                       // a sentence is never shredded.
-
-  function looksLikeList(s) {
-    if (H.splitKeep(s).length >= 2) return true;
-    return /\\b(and|or)\\b/i.test(s) && /[,;]/.test(s);
-  }
-
-  function br(text, depth, level) {
-    const pad = H.IND.repeat(depth);
-    if (level >= MAXDEPTH) return [pad + text];
-
-    // Find the LAST trigger that still has a list after it, so the break lands
-    // as close to the list as possible rather than at the first preposition.
-    let cut = -1, cutEnd = -1, m, re = new RegExp(TRIGGER.source, 'gi'), x;
-    while ((x = re.exec(text))) {
-      const after = text.slice(x.index + x[0].length).trim();
-      if (after && looksLikeList(after)) { cut = x.index; cutEnd = x.index + x[0].length; }
-    }
-    if (cut < 0) return [pad + text];
-
-    const stem = text.slice(0, cutEnd).trimEnd();   // trigger stays on this line
-    const rest = text.slice(cutEnd).trim();
-    const items = H.splitKeep(rest);
-    if (items.length < 2) return [pad + text];
-
-    const out = [pad + stem];
-    for (const it of items) out.push(...br(it, depth + 1, level + 1));
-    return out;
-  }
-
-  const out = [];
-  for (const line of t.split('\\n')) {
-    if (!line.trim()) { out.push(''); continue; }
-    out.push(...br(H.strip(line), H.depth(line), 0));
-  }
-  return out.join('\\n');
-}` },
-
-{ id:'breakconj', label:'⋔ Break on and/or', group:'parse', primary:true,
-  desc:'Narrower than "Break on lists": splits only on coordinating conjunctions, for pulling every distinct promise out of a compound obligation. The subject and modal stay as a stem ("The Supplier shall") so each obligation reads on its own. Punctuation and the trailing "and"/"or" stay exactly where they were drafted.',
-  code:
-`(t, H) => {
-  // The lead-in of a compound obligation almost always hinges on a modal.
-  // Splitting there keeps the subject out of the first item, which otherwise
-  // reads as a different kind of thing from its siblings.
   const LEAD = /^(.*?\\b(?:shall|must|will|may|agrees to|undertakes to|is required to|is responsible for)\\b)[:,]?\\s+(.*)$/i;
-
   const out = [];
   for (const line of t.split('\\n')) {
     if (!line.trim()) { out.push(''); continue; }
     const d = H.depth(line), body = H.strip(line);
     if (!/\\b(and|or)\\b/i.test(body)) { out.push(line); continue; }
-
     let stem = '', rest = body;
     const colon = body.indexOf(':');
     if (colon > 0 && colon < body.length - 1) {
-      stem = body.slice(0, colon + 1).trim();
-      rest = body.slice(colon + 1).trim();
+      stem = body.slice(0, colon + 1).trim(); rest = body.slice(colon + 1).trim();
     } else {
       const m = LEAD.exec(body);
       if (m) { stem = m[1].trim(); rest = m[2]; }
     }
-
     const items = H.splitKeep(rest);
     if (items.length < 2) { out.push(line); continue; }
     if (stem) out.push(H.IND.repeat(d) + stem);
@@ -5196,205 +5237,181 @@ const TXDEFS = [
 }` },
 
 { id:'sentences', label:'One sentence per line', group:'parse',
-  desc:'Splits on sentence-ending punctuation followed by a capital letter or an opening quote. Indentation is preserved.',
-  code:
-`(t, H) => H.lines(t, l => {
-  const d = H.depth(l);
-  return H.strip(l).replace(/([.!?])\\s+(?=[A-Z(\u201c"])/g, '$1\\n')
-    .split('\\n').map(x => H.IND.repeat(d) + x).join('\\n');
-})` },
-
+  desc:'Splits on sentence-ending punctuation followed by a capital or an opening quote. Indentation is preserved.',
+  code:`(t, H) => H.lines(t, l => { const d = H.depth(l);
+  return H.strip(l).replace(/([.!?])\\s+(?=[A-Z(“"])/g,'$1\\n').split('\\n')
+    .map(x => H.IND.repeat(d) + x).join('\\n'); })` },
 { id:'semicolons', label:'Split on semicolons', group:'parse',
-  desc:'One fragment per semicolon. The semicolon stays at the end of the fragment it closed, so the text is unaltered.',
-  code:
-`(t, H) => H.lines(t, l => {
-  const d = H.depth(l), parts = [];
-  let last = 0, m, re = /;(?=\\s)/g;
-  while ((m = re.exec(H.strip(l)))) { parts.push(H.strip(l).slice(last, m.index+1).trim()); last = m.index+1; }
-  const tail = H.strip(l).slice(last).trim();
-  if (tail) parts.push(tail);
-  return (parts.length ? parts : [H.strip(l)]).map(x => H.IND.repeat(d) + x).join('\\n');
-})` },
-
+  desc:'One fragment per semicolon; the semicolon stays where it was drafted.',
+  code:`(t, H) => H.lines(t, l => { const d = H.depth(l), b = H.strip(l);
+  const parts = []; let last = 0, m, re = /;(?=\\s)/g;
+  while ((m = re.exec(b))) { parts.push(b.slice(last, m.index+1).trim()); last = m.index+1; }
+  const tail = b.slice(last).trim(); if (tail) parts.push(tail);
+  return (parts.length ? parts : [b]).map(x => H.IND.repeat(d) + x).join('\\n'); })` },
 { id:'obligations', label:'Extract obligations', group:'parse',
-  desc:'Keeps only sentences containing a duty-creating verb (shall, must, will, agrees to, undertakes to, is required to, responsible for). Permissive language such as "may" is deliberately excluded — it creates a right, not a duty.',
-  code:
-`(t, H) => {
-  const one = t.replace(/([.!?])\\s+(?=[A-Z(\u201c"])/g, '$1\\n');
+  desc:'Keeps only sentences containing a duty-creating verb. "May" is excluded deliberately: it creates a right, not a duty.',
+  code:`(t, H) => { const one = t.replace(/([.!?])\\s+(?=[A-Z(“"])/g,'$1\\n');
   const hits = one.split('\\n').map(s => s.trim()).filter(s =>
     /\\b(shall|must|will|agrees to|undertakes to|is required to|responsible for)\\b/i.test(s));
-  return hits.length ? hits.join('\\n')
-    : '(nothing matched shall / must / will / agrees to / undertakes to)';
-}` },
-
+  return hits.length ? hits.join('\\n') : '(nothing matched shall / must / will / agrees to)'; }` },
 { id:'defined', label:'Extract defined terms', group:'parse',
-  desc:'Finds terms in quotes that are being defined — «"Goods" means …» and «(the "Agreement")» — and lists them with the start of their definition.',
-  code:
-`(t, H) => {
-  const found = new Map();
-  const pats = [
-    /[\u201c"]([^\u201d"]{2,60})[\u201d"]\\s+(?:shall\\s+)?means?\\b([^.;]{0,120})/gi,
-    /\\(\\s*(?:the|each,?\\s*an?|an?)?\\s*[\u201c"]([^\u201d"]{2,60})[\u201d"]\\s*\\)/gi
-  ];
+  desc:'Finds quoted terms being defined — «"Goods" means …» and «(the "Agreement")».',
+  code:`(t, H) => { const found = new Map();
+  const pats = [/[“"]([^”"]{2,60})[”"]\\s+(?:shall\\s+)?means?\\b([^.;]{0,120})/gi,
+                /\\(\\s*(?:the|each,?\\s*an?|an?)?\\s*[“"]([^”"]{2,60})[”"]\\s*\\)/gi];
   for (const r of pats) { let m; while ((m = r.exec(t))) if (!found.has(m[1])) found.set(m[1], (m[2]||'').trim()); }
   if (!found.size) return '(no defined terms found — they are usually in quotes)';
   return [...found.entries()].sort((a,b) => a[0].localeCompare(b[0]))
-    .map(([k,v]) => v ? k + ' — ' + v : k).join('\\n');
-}` },
-
+    .map(([k,v]) => v ? k + ' — ' + v : k).join('\\n'); }` },
 { id:'xrefs', label:'Extract cross-references', group:'parse',
-  desc:'Lists every reference to another part of the document. The match must end on a word character or a bracket, otherwise the sentence\u2019s own full stop is captured too and "Clause 9." looks different from "Clause 9".',
-  code:
-`(t, H) => {
-  const rx = /\\b(?:section|clause|article|schedule|exhibit|annex|appendix|paragraph)\\s+[\\dA-Za-z](?:[\\w.()-]*[\\w)])?/gi;
+  desc:'Lists references to other parts of the document. The match must end on a word character or bracket, or the sentence\u2019s own full stop is captured too.',
+  code:`(t, H) => { const rx = /\\b(?:section|clause|article|schedule|exhibit|annex|appendix|paragraph)\\s+[\\dA-Za-z](?:[\\w.()-]*[\\w)])?/gi;
   const hits = [...new Set((t.match(rx)||[]).map(s => s.trim()))];
-  return hits.length ? hits.sort().join('\\n') : '(no cross-references found)';
-}` },
-
+  return hits.length ? hits.sort().join('\\n') : '(no cross-references found)'; }` },
 { id:'parties', label:'Extract party names', group:'parse',
-  desc:'Pulls out capitalised names ending in a corporate suffix (Inc, LLC, Ltd, GmbH, PLC, Trust, Holdings…).',
-  code:
-`(t, H) => {
-  const rx = /\\b(?:[A-Z][A-Za-z&.'-]+\\s+){0,4}(?:Inc|LLC|L\\.L\\.C|Ltd|Limited|Corp|Corporation|Company|GmbH|PLC|LLP|LP|Trust|Partners|Holdings)\\b\\.?/g;
+  desc:'Capitalised names ending in a corporate suffix.',
+  code:`(t, H) => { const rx = /\\b(?:[A-Z][A-Za-z&.'-]+\\s+){0,4}(?:Inc|LLC|L\\.L\\.C|Ltd|Limited|Corp|Corporation|Company|GmbH|PLC|LLP|LP|Trust|Partners|Holdings)\\b\\.?/g;
   const hits = [...new Set((t.match(rx)||[]).map(s => s.trim()))];
-  return hits.length ? hits.sort().join('\\n') : '(no company-like names found)';
-}` },
+  return hits.length ? hits.sort().join('\\n') : '(no company-like names found)'; }` },
 
-/* ---- clean up ---- */
 { id:'straighten', label:'Straighten quotes & dashes', group:'fix',
   desc:'Curly quotes to straight, en/em dashes to hyphens, ellipsis to three dots.',
-  code:`(t) => t.replace(/[\u201c\u201d]/g,'"').replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,'-').replace(/\u2026/g,'...')` },
+  code:`(t) => t.replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/[–—]/g,'-').replace(/…/g,'...')` },
 { id:'unicodeclean', label:'Strip invisible characters', group:'fix',
-  desc:'Removes zero-width spaces, joiners, BOMs and soft hyphens, and turns non-breaking spaces into ordinary ones. These are invisible but break search and diff.',
+  desc:'Removes zero-width spaces, joiners, BOMs and soft hyphens; non-breaking spaces become ordinary ones.',
   code:`(t) => t.replace(/[\\u200b-\\u200d\\ufeff\\u00ad]/g,'').replace(/\\u00a0/g,' ')` },
 { id:'collapsews', label:'Collapse repeated spaces', group:'fix',
-  desc:'Runs of spaces or tabs inside a line become one space. Leading indentation is left alone.',
+  desc:'Runs of spaces inside a line become one. Indentation is left alone.',
   code:`(t,H) => H.lines(t, l => H.IND.repeat(H.depth(l)) + H.strip(l).replace(/[ \\t]{2,}/g,' '))` },
-{ id:'trim', label:'Trim each line', group:'fix', desc:'Removes leading and trailing whitespace from every line, flattening indentation.',
+{ id:'trim', label:'Trim each line', group:'fix', desc:'Removes leading and trailing whitespace, flattening indentation.',
   code:`(t,H) => H.lines(t, l => l.trim())` },
 { id:'noblank', label:'Remove blank lines', group:'fix', desc:'Drops empty lines.',
   code:`(t) => t.split('\\n').filter(l => l.trim()).join('\\n')` },
 { id:'dedupe', label:'Remove duplicate lines', group:'fix',
-  desc:'Keeps the first occurrence of each line, comparing case-insensitively and ignoring indentation. Order is preserved — a set would scramble it, which is worse than a stray duplicate.',
-  code:
-`(t,H) => { const seen = new Set();
-  return t.split('\\n').filter(l => {
-    const k = l.trim().toLowerCase();
-    if (!k) return true;
-    if (seen.has(k)) return false;
-    seen.add(k); return true;
-  }).join('\\n'); }` },
+  desc:'Keeps the first occurrence, comparing case-insensitively and ignoring indentation. Order is preserved — a set would scramble it, which is worse than a stray duplicate.',
+  code:`(t,H) => { const seen = new Set();
+  return t.split('\\n').filter(l => { const k = l.trim().toLowerCase();
+    if (!k) return true; if (seen.has(k)) return false; seen.add(k); return true; }).join('\\n'); }` },
 
-/* ---- case ---- */
 { id:'title', label:'Title Case', group:'case',
-  desc:'Capitalises each word except short joining words (a, and, of, the, to…), which stay lowercase unless they lead the line.',
-  code:
-`(t) => { const small = new Set(['a','an','and','as','at','but','by','for','from','in','nor','of','on','or','per','the','to','via','vs','with']);
-  return t.split('\\n').map(l => l.replace(/\\b[\\w'\u2019]+\\b/g, (w,i) =>
+  desc:'Capitalises each word except short joining words, which stay lowercase unless they lead the line.',
+  code:`(t) => { const small = new Set(['a','an','and','as','at','but','by','for','from','in','nor','of','on','or','per','the','to','via','vs','with']);
+  return t.split('\\n').map(l => l.replace(/\\b[\\w'’]+\\b/g, (w,i) =>
     (i > 0 && small.has(w.toLowerCase())) ? w.toLowerCase()
       : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join('\\n'); }` },
-{ id:'sentence', label:'Sentence case', group:'case', desc:'Lowercases everything, then capitalises the first letter of each sentence.',
+{ id:'sentence', label:'Sentence case', group:'case', desc:'Lowercases, then capitalises the first letter of each sentence.',
   code:`(t) => t.split('\\n').map(l => l.toLowerCase().replace(/(^\\s*\\w)|([.!?]\\s+\\w)/g, m => m.toUpperCase())).join('\\n')` },
 { id:'upper', label:'UPPERCASE', group:'case', desc:'Everything upper case.', code:`(t) => t.toUpperCase()` },
 { id:'lower', label:'lowercase', group:'case', desc:'Everything lower case.', code:`(t) => t.toLowerCase()` },
 
-/* ---- lines ---- */
-{ id:'sort', label:'Sort A→Z', group:'lines', desc:'Alphabetical, ignoring indentation and case. Blank lines are dropped.',
+{ id:'sort', label:'Sort A→Z', group:'lines', desc:'Alphabetical, ignoring indentation and case.',
   code:`(t,H) => t.split('\\n').filter(l => l.trim()).sort((a,b) => H.strip(a).toLowerCase().localeCompare(H.strip(b).toLowerCase())).join('\\n')` },
-{ id:'sortlen', label:'Sort by length', group:'lines', desc:'Shortest line first — useful for spotting stragglers and outliers.',
+{ id:'sortlen', label:'Sort by length', group:'lines', desc:'Shortest first — useful for spotting outliers.',
   code:`(t) => t.split('\\n').filter(l => l.trim()).sort((a,b) => a.length - b.length).join('\\n')` },
 { id:'reverse', label:'Reverse order', group:'lines', desc:'Last line first.', code:`(t) => t.split('\\n').reverse().join('\\n')` },
-{ id:'number', label:'Number the lines', group:'lines', desc:'Prefixes each non-blank line with a running number.',
+{ id:'number', label:'Number the lines', group:'lines', desc:'Running number on each non-blank line.',
   code:`(t) => { let n = 0; return t.split('\\n').map(l => l.trim() ? (++n) + '. ' + l : l).join('\\n'); }` },
 { id:'join', label:'Join into one paragraph', group:'lines', desc:'Every line joined with a single space.',
   code:`(t) => t.split('\\n').map(l => l.trim()).filter(Boolean).join(' ')` },
 
-/* ---- structure ---- */
-{ id:'md', label:'To Markdown bullets', group:'structure', desc:'Each line becomes a "-" bullet, indented two spaces per level, with any existing marker removed.',
+{ id:'md', label:'To Markdown bullets', group:'structure', desc:'Two-space indent per level, existing markers removed.',
   code:`(t,H) => H.lines(t, l => l.trim() ? '  '.repeat(H.depth(l)) + '- ' + H.strip(l).replace(H.markRx,'') : '')` },
-{ id:'outline', label:'To numbered outline', group:'structure', desc:'Renumbers the whole outline as 1. / a. / i. / (a) by depth, replacing whatever markers were there.',
-  code:
-`(t,H) => {
-  const mk = [n => n + '.',
-              n => String.fromCharCode(96 + ((n-1) % 26) + 1) + '.',
-              n => H.roman(n).toLowerCase() + '.',
-              n => '(' + String.fromCharCode(96 + ((n-1) % 26) + 1) + ')'];
+{ id:'outline', label:'To numbered outline', group:'structure', desc:'Renumbers by depth as 1. / a. / i. / (a).',
+  code:`(t,H) => { const mk = [n => n + '.', n => String.fromCharCode(96+((n-1)%26)+1) + '.',
+                 n => H.roman(n).toLowerCase() + '.', n => '(' + String.fromCharCode(96+((n-1)%26)+1) + ')'];
   const c = [];
-  return t.split('\\n').map(l => {
-    if (!l.trim()) return '';
+  return t.split('\\n').map(l => { if (!l.trim()) return '';
     const d = H.depth(l), body = H.strip(l).replace(H.markRx,'');
     c.length = d + 1; c[d] = (c[d]||0) + 1;
     for (let i = d+1; i < c.length; i++) c[i] = 0;
-    return H.IND.repeat(d) + mk[Math.min(d, mk.length-1)](c[d]) + ' ' + body;
-  }).join('\\n');
-}` },
-{ id:'flatten', label:'Flatten — remove indenting', group:'structure', desc:'Strips all leading whitespace.', code:`(t,H) => H.lines(t, l => H.strip(l))` },
-{ id:'stripmarks', label:'Strip numbers and bullets', group:'structure', desc:'Removes leading 1. / (a) / • markers, keeping the indentation.',
+    return H.IND.repeat(d) + mk[Math.min(d, mk.length-1)](c[d]) + ' ' + body; }).join('\\n'); }` },
+{ id:'flatten', label:'Flatten — remove indenting', group:'structure', desc:'Strips leading whitespace.',
+  code:`(t,H) => H.lines(t, l => H.strip(l))` },
+{ id:'stripmarks', label:'Strip numbers and bullets', group:'structure', desc:'Removes leading markers, keeping indentation.',
   code:`(t,H) => H.lines(t, l => H.IND.repeat(H.depth(l)) + H.strip(l).replace(H.markRx,''))` },
-{ id:'indentplus', label:'Indent +1', group:'structure', desc:'Pushes every non-blank line one level deeper.', code:`(t,H) => H.lines(t, l => l.trim() ? H.IND + l : l)` },
+{ id:'indentplus', label:'Indent +1', group:'structure', desc:'Pushes every non-blank line one level deeper.',
+  code:`(t,H) => H.lines(t, l => l.trim() ? H.IND + l : l)` },
 { id:'indentminus', label:'Outdent −1', group:'structure', desc:'Pulls every line back one level.',
   code:`(t,H) => H.lines(t, l => l.startsWith(H.IND) ? l.slice(H.IND.length) : H.strip(l))` },
 
-/* ---- graph ---- */
-{ id:'edges', label:'Edge list (parent → child)', group:'graph', desc:'Turns the outline into one edge per line. The nearest line one level shallower is the parent.',
-  code:
-`(t,H) => {
-  const stack = [], out = [];
-  for (const l of t.split('\\n')) {
-    if (!l.trim()) continue;
+{ id:'edges', label:'Edge list (parent → child)', group:'graph', desc:'One edge per line; the nearest shallower line is the parent.',
+  code:`(t,H) => { const stack = [], out = [];
+  for (const l of t.split('\\n')) { if (!l.trim()) continue;
     const d = H.depth(l), body = H.strip(l).replace(H.markRx,'');
     stack.length = d;
-    if (d > 0 && stack[d-1]) out.push(stack[d-1] + '  \u2192  ' + body);
-    stack[d] = body;
-  }
-  return out.join('\\n');
-}` },
-{ id:'mermaid', label:'Mermaid graph', group:'graph', desc:'A Mermaid "graph TD" definition, ready to paste into any Mermaid renderer.',
-  code:
-`(t,H) => {
-  const ids = new Map(), id = s => { if (!ids.has(s)) ids.set(s, 'n' + (ids.size+1)); return ids.get(s); };
-  const q = s => '"' + s.replace(/"/g, "'").slice(0,80) + '"';
+    if (d > 0 && stack[d-1]) out.push(stack[d-1] + '  →  ' + body);
+    stack[d] = body; }
+  return out.join('\\n'); }` },
+{ id:'mermaid', label:'Mermaid graph', group:'graph', desc:'A Mermaid "graph TD" definition.',
+  code:`(t,H) => { const ids = new Map(), id = s => { if (!ids.has(s)) ids.set(s,'n'+(ids.size+1)); return ids.get(s); };
+  const q = s => '"' + s.replace(/"/g,"'").slice(0,80) + '"';
   const stack = [], out = ['graph TD'];
-  for (const l of t.split('\\n')) {
-    if (!l.trim()) continue;
+  for (const l of t.split('\\n')) { if (!l.trim()) continue;
     const d = H.depth(l), body = H.strip(l).replace(H.markRx,'');
     stack.length = d;
     out.push('  ' + id(body) + '[' + q(body) + ']');
     if (d > 0 && stack[d-1]) out.push('  ' + id(stack[d-1]) + ' --> ' + id(body));
-    stack[d] = body;
-  }
-  return [...new Set(out)].join('\\n');
-}` },
-{ id:'json', label:'Nested JSON', group:'graph', desc:'The outline as nested {text, children} objects.',
-  code:
-`(t,H) => {
-  const root = { children: [] }, stack = [root];
-  for (const l of t.split('\\n')) {
-    if (!l.trim()) continue;
+    stack[d] = body; }
+  return [...new Set(out)].join('\\n'); }` },
+{ id:'json', label:'Nested JSON', group:'graph', desc:'The outline as nested {text, children}.',
+  code:`(t,H) => { const root = { children: [] }, stack = [root];
+  for (const l of t.split('\\n')) { if (!l.trim()) continue;
     const d = H.depth(l), node = { text: H.strip(l).replace(H.markRx,''), children: [] };
-    stack.length = d + 1;
-    (stack[d] || root).children.push(node);
-    stack[d+1] = node;
-  }
-  return JSON.stringify(root.children, null, 2);
-}` },
-{ id:'tsv', label:'TSV (depth, text)', group:'graph', desc:'Two columns: depth number, then the line. Imports cleanly into a spreadsheet.',
+    stack.length = d + 1; (stack[d] || root).children.push(node); stack[d+1] = node; }
+  return JSON.stringify(root.children, null, 2); }` },
+{ id:'tsv', label:'TSV (depth, text)', group:'graph', desc:'Depth number, tab, line. Imports cleanly into a spreadsheet.',
   code:`(t,H) => t.split('\\n').filter(l => l.trim()).map(l => H.depth(l) + '\\t' + H.strip(l)).join('\\n')` }
 ];
 
-const TXGROUPS = [
-  { id:'fix',       label:'Clean up',  icon:'🧹' },
-  { id:'parse',     label:'Parse',     icon:'⑂'  },
-  { id:'case',      label:'Case',      icon:'Aa' },
-  { id:'lines',     label:'Lines',     icon:'☰'  },
-  { id:'structure', label:'Structure', icon:'⌗'  },
-  { id:'graph',     label:'Graph',     icon:'⇢'  }
+const TXGROUPDEF = [
+  { id:'parse',     label:'Parse',     icon:'⑂',  def:'parse'  },
+  { id:'fix',       label:'Clean up',  icon:'🧹', def:'clean'  },
+  { id:'structure', label:'Structure', icon:'⌗',  def:'indent' },
+  { id:'case',      label:'Case',      icon:'Aa', def:'title'  },
+  { id:'lines',     label:'Lines',     icon:'☰',  def:'sort'   },
+  { id:'graph',     label:'Graph',     icon:'⇢',  def:'edges'  }
 ];
-const txDef = id => TXDEFS.find(d => d.id === id);
-const txCode = id => (TXstate.custom[id] != null ? TXstate.custom[id] : txDef(id).code);
-const txDesc = id => (TXstate.desc[id]  != null ? TXstate.desc[id]  : txDef(id).desc);
 
-/* ---------- compile + run ---------- */
+/* ---------- effective views over builtin + user data ---------- */
+function txAll(){
+  const out = [];
+  for(const d of TXBUILTIN){
+    if(TXstate.hidden.includes(d.id)) continue;
+    out.push({ id:d.id, builtin:true,
+               primary: (TXstate.pin[d.id] != null ? TXstate.pin[d.id] : !!d.primary),
+               label: TXstate.label[d.id] || d.label,
+               group: TXstate.home[d.id]  || d.group });
+  }
+  for(const [id,u] of Object.entries(TXstate.user)){
+    if(TXstate.hidden.includes(id)) continue;
+    out.push({ id, builtin:false,
+               primary: (TXstate.pin[id] != null ? TXstate.pin[id] : !!u.primary),
+               label: TXstate.label[id] || u.label || id,
+               group: TXstate.home[id]  || u.group || 'fix' });
+  }
+  return out;
+}
+function txGroups(){
+  const seen = new Map();
+  for(const g of TXGROUPDEF) seen.set(g.id, Object.assign({}, g));
+  for(const [id,g] of Object.entries(TXstate.groups))
+    seen.set(id, Object.assign(seen.get(id) || { id, icon:'▸' }, g, { id }));
+  return [...seen.values()].filter(g => !g.deleted);
+}
+function txGroup(id){ return txGroups().find(g => g.id === id); }
+function txDef(id){
+  return TXBUILTIN.find(d => d.id === id) ||
+         (TXstate.user[id] ? Object.assign({ id }, TXstate.user[id]) : null);
+}
+function txLabel(id){ const e = txAll().find(x => x.id === id); return e ? e.label : id; }
+function txCode(id){
+  if(TXstate.custom[id] != null) return TXstate.custom[id];
+  const d = txDef(id); return d ? (d.code || '(t)=>t') : '(t)=>t';
+}
+function txDesc(id){
+  if(TXstate.desc[id] != null) return TXstate.desc[id];
+  const d = txDef(id); return d ? (d.desc || '') : '';
+}
 const txFnCache = {};
 function txFn(id){
   const src = txCode(id);
@@ -5403,41 +5420,195 @@ function txFn(id){
   txFnCache[id] = { src, fn };
   return fn;
 }
-function txRun(id){
+/* ==================== stages (the pane pipeline) ==================== */
+/* txStages[0] is the input. Each later entry records which transform produced
+   it, so the pane can offer that transform's configured follow-ons. */
+let txStages = [{ id:null, text:'' }];
+
+function txPaneText(i){
+  const el = $('txpane' + i);
+  if(!el) return '';
+  if(!el.querySelector || !el.querySelector('.txchip')) return (el.innerText||'').replace(/ /g,' ');
+  // Read WITHOUT the tag chips: a highlighted pane fed onward must carry the
+  // text, never the categorization names.
+  const c = el.cloneNode(true);
+  c.querySelectorAll('.txchip').forEach(n => n.remove());
+  document.body.appendChild(c);
+  const t = (c.innerText||'').replace(/ /g,' ');
+  c.remove();
+  return t;
+}
+function txSrcFor(stage){ return stage === 0 ? txBlocks().map(b => b.text ? TX_IND.repeat(b.depth)+b.text : '').join('\n') : txPaneText(stage); }
+
+function txApply(id, fromStage){
   let r;
-  try{ r = txFn(id)(txSrc(), H); }
-  catch(e){ toast('“' + txDef(id).label + '” failed: ' + e.message, true);
-            $('txstat').textContent = 'error: ' + e.message; return; }
+  try{ r = txFn(id)(txSrcFor(fromStage), H); }
+  catch(e){ toast('“' + txLabel(id) + '” failed: ' + e.message, true); return; }
   if(typeof r !== 'string'){ toast('transform did not return text', true); return; }
-  txOutSet(r, TXstate.link[id] || []);
+  txStages = txStages.slice(0, fromStage + 1);
+  txStages[fromStage + 1] = { id, text:r };
+  txRenderPanes();
+  const el = $('txpane' + (fromStage + 1));
+  if(el) el.innerHTML = txHighlight(r, TXstate.link[id] || []);
+  txStat(r);
+}
+function txStat(s){
+  const n = s ? s.split('\n').length : 0;
+  $('txstat').textContent = `${n} line${n===1?'':'s'} · ${s.length} characters`;
+}
+function txEsc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+/* ---------- panes ---------- */
+function txRenderPanes(){
+  const strip = $('txstrip');
+  if(!strip) return;
+  const keep = {};
+  for(let i = 0; i < txStages.length; i++){
+    const el = $('txpane' + i);
+    if(el) keep[i] = el.innerHTML;
+  }
+  strip.innerHTML = '';
+  for(let i = 0; i < txStages.length; i++){
+    const pane = document.createElement('div');
+    pane.className = 'txpane txstage';
+    const title = i === 0 ? 'Input' : 'Output ' + i;
+    const via = i === 0 ? '<span class="muted">paste here (rich text welcome)</span>'
+                        : '<span class="muted">via ' + txEsc(txLabel(txStages[i].id)) + '</span>';
+    // Follow-on buttons: the transforms configured as next steps for whatever
+    // produced THIS pane. Grouped automatically once a category has more than
+    // one, so a long list never becomes a wall of buttons.
+    pane.innerHTML =
+      `<label>${title} ${via}</label>
+       <div class="txnext" id="txnext${i}"></div>
+       <div id="txpane${i}" class="txbox txstagebox" contenteditable="true" spellcheck="false"></div>`;
+    strip.appendChild(pane);
+    if(i === 0){
+      const rail = document.createElement('div');
+      rail.className = 'txrail'; rail.id = 'txrail';
+      strip.appendChild(rail);
+    }
+  }
+  for(const i in keep){ const el = $('txpane' + i); if(el) el.innerHTML = keep[i]; }
+  for(let i = 0; i < txStages.length; i++) txRenderNext(i);
+  txRenderRail();
+  txSyncPaneSize();
+}
+
+function txRenderNext(i){
+  const box = $('txnext' + i);
+  if(!box) return;
+  box.innerHTML = '';
+  if(i === 0) return;                       // stage 0's actions are the main bar
+  const from = txStages[i].id;
+  const ids = (TXstate.next[from] || []).filter(id => txDef(id));
+  if(!ids.length){
+    box.innerHTML = '<span class="muted" style="font-size:.74rem">no follow-on steps — set them with ✎ → Next steps</span>';
+    return;
+  }
+  const byGroup = {};
+  for(const id of ids){
+    const e = txAll().find(x => x.id === id); if(!e) continue;
+    (byGroup[e.group] = byGroup[e.group] || []).push(e);
+  }
+  for(const [gid, items] of Object.entries(byGroup)){
+    const g = txGroup(gid) || { id:gid, label:gid, icon:'▸' };
+    if(items.length === 1){
+      const b = document.createElement('div');
+      b.className = 'txbtn txmini';
+      b.innerHTML = `<span data-txrun="${items[0].id}" data-stage="${i}">${txEsc(items[0].label)}</span>`;
+      box.appendChild(b);
+    }else{
+      // More than one in a category: collapse into that category's pill, with
+      // its default on the text and the rest behind the caret.
+      const def = (g.def && items.some(x => x.id === g.def)) ? g.def : items[0].id;
+      const w = document.createElement('div');
+      w.className = 'txgroup';
+      w.innerHTML =
+        `<div class="txbtn txmini"><span data-txrun="${def}" data-stage="${i}">${g.icon} ${txEsc(g.label)}</span>
+           <span class="txcar" data-txmenu="n${i}-${gid}">▾</span></div>
+         <div class="txpop" id="txpop-n${i}-${gid}">
+           ${items.map(x => `<div class="txpopitem"><span data-txrun="${x.id}" data-stage="${i}">${txEsc(x.label)}</span></div>`).join('')}
+         </div>`;
+      box.appendChild(w);
+    }
+  }
+}
+
+/* The vertical tag rail between the input and the first output. Narrow by
+   design: it is a constant companion, not a panel. */
+function txRenderRail(){
+  const rail = $('txrail');
+  if(!rail) return;
+  const tags = Object.values(TXstate.tags);
+  rail.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'txrailhead'; head.textContent = 'TAG';
+  head.title = 'Select text in any pane, then click a categorization to add it';
+  rail.appendChild(head);
+  if(!tags.length){
+    const b = document.createElement('div');
+    b.className = 'txrailbtn'; b.dataset.txa = 'tag-new';
+    b.textContent = '＋'; b.title = 'Create your first categorization';
+    rail.appendChild(b);
+    return;
+  }
+  for(const t of tags){
+    const b = document.createElement('div');
+    b.className = 'txrailbtn';
+    b.style.setProperty('--c', t.color);
+    b.dataset.txtag = t.id;
+    b.textContent = (t.name || '?').slice(0, 5);
+    b.title = t.name + (t.desc ? ' — ' + t.desc : '') +
+              '\nSelect text in any pane, then click to add it to this categorization';
+    rail.appendChild(b);
+  }
+  const add = document.createElement('div');
+  add.className = 'txrailbtn'; add.dataset.txa = 'tag-new';
+  add.textContent = '＋'; add.title = 'New categorization';
+  rail.appendChild(add);
+}
+
+/* Resizing any pane resizes them all: one ResizeObserver writes the observed
+   size into CSS vars that every pane reads. Converges rather than looping,
+   because a pane already matching the vars produces no further write. */
+let txSizing = false;
+function txSyncPaneSize(){
+  const boxes = [...document.querySelectorAll('.txstagebox')];
+  if(!boxes.length || !window.ResizeObserver) return;
+  if(window._txRO) window._txRO.disconnect();
+  window._txRO = new ResizeObserver(entries => {
+    if(txSizing) return;
+    const e = entries[0]; if(!e) return;
+    const w = Math.round(e.contentRect.width), h = Math.round(e.contentRect.height);
+    const strip = $('txstrip'); if(!strip) return;
+    if(strip.dataset.w === String(w) && strip.dataset.h === String(h)) return;
+    txSizing = true;
+    strip.dataset.w = w; strip.dataset.h = h;
+    strip.style.setProperty('--txw', w + 'px');
+    strip.style.setProperty('--txh', h + 'px');
+    setTimeout(() => { txSizing = false; }, 60);
+  });
+  for(const b of boxes) window._txRO.observe(b);
 }
 
 /* ==================== qualitative coding ==================== */
 const TX_COLORS = ['#e11d48','#ea580c','#ca8a04','#16a34a','#0891b2',
                    '#2563eb','#7c3aed','#c026d3','#0f766e','#9f1239'];
-function txTagList(){ return Object.values(TXstate.tags); }
-function txNewTag(name){
+function txNewTag(name, cat){
   const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
-  TXstate.tags[id] = { id, name: name || 'New categorization', desc:'',
+  TXstate.tags[id] = { id, name: name || 'New categorization', desc:'', cat: cat || '',
                        color: TX_COLORS[Object.keys(TXstate.tags).length % TX_COLORS.length],
                        words: [] };
   txSave(); return id;
 }
-/* Highlight every word/phrase belonging to any linked tag.
-   Longest phrases match first so "material breach" wins over "breach", and
-   matches are collected before any HTML is written so overlapping tags can
-   share one bubble rather than nesting and mangling each other. */
 function txHighlight(text, tagIds){
-  const tags = tagIds.map(i => TXstate.tags[i]).filter(Boolean);
+  const tags = (tagIds||[]).map(i => TXstate.tags[i]).filter(Boolean);
   if(!tags.length) return txEsc(text);
   const terms = [];
-  for(const t of tags)
-    for(const w of (t.words||[]))
-      if(w && w.trim()) terms.push({ w: w.trim(), tag: t });
+  for(const t of tags) for(const w of (t.words||[])) if(w && w.trim()) terms.push({ w:w.trim(), tag:t });
   if(!terms.length) return txEsc(text);
   terms.sort((a,b) => b.w.length - a.w.length);
-
-  const hits = [];                                    // {start,end,tags:[]}
+  const hits = [];
   for(const {w, tag} of terms){
     const rx = new RegExp((/^\w/.test(w) ? '\\b' : '') + w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
                           + (/\w$/.test(w) ? '\\b' : ''), 'gi');
@@ -5446,79 +5617,109 @@ function txHighlight(text, tagIds){
       const s = m.index, e = s + m[0].length;
       const same = hits.find(h => h.start === s && h.end === e);
       if(same){ if(!same.tags.includes(tag)) same.tags.push(tag); continue; }
-      if(hits.some(h => s < h.end && e > h.start)) continue;   // overlaps: keep the longer
+      if(hits.some(h => s < h.end && e > h.start)) continue;
       hits.push({ start:s, end:e, tags:[tag] });
     }
   }
   if(!hits.length) return txEsc(text);
   hits.sort((a,b) => a.start - b.start);
-
   let out = '', pos = 0;
   for(const h of hits){
     out += txEsc(text.slice(pos, h.start));
-    const c = h.tags[0].color;
     const chips = h.tags.map(t =>
-      `<span class="txchip" style="--c:${t.color}" title="${txEsc(t.name)}${t.desc ? ' — ' + txEsc(t.desc) : ''}">${txEsc(t.name)}</span>`
-    ).join('');
-    out += `<span class="txmark" style="--c:${c}">${txEsc(text.slice(h.start, h.end))}${chips}</span>`;
+      `<span class="txchip" style="--c:${t.color}" title="${txEsc(t.name)}${t.desc?' — '+txEsc(t.desc):''}">${txEsc(t.name)}</span>`).join('');
+    out += `<span class="txmark" style="--c:${h.tags[0].color}">${txEsc(text.slice(h.start,h.end))}${chips}</span>`;
     pos = h.end;
   }
-  out += txEsc(text.slice(pos));
-  return out;
+  return out + txEsc(text.slice(pos));
 }
-
-/* ==================== UI ==================== */
+/* Tag whatever is selected. Works from any pane: the selection is text, and a
+   categorization is a list of words -- so "tag this" means "add these words". */
+function txTagSelection(tagId){
+  const t = TXstate.tags[tagId];
+  if(!t) return;
+  const sel = (window.getSelection && window.getSelection().toString() || '').trim();
+  if(!sel){ toast('select some text in a pane first, then click the tag', true); return; }
+  if(sel.length > 120){ toast('that selection is too long for a tag word', true); return; }
+  const words = t.words || (t.words = []);
+  if(words.some(w => w.toLowerCase() === sel.toLowerCase())){
+    toast(`“${sel}” is already in ${t.name}`); return;
+  }
+  words.push(sel);
+  txSave();
+  toast(`added “${sel}” to ${t.name}`);
+  txRenderTags();
+  // Re-highlight every pane produced by a transform linked to this tag.
+  for(let i = 1; i < txStages.length; i++){
+    const st = txStages[i];
+    if((TXstate.link[st.id] || []).includes(tagId)){
+      const el = $('txpane' + i);
+      if(el) el.innerHTML = txHighlight(st.text, TXstate.link[st.id]);
+    }
+  }
+}
+/* ==================== toolbar ==================== */
 function txBuildTools(){
   const bar = $('txtools');
   if(!bar) return;
   bar.innerHTML = '';
-  const mkEdit = id => `<span class="txed" data-txedit="${id}" title="Edit the code and explanation">✎</span>`;
+  const all = txAll();
+  const pip = id => `<span class="txed" data-txedit="${id}" title="Edit this transform">✎</span>`;
 
-  // Primary transforms: their own button, with the edit pip in the corner.
-  for(const d of TXDEFS.filter(x => x.primary)){
+  for(const d of all.filter(x => x.primary)){
     const b = document.createElement('div');
     b.className = 'txbtn primary';
-    b.innerHTML = `<span data-txrun="${d.id}">${txEsc(d.label)}</span>${mkEdit(d.id)}`;
-    b.title = txDesc(d.id).split('\n')[0];
+    b.innerHTML = `<span data-txrun="${d.id}" data-stage="0">${txEsc(d.label)}</span>${pip(d.id)}`;
+    b.title = (txDesc(d.id) || '').split('\n')[0];
     bar.appendChild(b);
   }
-  // Groups: one button each, opening its own menu.
-  for(const g of TXGROUPS){
-    const items = TXDEFS.filter(d => d.group === g.id && !d.primary);
+  for(const g of txGroups()){
+    const items = all.filter(d => d.group === g.id && !d.primary);
     if(!items.length) continue;
-    const wrap = document.createElement('div');
-    wrap.className = 'txgroup';
-    wrap.innerHTML =
-      `<div class="txbtn" data-txmenu="${g.id}"><span class="txico">${g.icon}</span>
-         <span class="txlab">${txEsc(g.label)}</span><span class="txcar">▾</span></div>
+    // The pill's TEXT runs the category default; the caret opens the rest.
+    const def = (g.def && items.some(x => x.id === g.def)) ? g.def
+              : (g.def && all.some(x => x.id === g.def)) ? g.def : items[0].id;
+    const w = document.createElement('div');
+    w.className = 'txgroup';
+    w.innerHTML =
+      `<div class="txbtn">
+         <span data-txrun="${def}" data-stage="0" title="Runs ${txEsc(txLabel(def))}">${g.icon} <span class="txlab">${txEsc(g.label)}</span></span>
+         <span class="txcar" data-txmenu="${g.id}" title="Other transforms in this category">▾</span>
+         <span class="txed" data-txgedit="${g.id}" title="Rename this category / change what its text runs">✎</span>
+       </div>
        <div class="txpop" id="txpop-${g.id}">
-         ${items.map(d => `<div class="txpopitem"><span data-txrun="${d.id}">${txEsc(d.label)}</span>${mkEdit(d.id)}</div>`).join('')}
+         ${items.map(d => `<div class="txpopitem"><span data-txrun="${d.id}" data-stage="0">${txEsc(d.label)}</span><span class="txed" data-txedit="${d.id}">✎</span></div>`).join('')}
        </div>`;
-    bar.appendChild(wrap);
+    bar.appendChild(w);
   }
   const sp = document.createElement('span'); sp.style.flex = '1'; bar.appendChild(sp);
   const tg = document.createElement('div');
   tg.className = 'txbtn txtagbtn'; tg.dataset.txa = 'tags-open';
-  tg.innerHTML = '◈ Qualitative coding';
-  tg.title = 'Define categorizations, tag words, and highlight them in the output';
+  tg.innerHTML = '◈ <span class="txlab">Qualitative coding</span>';
   bar.appendChild(tg);
 }
-
 function txCloseMenus(except){
   document.querySelectorAll('.txpop.on').forEach(p => { if(p !== except) p.classList.remove('on'); });
 }
 
+/* ==================== editors ==================== */
+function txFillGroupSel(sel, val){
+  sel.innerHTML = txGroups().map(g =>
+    `<option value="${g.id}" ${g.id===val?'selected':''}>${txEsc(g.label)}</option>`).join('');
+}
 function txOpenEdit(id){
-  const d = txDef(id); if(!d) return;
-  $('txedit').style.display = 'block';
-  $('txedit').dataset.id = id;
-  $('txedit-title').textContent = 'Edit — ' + d.label;
-  $('txedit-sub').textContent = '(' + (TXGROUPS.find(g => g.id === d.group) || {}).label + ')';
+  const e = txAll().find(x => x.id === id) || { id, label:id, group:'fix' };
+  const p = $('txedit');
+  p.style.display = 'block'; p.dataset.id = id;
+  $('txedit-title').textContent = 'Edit — ' + e.label;
+  $('txedit-sub').textContent = txDef(id) && TXBUILTIN.some(b => b.id===id) ? '(built-in)' : '(yours)';
+  $('txedit-label').value = e.label;
+  txFillGroupSel($('txedit-group'), e.group);
   $('txedit-code').value = txCode(id);
   $('txedit-desc').value = txDesc(id);
-  $('txedit-state').textContent = TXstate.custom[id] != null ? '✎ your version' : 'built-in';
+  $('txedit-state').textContent = TXstate.custom[id] != null ? '✎ your version' : 'built-in code';
   txRenderEditTags(id);
-  $('txedit').scrollIntoView({ block:'nearest' });
+  p.scrollIntoView({ block:'nearest' });
 }
 function txRenderEditTags(id){
   const box = $('txedit-tags');
@@ -5526,52 +5727,129 @@ function txRenderEditTags(id){
   box.innerHTML = linked.length ? '' : '<span class="muted">none — output is not highlighted</span>';
   for(const tid of linked){
     const t = TXstate.tags[tid]; if(!t) continue;
-    const p = document.createElement('span');
-    p.className = 'pill'; p.style.borderColor = t.color; p.style.color = t.color;
-    p.innerHTML = `${txEsc(t.name)} <b data-txunlink="${tid}" style="cursor:pointer">✕</b>`;
-    box.appendChild(p);
+    const s = document.createElement('span');
+    s.className = 'pill'; s.style.borderColor = t.color; s.style.color = t.color;
+    s.innerHTML = `${txEsc(t.name)} <b data-txunlink="${tid}" style="cursor:pointer">✕</b>`;
+    box.appendChild(s);
   }
-  const sel = $('txedit-tagpick');
-  sel.innerHTML = '<option value="">Add a categorization…</option>' +
-    txTagList().filter(t => !linked.includes(t.id))
+  $('txedit-tagpick').innerHTML = '<option value="">Add a categorization…</option>' +
+    Object.values(TXstate.tags).filter(t => !linked.includes(t.id))
       .map(t => `<option value="${t.id}">${txEsc(t.name)}</option>`).join('');
 }
+function txOpenGroupEdit(gid){
+  const g = txGroup(gid); if(!g) return;
+  const p = $('txgedit');
+  p.style.display = 'block'; p.dataset.id = gid;
+  $('txgedit-label').value = g.label;
+  $('txgedit-icon').value = g.icon || '▸';
+  const inGroup = txAll().filter(x => x.group === gid);
+  $('txgedit-def').innerHTML = inGroup.map(x =>
+    `<option value="${x.id}" ${x.id===g.def?'selected':''}>${txEsc(x.label)}</option>`).join('')
+    || '<option value="">(no transforms in this category)</option>';
+  p.scrollIntoView({ block:'nearest' });
+}
 
+/* Floating "next steps" picker: a popout so a long list never expands the
+   editor panel and pushes everything else off screen. */
+function txOpenNextPicker(id){
+  txCloseMenus();
+  let pop = $('txnextpop');
+  if(!pop){
+    pop = document.createElement('div');
+    pop.id = 'txnextpop'; pop.className = 'txpop txnextpop';
+    document.body.appendChild(pop);
+  }
+  const chosen = new Set(TXstate.next[id] || []);
+  const groups = {};
+  for(const e of txAll()) (groups[e.group] = groups[e.group] || []).push(e);
+  pop.innerHTML =
+    `<div class="txpopitem" style="font-weight:600">Follow-on steps for “${txEsc(txLabel(id))}”
+       <span class="txed" data-txa="next-close" style="position:static">✕</span></div>` +
+    Object.entries(groups).map(([gid, items]) => {
+      const g = txGroup(gid) || { label:gid, icon:'▸' };
+      return `<div class="txpopgrp">${g.icon} ${txEsc(g.label)}</div>` +
+        items.map(x => `<label class="txpopitem"><input type="checkbox" data-txnext="${x.id}"
+          ${chosen.has(x.id)?'checked':''}> ${txEsc(x.label)}</label>`).join('');
+    }).join('');
+  pop.dataset.for = id;
+  pop.classList.add('on');
+  const anchor = $('txedit').getBoundingClientRect();
+  pop.style.top  = (window.scrollY + anchor.top + 40) + 'px';
+  pop.style.left = (window.scrollX + Math.max(8, anchor.right - 320)) + 'px';
+}
+
+/* ==================== manage ==================== */
+function txRenderManage(){
+  const bx = $('txmanage-x');
+  const all = txAll();
+  bx.innerHTML = txGroups().map(g => {
+    const items = all.filter(x => x.group === g.id);
+    return `<div class="txmgrp"><b>${g.icon} ${txEsc(g.label)}</b>
+      <span class="muted">${items.length}</span>
+      <button data-txgedit="${g.id}" class="txmini">✎</button></div>` +
+      items.map(x => `<div class="txmrow">
+        <input type="text" value="${txEsc(x.label)}" data-txren="${x.id}" title="rename">
+        <select data-txhome="${x.id}" title="move to another category">
+          ${txGroups().map(g2 => `<option value="${g2.id}" ${g2.id===x.group?'selected':''}>${txEsc(g2.label)}</option>`).join('')}
+        </select>
+        <label class="txmpin" title="show as its own button, not inside the category menu">
+          <input type="checkbox" data-txprim="${x.id}" ${x.primary?'checked':''}>pin</label>
+        <button data-txdelx="${x.id}" title="${x.builtin?'hide this built-in':'delete'}">${x.builtin?'👁':'🗑'}</button>
+      </div>`).join('');
+  }).join('') +
+  (TXstate.hidden.length ? `<div class="txmgrp"><b>Hidden</b></div>` +
+    TXstate.hidden.map(id => `<div class="txmrow"><span class="muted" style="flex:1">${txEsc(txDef(id)?(txDef(id).label||id):id)}</span>
+      <button data-txunhide="${id}">restore</button></div>`).join('') : '');
+
+  const bq = $('txmanage-q');
+  const cats = Object.values(TXstate.tagcat);
+  const tags = Object.values(TXstate.tags);
+  const render = list => list.map(t => `<div class="txmrow">
+      <input type="color" value="${t.color}" data-txt="${t.id}" data-f="color">
+      <input type="text" value="${txEsc(t.name)}" data-txt="${t.id}" data-f="name">
+      <select data-txt="${t.id}" data-f="cat" title="categorization group">
+        <option value="">(ungrouped)</option>
+        ${cats.map(c => `<option value="${c.id}" ${c.id===t.cat?'selected':''}>${txEsc(c.label)}</option>`).join('')}
+      </select>
+      <button data-txdeltag="${t.id}">🗑</button></div>`).join('');
+  bq.innerHTML =
+    cats.map(c => `<div class="txmgrp"><b>${txEsc(c.label)}</b>
+        <button data-txrencat="${c.id}" class="txmini">✎</button>
+        <button data-txdelcat="${c.id}" class="txmini">🗑</button></div>` +
+      render(tags.filter(t => t.cat === c.id))).join('') +
+    `<div class="txmgrp"><b>Ungrouped</b></div>` + render(tags.filter(t => !t.cat || !TXstate.tagcat[t.cat]));
+}
 function txRenderTags(){
   const box = $('txtaglist');
-  const list = txTagList();
-  if(!list.length){
-    box.innerHTML = '<p class="muted">No categorizations yet. A categorization is a named set of words — “Obligation”, “Deadline”, “Money” — that gets highlighted wherever it appears in a transform’s output.</p>';
+  if(!box) return;
+  const tags = Object.values(TXstate.tags);
+  if(!tags.length){
+    box.innerHTML = '<p class="muted">No categorizations yet. A categorization is a named set of words — “Obligation”, “Deadline”, “Money” — highlighted wherever it appears in a linked transform’s output. Select text in any pane and click a tag in the vertical strip to add it.</p>';
     return;
   }
   box.innerHTML = '';
-  for(const t of list){
+  for(const t of tags){
     const d = document.createElement('div');
     d.className = 'txtagcard'; d.style.borderLeftColor = t.color;
     d.innerHTML = `
       <div class="bar" style="margin:0">
-        <input type="color" value="${t.color}" data-txt="${t.id}" data-f="color" title="colour">
+        <input type="color" value="${t.color}" data-txt="${t.id}" data-f="color">
         <input type="text" value="${txEsc(t.name)}" data-txt="${t.id}" data-f="name"
-               style="font-weight:600;min-width:10rem" placeholder="name">
+               style="font-weight:600;min-width:10rem">
         <span class="muted">${(t.words||[]).length} word${(t.words||[]).length===1?'':'s'}</span>
-        <span style="flex:1"></span>
-        <button data-txdeltag="${t.id}">🗑</button>
+        <span style="flex:1"></span><button data-txdeltag="${t.id}">🗑</button>
       </div>
       <input type="text" value="${txEsc(t.desc||'')}" data-txt="${t.id}" data-f="desc"
-             style="width:100%;margin:.3rem 0" placeholder="description — shown on hover in the output">
-      <textarea data-txt="${t.id}" data-f="words" rows="2" style="width:100%;font-size:.8rem"
+             style="width:100%;margin:.3rem 0" placeholder="description — shown on hover">
+      <textarea data-txt="${t.id}" data-f="words" rows="2" class="txresize" style="width:100%;font-size:.8rem"
         placeholder="words and phrases, one per line or comma separated">${txEsc((t.words||[]).join(', '))}</textarea>`;
     box.appendChild(d);
   }
 }
 
-/* ---------- Pi storage (fid 7) ---------- */
+/* ==================== Pi storage (fid 7) ==================== */
 const TT_FID = 7;
-let txPiLoaded = false, txPiTimer = null, txPiPending = false, txLoadedLS = false;
-
-/* Wait for the link to be IDLE before asking for the bundle. _readQ is the
-   shared read queue; while anything is in it the Pi is busy with data the
-   user is actually waiting for. Poll cheaply, then fire once. */
+let txPiTimer = null;
 function txScheduleLoad(){
   clearInterval(txPiTimer);
   let waited = 0;
@@ -5579,104 +5857,101 @@ function txScheduleLoad(){
     waited += 600;
     if(!device){ clearInterval(txPiTimer); return; }
     const idle = (typeof _readQ === 'undefined') || (!_readQ.length && !_reading);
-    if(idle || waited > 20000){          // safety valve: never wait forever
-      clearInterval(txPiTimer);
-      txLoadFromPi(true);
-    }
+    if(idle || waited > 20000){ clearInterval(txPiTimer); txLoadFromPi(true); }
   }, 600);
 }
 function txLoadFromPi(quiet){
   if(!device){ if(!quiet) toast('connect to the Pi first', true); return; }
-  txPiPending = true;
-  txSetPiStatus('loading…');
-  getFile(TT_FID);
+  txSetPiStatus('loading…'); getFile(TT_FID);
 }
-
-/* Merge, never replace. A transformer you edited in this browser but have not
-   pushed yet must survive a load; the Pi copy wins only where this browser has
-   no opinion. Anything overwritten is reported rather than done silently. */
+function txSetPiStatus(t){ const el = $('txpistat'); if(el) el.textContent = t; }
 function txAdoptFromPi(obj){
-  txPiPending = false;
-  // The Pi bundle can arrive before the Text Transform tab has ever been
-  // opened, and txInit() is what normally loads this browser's saved state.
-  // Without this, "keep what is local" would compare against an EMPTY object
-  // and the Pi copy would silently overwrite edits sitting in localStorage.
   if(!txLoadedLS){ txLoad(); txLoadedLS = true; }
   if(!obj || typeof obj !== 'object'){ txSetPiStatus('nothing on the Pi yet'); return; }
-  const xf = obj.transformers || {}, ql = obj.qual || {};
+  const xf = obj.transformers || {}, ql = obj.qual || {}, meta = obj.meta || {};
   let added = 0, skipped = 0, bad = 0;
-  for(const [id, body] of Object.entries(xf)){
-    if(body && body.error){ bad++; continue; }
-    if(!body || typeof body !== 'object') continue;
-    if(TXstate.custom[id] != null && TXstate.custom[id] !== body.code){ skipped++; continue; }
-    if(body.code != null) TXstate.custom[id] = String(body.code);
-    if(body.desc != null) TXstate.desc[id]   = String(body.desc);
-    if(Array.isArray(body.link)) TXstate.link[id] = body.link;
+  for(const [id, b] of Object.entries(xf)){
+    if(b && b.error){ bad++; continue; }
+    if(!b || typeof b !== 'object') continue;
+    if(TXstate.custom[id] != null && TXstate.custom[id] !== b.code){ skipped++; continue; }
+    if(b.code  != null) TXstate.custom[id] = String(b.code);
+    if(b.desc  != null) TXstate.desc[id]   = String(b.desc);
+    if(b.label != null) TXstate.label[id]  = String(b.label);
+    if(b.group != null) TXstate.home[id]   = String(b.group);
+    if(Array.isArray(b.link)) TXstate.link[id] = b.link;
+    if(Array.isArray(b.next)) TXstate.next[id] = b.next;
+    if(typeof b.pin === 'boolean') TXstate.pin[id] = b.pin;
+    if(b.user) TXstate.user[id] = { label:b.label||id, group:b.group||'fix',
+                                    code:b.code||'(t)=>t', desc:b.desc||'', primary:!!b.primary };
     added++;
   }
   for(const [id, t] of Object.entries(ql)){
     if(t && t.error){ bad++; continue; }
     if(!t || typeof t !== 'object') continue;
     if(TXstate.tags[id] && JSON.stringify(TXstate.tags[id]) !== JSON.stringify(t)){ skipped++; continue; }
-    TXstate.tags[id] = { id, name: String(t.name||id), desc: String(t.desc||''),
-                         color: String(t.color||'#888'),
-                         words: Array.isArray(t.words) ? t.words.map(String) : [] };
+    TXstate.tags[id] = { id, name:String(t.name||id), desc:String(t.desc||''),
+                         cat:String(t.cat||''), color:String(t.color||'#888'),
+                         words:Array.isArray(t.words)?t.words.map(String):[] };
     added++;
   }
-  txPiLoaded = true;
+  if(meta.groups && typeof meta.groups === 'object') Object.assign(TXstate.groups, meta.groups);
+  if(meta.tagcat && typeof meta.tagcat === 'object') Object.assign(TXstate.tagcat, meta.tagcat);
+  if(Array.isArray(meta.hidden)) TXstate.hidden = [...new Set(TXstate.hidden.concat(meta.hidden))];
   txSave();
-  if($('page-tx') && $('page-tx').dataset.wired){ txBuildTools(); txRenderTags(); }
-  txSetPiStatus(`loaded ${added} from Pi` +
-    (skipped ? ` · ${skipped} kept local (differs)` : '') +
-    (bad ? ` · ${bad} unreadable on the Pi` : ''));
+  if($('page-tx') && $('page-tx').dataset.wired){ txBuildTools(); txRenderTags(); txRenderPanes(); }
+  txSetPiStatus(`loaded ${added} from Pi` + (skipped?` · ${skipped} kept local`:'') + (bad?` · ${bad} unreadable`:''));
 }
-
 function txSaveToPi(){
   if(!device){ toast('connect to the Pi first', true); return; }
   const transformers = {};
-  for(const id of Object.keys(TXstate.custom))
-    transformers[id] = { id, code: TXstate.custom[id],
-                         desc: TXstate.desc[id] || '',
-                         link: TXstate.link[id] || [] };
-  // A transform with only a re-written EXPLANATION or new tag links, and no
-  // code change, still deserves to travel.
-  for(const id of Object.keys(TXstate.desc).concat(Object.keys(TXstate.link)))
-    if(!transformers[id])
-      transformers[id] = { id, code: TXstate.custom[id] || '',
-                           desc: TXstate.desc[id] || '',
-                           link: TXstate.link[id] || [] };
+  const touch = id => transformers[id] = transformers[id] || { id };
+  for(const id of Object.keys(TXstate.custom)) Object.assign(touch(id), { code:TXstate.custom[id] });
+  for(const id of Object.keys(TXstate.desc))   Object.assign(touch(id), { desc:TXstate.desc[id] });
+  for(const id of Object.keys(TXstate.label))  Object.assign(touch(id), { label:TXstate.label[id] });
+  for(const id of Object.keys(TXstate.home))   Object.assign(touch(id), { group:TXstate.home[id] });
+  for(const id of Object.keys(TXstate.link))   Object.assign(touch(id), { link:TXstate.link[id] });
+  for(const id of Object.keys(TXstate.next))   Object.assign(touch(id), { next:TXstate.next[id] });
+  for(const id of Object.keys(TXstate.pin))    Object.assign(touch(id), { pin:TXstate.pin[id] });
+  for(const [id,u] of Object.entries(TXstate.user))
+    Object.assign(touch(id), { user:true, label:u.label, group:u.group,
+                               code:TXstate.custom[id]||u.code, desc:u.desc, primary:!!u.primary });
   const n = Object.keys(transformers).length + Object.keys(TXstate.tags).length;
   txSetPiStatus('sending…');
-  // putFile resolves once the bytes are on the wire; the Pi's own ack arrives
-  // separately on the status channel. Report what we actually know.
-  putFile(TT_FID, { transformers, qual: TXstate.tags })
-    .then(() => { txSetPiStatus(`sent ${n} item${n===1?'':'s'} to the Pi`);
-                  toast('sent to Pi — check the status line for its reply'); },
-          e => { txSetPiStatus('send failed: ' + e); toast('send failed: ' + e, true); });
+  // putFile resolves once the bytes are on the wire; the Pi's ack arrives
+  // separately. Report what we actually know.
+  putFile(TT_FID, { transformers, qual: TXstate.tags,
+                    meta: { groups: TXstate.groups, tagcat: TXstate.tagcat, hidden: TXstate.hidden } })
+    .then(() => { txSetPiStatus(`sent ${n} item${n===1?'':'s'} to the Pi`); toast('sent to Pi'); },
+          e  => { txSetPiStatus('send failed: ' + e); toast('send failed: ' + e, true); });
 }
-function txSetPiStatus(t){ const el = $('txpistat'); if(el) el.textContent = t; }
-
+/* ==================== wiring ==================== */
 function txInit(){
   const root = $('page-tx');
   if(!root || root.dataset.wired) return;
   root.dataset.wired = '1';
   if(!txLoadedLS){ txLoad(); txLoadedLS = true; }
   txBuildTools();
+  txRenderPanes();
   txRenderTags();
 
-  // One delegated listener for the whole tab: buttons are rebuilt whenever a
-  // label or description changes, so per-element handlers would go stale.
-  root.addEventListener('click', e => {
-    const t = e.target.closest('[data-txrun],[data-txedit],[data-txmenu],[data-txa],[data-txunlink],[data-txdeltag]');
+  /* One delegated click handler. The toolbar is rebuilt whenever a name,
+     category or membership changes, so per-element handlers would go stale. */
+  document.addEventListener('click', e => {
+    const inTab = e.target.closest && e.target.closest('#page-tx, #txnextpop');
+    if(!inTab){ txCloseMenus(); return; }
+    const t = e.target.closest('[data-txrun],[data-txedit],[data-txgedit],[data-txmenu],[data-txa],[data-txunlink],[data-txdeltag],[data-txdelx],[data-txunhide],[data-txtag],[data-txrencat],[data-txdelcat]');
     if(!t) return;
-    if(t.dataset.txedit != null){ e.stopPropagation(); txCloseMenus(); txOpenEdit(t.dataset.txedit); return; }
-    if(t.dataset.txrun  != null){ txCloseMenus(); txRun(t.dataset.txrun); return; }
-    if(t.dataset.txmenu != null){
+
+    if(t.dataset.txedit  != null){ e.stopPropagation(); txCloseMenus(); txOpenEdit(t.dataset.txedit); return; }
+    if(t.dataset.txgedit != null){ e.stopPropagation(); txCloseMenus(); txOpenGroupEdit(t.dataset.txgedit); return; }
+    if(t.dataset.txrun   != null){ txCloseMenus(); txApply(t.dataset.txrun, +(t.dataset.stage||0)); return; }
+    if(t.dataset.txmenu  != null){
       const pop = $('txpop-' + t.dataset.txmenu);
-      const wasOn = pop.classList.contains('on');
-      txCloseMenus(); if(!wasOn) pop.classList.add('on');
+      const was = pop && pop.classList.contains('on');
+      txCloseMenus(); if(pop && !was) pop.classList.add('on');
       e.stopPropagation(); return;
     }
+    if(t.dataset.txtag != null){ txTagSelection(t.dataset.txtag); return; }
     if(t.dataset.txunlink != null){
       const id = $('txedit').dataset.id;
       TXstate.link[id] = (TXstate.link[id]||[]).filter(x => x !== t.dataset.txunlink);
@@ -5687,45 +5962,123 @@ function txInit(){
       if(!confirm('Delete “' + TXstate.tags[tid].name + '”?')) return;
       delete TXstate.tags[tid];
       for(const k in TXstate.link) TXstate.link[k] = TXstate.link[k].filter(x => x !== tid);
-      txSave(); txRenderTags(); return;
+      txSave(); txRenderTags(); txRenderManage(); txRenderRail(); return;
     }
+    if(t.dataset.txdelx != null){
+      const id = t.dataset.txdelx, d = txDef(id);
+      const builtin = TXBUILTIN.some(b => b.id === id);
+      // Built-ins are HIDDEN, never deleted: removing code the user did not
+      // write is not ours to do, and "restore" must always be possible.
+      if(!confirm(builtin ? `Hide “${txLabel(id)}”? You can restore it here later.`
+                          : `Delete “${txLabel(id)}” permanently?`)) return;
+      if(builtin){ if(!TXstate.hidden.includes(id)) TXstate.hidden.push(id); }
+      else { delete TXstate.user[id]; delete TXstate.custom[id]; delete TXstate.desc[id]; }
+      txSave(); txBuildTools(); txRenderManage(); return;
+    }
+    if(t.dataset.txunhide != null){
+      TXstate.hidden = TXstate.hidden.filter(x => x !== t.dataset.txunhide);
+      txSave(); txBuildTools(); txRenderManage(); return;
+    }
+    if(t.dataset.txrencat != null){
+      const c = TXstate.tagcat[t.dataset.txrencat];
+      const n = prompt('Rename categorization group', c.label);
+      if(n){ c.label = n; txSave(); txRenderManage(); }
+      return;
+    }
+    if(t.dataset.txdelcat != null){
+      const cid = t.dataset.txdelcat;
+      if(!confirm('Delete the group “'+TXstate.tagcat[cid].label+'”? Its categorizations become ungrouped.')) return;
+      delete TXstate.tagcat[cid];
+      for(const tg of Object.values(TXstate.tags)) if(tg.cat === cid) tg.cat = '';
+      txSave(); txRenderManage(); return;
+    }
+
     switch(t.dataset.txa){
       case 'copy': {
-        const s = txOutGet();
+        const s = txPaneText(txStages.length - 1);
         if(navigator.clipboard) navigator.clipboard.writeText(s)
-          .then(() => toast('output copied'), () => toast('press ⌘/Ctrl+C', true));
+          .then(() => toast('copied'), () => toast('press ⌘/Ctrl+C', true));
         else toast('press ⌘/Ctrl+C', true);
         break; }
-      case 'swap':
-        // Plain text back in: the output's INDENTATION is now the structure,
-        // and textContent preserves it verbatim.
-        $('txin').textContent = txOutGet();
-        toast('output moved to input'); break;
-      case 'clear': $('txin').innerHTML = ''; $('txout').innerHTML = ''; txStat(''); break;
-      case 'pi-load': txLoadFromPi(false); break;
-      case 'pi-save': txSaveToPi(); break;
+      case 'clear':
+        txStages = [{ id:null, text:'' }];
+        txRenderPanes(); txStat(''); break;
+      case 'manage': $('txmanage').style.display = 'block'; txRenderManage(); break;
+      case 'manage-close': $('txmanage').style.display = 'none'; break;
       case 'tags-open':  $('txtags').style.display = 'block'; txRenderTags(); break;
       case 'tags-close': $('txtags').style.display = 'none'; break;
       case 'edit-close': $('txedit').style.display = 'none'; break;
+      case 'gedit-close': $('txgedit').style.display = 'none'; break;
+      case 'next-close': txCloseMenus(); break;
+      case 'pi-load': txLoadFromPi(false); break;
+      case 'pi-save': txSaveToPi(); break;
+      case 'edit-next': txOpenNextPicker($('txedit').dataset.id); break;
       case 'edit-save': {
-        const id = $('txedit').dataset.id;
-        const code = $('txedit-code').value;
+        const id = $('txedit').dataset.id, code = $('txedit-code').value;
         try{ new Function('H','"use strict";return (' + code + ');')(H); }
         catch(err){ toast('code does not parse: ' + err.message, true); return; }
-        TXstate.custom[id] = code;
-        TXstate.desc[id]   = $('txedit-desc').value;
-        txSave(); txBuildTools();
-        $('txedit-state').textContent = '✎ your version';
-        toast('saved — “' + txDef(id).label + '” now runs your version');
+        const builtin = TXBUILTIN.find(b => b.id === id);
+        if(builtin){
+          if(code !== builtin.code) TXstate.custom[id] = code; else delete TXstate.custom[id];
+          TXstate.desc[id] = $('txedit-desc').value;
+        }else if(TXstate.user[id]){
+          TXstate.user[id].code = code; TXstate.user[id].desc = $('txedit-desc').value;
+          TXstate.custom[id] = code;
+        }
+        const lbl = $('txedit-label').value.trim();
+        if(lbl) TXstate.label[id] = lbl;
+        TXstate.home[id] = $('txedit-group').value;
+        txSave(); txBuildTools(); txRenderPanes();
+        $('txedit-state').textContent = TXstate.custom[id] != null ? '✎ your version' : 'built-in code';
+        toast('saved');
         break; }
       case 'edit-reset': {
         const id = $('txedit').dataset.id;
         delete TXstate.custom[id]; delete TXstate.desc[id];
+        delete TXstate.label[id];  delete TXstate.home[id];
         txSave(); txOpenEdit(id); txBuildTools(); toast('restored the built-in version');
+        break; }
+      case 'gedit-save': {
+        const gid = $('txgedit').dataset.id;
+        TXstate.groups[gid] = Object.assign({}, TXstate.groups[gid], {
+          id:gid, label:$('txgedit-label').value.trim() || gid,
+          icon:$('txgedit-icon').value.trim() || '▸',
+          def:$('txgedit-def').value });
+        txSave(); txBuildTools(); txRenderManage(); toast('category saved');
+        break; }
+      case 'gedit-del': {
+        const gid = $('txgedit').dataset.id;
+        const items = txAll().filter(x => x.group === gid);
+        if(items.length && !confirm(`“${txGroup(gid).label}” still holds ${items.length} transform(s). They will move to Clean up. Continue?`)) return;
+        for(const x of items) TXstate.home[x.id] = 'fix';
+        TXstate.groups[gid] = Object.assign({}, TXstate.groups[gid], { id:gid, deleted:true });
+        txSave(); $('txgedit').style.display = 'none'; txBuildTools(); txRenderManage();
+        break; }
+      case 'new-transform': {
+        const name = prompt('Name for the new transform?', 'My transform');
+        if(!name) return;
+        const id = 'u' + Date.now().toString(36);
+        TXstate.user[id] = { label:name, group:'fix', desc:'',
+                             code:'(t, H) => {\n  // t is the incoming text. Return the new text.\n  return t;\n}' };
+        txSave(); txBuildTools(); txRenderManage(); txOpenEdit(id);
+        break; }
+      case 'new-group': {
+        const name = prompt('Name for the new category?', 'My category');
+        if(!name) return;
+        const gid = 'g' + Date.now().toString(36);
+        TXstate.groups[gid] = { id:gid, label:name, icon:'▸', def:'' };
+        txSave(); txBuildTools(); txRenderManage();
+        break; }
+      case 'new-tagcat': {
+        const name = prompt('Name for the categorization group?', 'My group');
+        if(!name) return;
+        const cid = 'c' + Date.now().toString(36);
+        TXstate.tagcat[cid] = { id:cid, label:name };
+        txSave(); txRenderManage();
         break; }
       case 'tag-new': {
         const id = txNewTag(prompt('Name for the new categorization?', 'Obligation') || undefined);
-        txRenderTags(); $('txtags').style.display = 'block';
+        txRenderTags(); txRenderManage(); txRenderRail();
         const eid = $('txedit').dataset.id;
         if(eid && $('txedit').style.display !== 'none'){
           TXstate.link[eid] = (TXstate.link[eid]||[]).concat([id]); txSave(); txRenderEditTags(eid);
@@ -5734,24 +6087,57 @@ function txInit(){
     }
   });
 
-  document.addEventListener('click', () => txCloseMenus());
+  /* inputs: rename, re-home, pin, tag fields, next-step checkboxes */
+  root.addEventListener('change', e => {
+    const el = e.target;
+    if(el.dataset.txren  != null){ TXstate.label[el.dataset.txren] = el.value.trim() || undefined; txSave(); txBuildTools(); return; }
+    if(el.dataset.txhome != null){ TXstate.home[el.dataset.txhome] = el.value; txSave(); txBuildTools(); txRenderManage(); return; }
+    if(el.dataset.txprim != null){
+      // Pinning is its own map. The earlier version copied built-ins into the
+      // `user` table to carry the flag, which quietly turned a built-in into a
+      // user transform -- and then "Reset to built-in" had nothing to reset to.
+      TXstate.pin[el.dataset.txprim] = el.checked;
+      txSave(); txBuildTools(); return;
+    }
+  });
+  root.addEventListener('input', e => {
+    const el = e.target, tid = el.dataset.txt;
+    if(tid){
+      const t = TXstate.tags[tid]; if(!t) return;
+      if(el.dataset.f === 'words') t.words = el.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+      else t[el.dataset.f] = el.value;
+      txSave(); txRenderRail(); return;
+    }
+    if(el.id === 'txpane0'){
+      const s = el.innerText || '';
+      $('txstat').textContent = `input: ${s.split('\n').length} lines · ${s.length} characters`;
+    }
+  });
+  document.addEventListener('change', e => {
+    if(e.target.dataset && e.target.dataset.txnext != null){
+      const pop = $('txnextpop'), id = pop && pop.dataset.for; if(!id) return;
+      const set = new Set(TXstate.next[id] || []);
+      e.target.checked ? set.add(e.target.dataset.txnext) : set.delete(e.target.dataset.txnext);
+      TXstate.next[id] = [...set];
+      txSave(); txRenderPanes();
+    }
+  });
   $('txedit-tagpick').onchange = e => {
     const id = $('txedit').dataset.id, v = e.target.value;
     if(!v) return;
     TXstate.link[id] = (TXstate.link[id]||[]).concat([v]);
     txSave(); txRenderEditTags(id);
   };
-  $('txtaglist').addEventListener('input', e => {
-    const el = e.target, tid = el.dataset.txt; if(!tid) return;
-    const t = TXstate.tags[tid]; if(!t) return;
-    if(el.dataset.f === 'words') t.words = el.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
-    else t[el.dataset.f] = el.value;
-    txSave();
-  });
-  $('txin').addEventListener('input', () => {
-    const t = $('txin').innerText || '';
-    $('txstat').textContent = `input: ${t.split('\n').length} lines · ${t.length} characters`;
-  });
+
+  /* Shift + wheel scrolls the pane strip sideways. Browsers do this for a
+     scroll container, but the wheel lands on the pane under the pointer and
+     that pane consumes it -- so translate it here. */
+  const wrap = document.querySelector('.txstripwrap');
+  if(wrap) wrap.addEventListener('wheel', ev => {
+    if(!ev.shiftKey) return;
+    ev.preventDefault();
+    wrap.scrollLeft += (ev.deltaY || ev.deltaX);
+  }, { passive:false });
 }
 
 /* ============ tabs ============ */
