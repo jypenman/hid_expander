@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.2 BF2</title>
+<title>HID Config 20.5</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -89,6 +89,24 @@ opacity:.85;max-width:100%;overflow:hidden;white-space:nowrap;pointer-events:non
 color:#000;background:var(--layer);border-radius:3px;padding:0 .15rem;pointer-events:none}
 .kcenter{pointer-events:none}
 label{display:block;margin:.45rem 0 .1rem;font-size:.84rem;opacity:.85}
+/* labels that sit on the same line as their control (checkbox + caption) */
+label.inl{display:inline-flex;align-items:center;gap:.3rem;margin:.3rem 0 0;cursor:pointer}
+label.inl input{margin:0}
+/* --- Text Transform (20.5) --- */
+.txgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-top:.5rem}
+.txpane{display:flex;flex-direction:column;min-width:0}
+/* Height tracks the viewport so widening or heightening the window grows both
+   panes; min-height keeps them usable on a short screen. */
+.txbox{height:calc(100vh - 22rem);min-height:22rem;width:100%;box-sizing:border-box;
+  overflow:auto;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.82rem;line-height:1.45;padding:.5rem .6rem;border:1px solid var(--line);
+  border-radius:6px;background:var(--bg2, #fff);color:inherit;resize:none;tab-size:4}
+.txbox:focus{outline:2px solid rgba(120,160,255,.5);outline-offset:-1px}
+#txin ul,#txin ol{margin:.2rem 0 .2rem 1.2rem;padding-left:1rem}
+#txin p{margin:.15rem 0}
+.txbar{flex-wrap:wrap;gap:.35rem}
+@media (max-width:820px){.txgrid{grid-template-columns:1fr}
+  .txbox{height:auto;min-height:14rem}}
 select,input[type=text],input[type=number],textarea{width:100%;padding:.35rem;border-radius:6px;
 border:1px solid var(--line);background:Field;color:FieldText}
 select option{background:Field;color:FieldText}
@@ -243,6 +261,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="expr">Expressions</div>
   <div class="tab" data-t="os">OS</div>
   <div class="tab" data-t="bt">Bluetooth</div>
+  <div class="tab" data-t="tx">Text Transform</div>
   <div class="tab" data-t="log">Changes</div>
 </div>
 
@@ -384,6 +403,91 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
  </div>
 </div>
 
+<div id="page-tx" style="display:none">
+  <div class="card">
+    <h2>Text Transform</h2>
+    <p class="muted" style="margin-top:-.3rem">
+      Paste on the left — <b>rich text is kept</b>, so Word and PDF list nesting,
+      indents and bold headings are read as structure rather than thrown away.
+      Transform, then copy. Nothing here touches the Pi; it runs entirely in the
+      browser and works with the device disconnected.
+    </p>
+
+    <div class="bar txbar">
+      <button class="primary" data-tx="clean" title="Undo PDF and Word damage: rejoin lines broken mid-sentence, repair hyphenated words split across lines, drop page numbers and repeated headers">🧹 Clean paste</button>
+      <button class="primary" data-tx="indent" title="Infer the outline: numbered, lettered, roman and bulleted items nest by marker type; a line ending in a colon introduces the lines beneath it">⇥ Smart indent</button>
+      <button class="primary" data-tx="splitlist" title="A clause ending in an enumeration becomes one indented line per item">☰ Split lists</button>
+      <button class="primary" data-tx="splitconj" title="Break 'and' / 'or' conjunctions onto separate indented lines — for pulling every distinct promise out of dense contract language">⑂ Split and/or</button>
+      <span style="flex:1"></span>
+      <select id="txmenu" title="Less common transforms, grouped">
+        <option value="">More…</option>
+        <optgroup label="Clean up">
+          <option value="straighten">Straighten quotes &amp; dashes</option>
+          <option value="unicodeclean">Strip invisible / control characters</option>
+          <option value="collapsews">Collapse repeated spaces</option>
+          <option value="trim">Trim each line</option>
+          <option value="noblank">Remove blank lines</option>
+          <option value="dedupe">Remove duplicate lines</option>
+        </optgroup>
+        <optgroup label="Case">
+          <option value="title">Title Case</option>
+          <option value="sentence">Sentence case</option>
+          <option value="upper">UPPERCASE</option>
+          <option value="lower">lowercase</option>
+        </optgroup>
+        <optgroup label="Lines">
+          <option value="sort">Sort A→Z</option>
+          <option value="sortlen">Sort by length</option>
+          <option value="reverse">Reverse order</option>
+          <option value="number">Number the lines</option>
+          <option value="join">Join into one paragraph</option>
+          <option value="sentences">One sentence per line</option>
+          <option value="semicolons">Split on semicolons</option>
+        </optgroup>
+        <optgroup label="Structure">
+          <option value="md">To Markdown bullets</option>
+          <option value="outline">To numbered outline (1 / a / i)</option>
+          <option value="flatten">Flatten — remove all indenting</option>
+          <option value="stripmarks">Strip leading numbers and bullets</option>
+          <option value="indentplus">Indent everything +1</option>
+          <option value="indentminus">Outdent everything −1</option>
+        </optgroup>
+        <optgroup label="Contract analysis">
+          <option value="obligations">Extract obligations (shall / must / will)</option>
+          <option value="defined">Extract defined terms</option>
+          <option value="xrefs">Extract cross-references</option>
+          <option value="parties">Extract capitalised party names</option>
+        </optgroup>
+        <optgroup label="Graph export">
+          <option value="edges">Outline → edge list (parent → child)</option>
+          <option value="mermaid">Outline → Mermaid graph</option>
+          <option value="json">Outline → nested JSON</option>
+          <option value="tsv">Outline → TSV (depth, text)</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="bar txbar" style="margin-top:-.35rem">
+      <span class="muted" id="txstat">ready</span>
+      <span style="flex:1"></span>
+      <button data-tx="_swap" title="Feed the output back into the input so you can chain transforms">↺ Output → input</button>
+      <button data-tx="_copy" title="Copy the output to the clipboard">📋 Copy output</button>
+      <button data-tx="_clear">✕ Clear</button>
+    </div>
+
+    <div class="txgrid">
+      <div class="txpane">
+        <label for="txin">Input <span class="muted">— paste here (rich text welcome)</span></label>
+        <div id="txin" class="txbox" contenteditable="true" spellcheck="false"></div>
+      </div>
+      <div class="txpane">
+        <label for="txout">Output <span class="muted">— editable; ↺ chains it back into the input</span></label>
+        <textarea id="txout" class="txbox" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="page-log" style="display:none">
   <div class="panel">
     <h2 style="font-size:1rem">Change history <span class="muted" id="logcount" style="font-weight:400;font-size:.8rem"></span></h2>
@@ -413,6 +517,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <label style="margin:0;display:inline"><input type="checkbox" id="setimportrx"> import as regex set</label>
     </div>
     <div id="setlist" class="pills"></div>
+    <div id="setdescwrap" style="display:none;margin:.4rem 0">
+      <label for="setdesc">Description of this set <span class="muted">— what it
+        is for, where it came from, anything future-you will want to know</span></label>
+      <textarea id="setdesc" rows="2" style="width:100%;font-size:.82rem"
+                placeholder="e.g. Spanish place names for the Cintrón case file. Triggers start with / to avoid firing mid-word."></textarea>
+    </div>
     <table style="width:100%;font-size:.84rem" id="settable"></table>
     <div class="bar" id="setitembar" style="display:none">
       <button id="setadditem">＋ Add expansion</button>
@@ -421,6 +531,15 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <span class="muted" id="setdirty" style="font-size:.78rem"></span>
     </div>
     <p class="muted" style="font-size:.78rem;margin-top:.3rem">
+      <b>List transforms</b> (for turning a typed or captured list into a tidy one):
+      <code>{{~SORT(a|c|b)}}</code> sorts, <code>{{~UNIQ(...)}}</code> removes
+      duplicates keeping the first of each, <code>{{~SORTU(...)}}</code> does both.
+      Items separate on <code>|</code> or a newline. Combine with a regex capture,
+      e.g. trigger <code>(.+)/su</code> → <code>{{~SORTU($1)}}</code>.
+      <br><i>Note:</i> these cannot read your computer's clipboard. This device is a
+      USB keyboard — it can only send keystrokes, and there is no path by which the
+      clipboard could travel back to it. Type or paste the list, then trigger.
+      <br><br>
       <b>Where edits go:</b> expansion sets are stored in their own files on the Pi
       (<code>expansion_sets/</code>), <i>not</i> in your profile. Editing an item here needs
       <b>⬆ Save this set</b> (or ⬆ Save sets) — <b>⬆ Save to device</b> saves the profile and
@@ -433,9 +552,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     expansions.json) -- edit the trigger text below, then use the normal
     <b>⬆ Save to device</b> button at the top to apply.</p>
     <div class="row">
-      <div><label>Today's date</label><input type="text" id="trigDate"></div>
-      <div><label>Current time</label><input type="text" id="trigTime"></div>
-      <div><label>Date + time</label><input type="text" id="trigDatetime"></div>
+      <div><label>Today's date</label><input type="text" id="trigDate">
+        <label class="inl" title="type a space after the date, so you can keep typing without reaching for the spacebar"><input type="checkbox" id="spDate"> trailing space</label></div>
+      <div><label>Current time</label><input type="text" id="trigTime">
+        <label class="inl" title="type a space after the time"><input type="checkbox" id="spTime"> trailing space</label></div>
+      <div><label>Date + time</label><input type="text" id="trigDatetime">
+        <label class="inl" title="type a space after the date and time"><input type="checkbox" id="spDatetime"> trailing space</label></div>
     </div>
   </div>
   <div class="panel">
@@ -493,10 +615,24 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
         pick the one matching where you type most.
         <table style="width:100%;margin:.4rem 0;font-size:.78rem">
           <tr><td><b>Method</b></td><td><b>Sends</b></td><td><b>Works in</b></td><td><b>Fails in</b></td></tr>
+          <tr style="background:rgba(120,200,120,.10)">
+              <td><code>win_auto</code> <b>(default)</b></td>
+              <td>Alt+0NNN when the character is CP1252, hex otherwise</td>
+              <td>Everywhere, for every accented Latin letter, the Euro,
+                  curly quotes and dashes. Numpad digits only, so it can
+                  never trigger a menu accelerator, and it needs no registry
+                  change.</td>
+              <td>Nothing, within CP1252. Beyond it (☑, emoji) it falls back
+                  to <code>win_alt_hex</code> and inherits that row's caveat.</td></tr>
           <tr><td><code>win_alt_hex</code></td><td>Alt + numpad&nbsp;<b>+</b> then hex (2611)</td>
               <td>Browsers, Teams, Start menu, most apps</td>
               <td><b>Office</b> — it ignores the “+” and reads the digits as
-                  <i>decimal</i>, so 2611 becomes U+0A33&nbsp;ਲ਼</td></tr>
+                  <i>decimal</i>, so 2611 becomes U+0A33&nbsp;ਲ਼.<br>
+                  <b>Also anywhere <code>EnableHexNumpad</code> is not set</b> —
+                  the hex digits a–f are typed as Alt+letter, which Windows
+                  then delivers as MENU ACCELERATORS. “ó” is hex f3, so it
+                  sends Alt+F and opens the browser menu instead of typing
+                  anything.</td></tr>
           <tr><td><code>win_alt_dec</code></td><td>Alt + decimal (9745)</td>
               <td><b>Office</b> (Word, Outlook, OneNote) — full Unicode</td>
               <td>Browsers — they wrap it to one byte, so 9745 → ◄</td></tr>
@@ -509,9 +645,14 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
           <tr><td><code>linux_ctrl_shift_u</code></td><td>Ctrl+Shift+U, hex, Space</td>
               <td>GTK / IBus apps</td><td>Qt apps and some terminals</td></tr>
         </table>
-        <b>Rule of thumb:</b> mostly in Office → <code>win_alt_dec</code>;
-        mostly in a browser → <code>win_alt_hex</code> (needs the
-        <code>EnableHexNumpad</code> registry value and Num&nbsp;Lock on).
+        <b>Rule of thumb:</b> leave it on <code>win_auto</code>. Choose
+        <code>win_alt_dec</code> if you are only ever in Office and want
+        characters above CP1252; choose <code>win_alt_hex</code> only if you
+        have set the <code>EnableHexNumpad</code> registry value <i>and</i>
+        logged out and in again. Num&nbsp;Lock must be on for every Alt method.
+        <br>To enable hex entry (only needed for characters outside CP1252),
+        run in an admin PowerShell and then sign out:<br>
+        <code>reg add "HKCU\Control Panel\Input Method" /v EnableHexNumpad /t REG_SZ /d 1 /f</code>
         Values above U+FFFF are unreliable with every Alt method.
         <br><b>Always reliable alternative:</b> put the character in a
         <b>Copy / Paste</b> item and paste it — no escape sequence involved.
@@ -4137,10 +4278,16 @@ function collectDevs(){
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
   if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};
+  // 20.3: trailing space is keyed by KIND, not by trigger text, so renaming a
+  // trigger keeps the setting instead of silently resetting it.
+  if(!cfg.dynamic_space)cfg.dynamic_space={};
   const byKind=k=>Object.keys(cfg.dynamic_triggers).find(t=>cfg.dynamic_triggers[t]===k)||'';
   $('trigDate').value=byKind('date');
   $('trigTime').value=byKind('time');
   $('trigDatetime').value=byKind('datetime');
+  $('spDate').checked=!!cfg.dynamic_space.date;
+  $('spTime').checked=!!cfg.dynamic_space.time;
+  $('spDatetime').checked=!!cfg.dynamic_space.datetime;
   const rebind=()=>{
     // NOTE: keep trailing spaces verbatim — a trigger like "dt " only fires
     // after the space, and stripping it (old bug) is why "dt " reverted to
@@ -4149,8 +4296,11 @@ function renderExp(){
     const dv=$('trigDate').value, tv=$('trigTime').value, dtv=$('trigDatetime').value;
     if(dv)nt[dv]='date'; if(tv)nt[tv]='time'; if(dtv)nt[dtv]='datetime';
     cfg.dynamic_triggers=nt;
+    cfg.dynamic_space={date:$('spDate').checked,time:$('spTime').checked,
+                       datetime:$('spDatetime').checked};
     toast('date/time triggers changed — press ⬆ Save to device (top) to apply');};
   ['trigDate','trigTime','trigDatetime'].forEach(id=>{$(id).oninput=rebind;$(id).onchange=rebind;});
+  ['spDate','spTime','spDatetime'].forEach(id=>{$(id).onchange=rebind;});
   const t=$('exptable');
   t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
   for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
@@ -4312,12 +4462,26 @@ window.toggleSetActive=(name,on)=>{
     toast((on?'activated ':'deactivated ')+name+' — ⬆ Save sets to apply');}};
 function renderSetTable(){
   const t=$('settable'),bar=$('setitembar');if(!t)return;
-  if(!curSet||!expSets||!expSets[curSet]){t.innerHTML='';bar.style.display='none';return;}
+  if(!curSet||!expSets||!expSets[curSet]){
+    t.innerHTML='';bar.style.display='none';
+    const dw=$('setdescwrap'); if(dw)dw.style.display='none';
+    return;}
   bar.style.display='flex';
   const st=expSets[curSet];
   const _oses=osKnown();
+  // 20.4 BF3 #3: a free-text description for the SET. Travels in the set file
+  // alongside name/active/items, so it survives export and import and shows
+  // up wherever the set does.
+  const dbox=$('setdesc'), dwrap=$('setdescwrap');
+  if(dwrap){
+    dwrap.style.display='block';
+    dbox.value=st.description||'';
+    dbox.oninput=()=>{st.description=dbox.value;markSetsDirty();};
+  }
   let h=`<tr><td><b>On</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td>
-    <td><b>Regex</b></td><td><b>Case</b></td>${_oses.length>1?'<td><b>OS</b></td>':''}<td></td></tr>`;
+    <td><b>Regex</b></td><td><b>Case</b></td>
+    <td><b title="Keep the trigger on screen and add the value after it, instead of replacing it">Keep</b></td>
+    ${_oses.length>1?'<td><b>OS</b></td>':''}<td></td></tr>`;
   (st.items||[]).forEach((it,i)=>{
     h+=`<tr${it.off?' class="addoff"':''}>
       <td><input type="checkbox" data-si="${i}" data-f="off" ${it.off?'':'checked'} title="enable / disable this expansion"></td>
@@ -4327,6 +4491,8 @@ function renderSetTable(){
       <td><select data-si="${i}" data-f="case">
         <option value="ignore" ${it.case!=='match'?'selected':''}>ignore</option>
         <option value="match" ${it.case==='match'?'selected':''}>match</option></select></td>
+      <td><input type="checkbox" data-si="${i}" data-f="keep" ${it.keep?'checked':''}
+          title="Don't replace the trigger: leave what you typed and append the value"></td>
       ${_oses.length>1?`<td><select data-si="${i}" data-f="os" title="which OS this expansion applies on">
         <option value="" ${!it.os?'selected':''}>all</option>
         ${_oses.map(o=>`<option value="${esc(o)}" ${[].concat(it.os||[])[0]===o?'selected':''}>${esc(o)} only</option>`).join('')}
@@ -4339,6 +4505,7 @@ function renderSetTable(){
     markSetsDirty();
     if(f==='off'){it.off=!el.checked;renderSets();return;}
     if(f==='regex')it.regex=el.checked;
+    else if(f==='keep')it.keep=el.checked;
     else if(f==='value')it.value=el.value.replace(/\\n/g,'\n');
     else if(f==='os'){if(el.value)it.os=[el.value];else delete it.os;}   // 19.2R #3
     else it[f]=el.value;
@@ -4347,7 +4514,7 @@ function renderSetTable(){
     st.items.splice(+b.dataset.sdel,1);renderSets();});}
 $('setadditem').onclick=()=>{
   if(!curSet)return;
-  expSets[curSet].items.push({trigger:'',value:'',regex:false,case:'ignore'});
+  expSets[curSet].items.push({trigger:'',value:'',regex:false,case:'ignore',keep:false});
   renderSets();};
 $('setdelete').onclick=()=>{
   if(!curSet)return;
@@ -4458,7 +4625,7 @@ function renderOsTab(){
         onchange="osScrollSet('${esc(o)}','${d.id}',this.checked)"> invert</label></td>`;}).join('')+'</tr>';}
   $('osscroll').innerHTML=sh;
   // unicode method
-  const methods=['','none','mac_option_hex','win_alt_hex','win_alt_x','win_alt_dec','linux_ctrl_shift_u'];
+  const methods=['','none','win_auto','mac_option_hex','win_alt_hex','win_alt_x','win_alt_dec','linux_ctrl_shift_u'];
   let uh=`<tr><td><b>OS</b></td><td><b>Unicode method</b></td></tr>`;
   for(const o of oses){
     const cur=(cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].unicode_method)||'';
@@ -4621,10 +4788,586 @@ function initTz(){
   const er=$('erasesel');if(er){er.value=(cfg&&cfg.erase_method)||'backspace';
     er.onchange=()=>{if(cfg)cfg.erase_method=er.value;toast('erase method set — ⬆ Save to device');};}}
 
+/* ==================== Text Transform (20.5) ==========================
+   Entirely client-side: no device, no Pi, no network. Works disconnected.
+
+   The whole tab rests on one idea: a pasted document already carries its
+   structure, and throwing that away is what makes reformatting painful.
+   Word and PDF paste real <ul>/<ol> nesting, real margin-left indents and
+   real bold runs. txBlocks() reads those into {text, depth} and every
+   transform works on that, so "Smart indent" on Word text usually has
+   nothing left to guess.
+   ==================================================================== */
+
+const TX_IND = '    ';                    // one level of output indent
+
+/* ---------- reading the input, structure and all ---------- */
+function txBlocks(){
+  const root = $('txin');
+  if(!root) return [];
+  const blocks = [];
+  const BLOCK = /^(P|DIV|LI|H1|H2|H3|H4|H5|H6|TR|BLOCKQUOTE|PRE)$/;
+
+  const listDepth = el => {
+    let d = 0, n = el.parentElement;
+    while(n && n !== root){
+      if(n.tagName === 'UL' || n.tagName === 'OL') d++;
+      n = n.parentElement;
+    }
+    return d;                      // TRUE nesting; normalised at the end
+  };
+  // Word does not always use real lists: it emits <p> with margin-left, and
+  // marks its fake list paragraphs with MsoListParagraph. Both are structure.
+  const styleDepth = el => {
+    const st = el.getAttribute && el.getAttribute('style') || '';
+    let px = 0;
+    const m = /margin-left:\s*(-?[\d.]+)(pt|px|in|cm)/i.exec(st);
+    if(m){
+      const v = parseFloat(m[1]);
+      px = m[2].toLowerCase() === 'pt' ? v * 1.333
+         : m[2].toLowerCase() === 'in' ? v * 96
+         : m[2].toLowerCase() === 'cm' ? v * 37.8 : v;
+    }
+    let d = px > 0 ? Math.round(px / 36) : 0;      // ~0.5in per level
+    const cls = (el.className || '') + '';
+    if(/MsoListParagraph/i.test(cls) && d === 0) d = 1;
+    return d;
+  };
+  const isBold = el => {
+    if(!el.querySelector) return false;
+    const t = (el.innerText || '').trim();
+    if(!t) return false;
+    const b = el.querySelector('b,strong');
+    return !!(b && (b.innerText || '').trim().length >= t.length * 0.8);
+  };
+
+  const walk = node => {
+    for(const el of node.children){
+      if(el.tagName === 'UL' || el.tagName === 'OL' || el.tagName === 'TABLE'
+         || el.tagName === 'TBODY'){ walk(el); continue; }
+      if(BLOCK.test(el.tagName)){
+        const txt = (el.innerText || '').replace(/ /g,' ').trimEnd();
+        if(txt.trim()){
+          blocks.push({ text: txt.trim(),
+                        depth: Math.max(listDepth(el), styleDepth(el)),
+                        bold: isBold(el),
+                        li: el.tagName === 'LI' });
+        }else{
+          blocks.push({ text:'', depth:0, bold:false, li:false });
+        }
+        if(el.querySelector && el.querySelector('ul,ol')) walk(el);
+        continue;
+      }
+      walk(el);
+    }
+  };
+  walk(root);
+
+  // Normalise so the shallowest real line sits at depth 0. Counting list
+  // nesting honestly means a document that is nothing BUT a list would start
+  // at depth 1 and waste a level; shifting afterwards keeps both that case and
+  // the common one (a heading with a list under it) correct.
+  const real = blocks.filter(b => b.text);
+  if(real.length){
+    const min = Math.min(...real.map(b => b.depth));
+    if(min > 0) for(const b of blocks) b.depth = Math.max(0, b.depth - min);
+  }
+
+  // Nothing block-level (a plain-text paste): fall back to the text itself,
+  // taking leading whitespace as the indent.
+  if(!blocks.length){
+    const raw = (root.innerText || '').replace(/ /g,' ');
+    return raw.split('\n').map(l => ({
+      text: l.trim(),
+      depth: Math.floor((l.match(/^[\t ]*/)[0].replace(/\t/g,'    ')).length / 4),
+      bold: false, li: false
+    }));
+  }
+  return blocks;
+}
+
+function txText(){ return txBlocks().map(b => TX_IND.repeat(b.depth) + b.text).join('\n'); }
+function txSet(s){ $('txout').value = s; txStat(s); }
+function txStat(s){
+  const lines = s ? s.split('\n').length : 0;
+  $('txstat').textContent = `${lines} line${lines===1?'':'s'} · ${s.length} characters`;
+}
+function txOutLines(){ return ($('txout').value || '').split('\n'); }
+
+/* Depth of an already-indented plain line. */
+function txDepthOf(line){
+  const lead = (line.match(/^[\t ]*/) || [''])[0].replace(/\t/g,'    ');
+  return Math.floor(lead.length / 4);
+}
+function txStrip(line){ return line.replace(/^[\t ]+/,''); }
+
+/* ---------- markers ---------- */
+const TX_MARKS = [
+  { k:'pnum',   re:/^\(\s*\d+\s*\)\s+/ },
+  { k:'num',    re:/^\d+[.)]\s+/ },
+  { k:'proman', re:/^\(\s*(?=[ivxlcdm]{1,6}\s*\))[ivxlcdm]{1,6}\s*\)\s+/i },
+  { k:'roman',  re:/^(?=[ivxlcdm]{1,6}[.)])[ivxlcdm]{1,6}[.)]\s+/i },
+  { k:'palpha', re:/^\(\s*[A-Za-z]\s*\)\s+/ },
+  { k:'alpha',  re:/^[A-Za-z][.)]\s+/ },
+  { k:'bullet', re:/^[•▪◦·‣∙◘○●–—*+-]\s+/ }
+];
+function txMarker(line){
+  const t = txStrip(line);
+  for(const m of TX_MARKS){ if(m.re.test(t)) return m.k; }
+  return null;
+}
+
+/* ---------- the four primary transforms ---------- */
+
+/* Clean paste — undo what PDF and Word do to text on the way out.
+   The interesting rule is the rejoin: a line is a continuation if it does NOT
+   end a sentence AND the next line starts lowercase. Requiring both keeps
+   genuine short lines (headings, list items) on their own line, which a
+   simpler "join everything" would destroy. */
+function txClean(){
+  let lines = txText().split('\n');
+  lines = lines.filter(l => {
+    const t = l.trim();
+    if(/^\d+$/.test(t)) return false;                        // bare page number
+    if(/^page\s+\d+(\s+of\s+\d+)?$/i.test(t)) return false;
+    if(/^-\s*\d+\s*-$/.test(t)) return false;                // - 12 -
+    return true;
+  });
+  // repeated header/footer: identical non-trivial line appearing 3+ times
+  const counts = {};
+  for(const l of lines){ const t = l.trim(); if(t.length > 3) counts[t] = (counts[t]||0)+1; }
+  const boiler = new Set(Object.keys(counts).filter(k => counts[k] >= 3 && k.length < 80));
+  lines = lines.filter(l => !boiler.has(l.trim()));
+
+  // A wrapped line is one the PDF broke because it ran out of column, so it
+  // sits at or near the widest line in the document. A heading is short. That
+  // width comparison is what separates them -- requiring the next line to
+  // start lowercase (the obvious rule) fails on "...set out in / Schedule 2",
+  // and joining every unpunctuated line glues headings to the body below.
+  const lens = lines.map(l => l.trim().length).filter(n => n > 0).sort((a,b) => a-b);
+  const wide = lens.length ? lens[Math.floor(lens.length * 0.8)] : 0;
+  const isFull = t => t.length >= Math.max(40, wide * 0.8);
+
+  const out = [];
+  for(let i = 0; i < lines.length; i++){
+    let cur = lines[i];
+    if(!cur.trim()){ out.push(''); continue; }
+    while(i + 1 < lines.length){
+      const nxt = lines[i+1];
+      if(!nxt.trim()) break;
+      const c = cur.trimEnd(), n = nxt.trim();
+      if(/-$/.test(c) && /^[a-z]/.test(n)){                  // hyphen split word
+        cur = c.replace(/-$/,'') + n; i++; continue;
+      }
+      const endsSentence = /[.!?:;”"')\]]$/.test(c);
+      const nextIsMarked = txMarker(nxt) !== null;
+      const cont = /^[a-z(]/.test(n) || isFull(c.trim());
+      if(!endsSentence && cont && !nextIsMarked){
+        cur = c + ' ' + n; i++; continue;
+      }
+      break;
+    }
+    out.push(cur);
+  }
+  return out.join('\n').replace(/\n{3,}/g,'\n\n');
+}
+
+/* Smart indent — infer the outline.
+   Marker TYPE decides depth, in order of first appearance: legal documents go
+   1. then (a) then (i), and the type is a far more reliable signal than any
+   whitespace that survived the paste. A line ending in a colon introduces the
+   unmarked lines beneath it. Existing depth from the HTML is a floor, never
+   overridden, because if Word said it was nested it really was. */
+function txIndent(){
+  const blocks = txBlocks();
+  const order = [];
+  for(const b of blocks){
+    const k = txMarker(b.text);
+    if(k && !order.includes(k)) order.push(k);
+  }
+  const out = [];
+  let introDepth = null;
+  for(const b of blocks){
+    if(!b.text){ out.push(''); introDepth = null; continue; }
+    const k = txMarker(b.text);
+    let d;
+    if(k){
+      d = order.indexOf(k);
+      introDepth = null;
+    }else if(introDepth !== null){
+      d = introDepth + 1;
+    }else{
+      d = b.depth;
+    }
+    d = Math.max(d, b.depth);
+    // A bold, punctuation-free line is a heading: pull it to the top level.
+    if(b.bold && !/[.;,]$/.test(b.text) && b.text.length < 90 && !k){ d = 0; }
+    out.push(TX_IND.repeat(d) + b.text);
+    if(/:$/.test(b.text)) introDepth = d;
+  }
+  return out.join('\n');
+}
+
+/* Split lists — a clause ending in an enumeration becomes one line per item. */
+function txSplitList(){
+  const out = [];
+  for(const line of txText().split('\n')){
+    if(!line.trim()){ out.push(''); continue; }
+    const d = txDepthOf(line), body = txStrip(line);
+    // inline markers: "... as follows: (a) x; (b) y; and (c) z"
+    const inline = body.split(/(?=\((?:[a-z]|[ivxlcdm]{1,4}|\d{1,2})\)\s)/i)
+                       .filter(p => p.trim());
+    if(inline.length > 1){
+      out.push(TX_IND.repeat(d) + inline[0].trim());
+      for(const p of inline.slice(1)) out.push(TX_IND.repeat(d+1) + p.trim());
+      continue;
+    }
+    const parts = txConjSplit(body);
+    if(parts){
+      out.push(TX_IND.repeat(d) + parts.stem);
+      for(const it of parts.items) out.push(TX_IND.repeat(d+1) + it);
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+/* The conjunction splitter, shared by "Split lists" and "Split and/or".
+   Returns {stem, items} or null.
+
+   Only splits when an "and"/"or" actually appears, and prefers a colon as the
+   stem boundary because that is the drafting convention. Semicolons win over
+   commas as item separators when both are present: contract lists use
+   semicolons precisely because the items themselves contain commas. */
+function txConjSplit(body){
+  if(!/\b(and|or)\b/i.test(body)) return null;
+  let stem = '', rest = body;
+  const colon = body.indexOf(':');
+  if(colon > 0 && colon < body.length - 1){
+    stem = body.slice(0, colon + 1).trim();
+    rest = body.slice(colon + 1).trim();
+  }
+  const tail = /[.;,]$/.test(rest) ? rest.slice(-1) : '';
+  if(tail) rest = rest.slice(0, -1);
+
+  let items;
+  if(rest.includes(';')){
+    items = rest.split(';');
+  }else{
+    // "A, B, and C"  /  "A and B"
+    const m = /^(.*?)(?:,)?\s+(?:and|or)\s+([^,]+)$/i.exec(rest);
+    if(!m) return null;
+    items = m[1].split(',').concat([m[2]]);
+  }
+  items = items.map(s => s.replace(/^\s*(?:and|or)\s+/i,'').trim())
+               .filter(Boolean);
+  if(items.length < 2) return null;
+  if(!stem){
+    // No colon. Contract lead-ins almost always hinge on a modal or an
+    // introducing phrase -- "The Supplier shall deliver, install and maintain"
+    // -- so split there. Without this the first obligation keeps the subject
+    // glued to it and the list reads as three unlike things.
+    const lead = /^(.*?\b(?:shall|must|will|agrees\s+to|undertakes\s+to|is\s+required\s+to|including(?:,?\s+but\s+not\s+limited\s+to)?|such\s+as|namely)\b)[:,]?\s+(.*)$/i
+                   .exec(rest);
+    if(lead){
+      stem = lead[1].trim();
+      const after = lead[2];
+      if(after.includes(';')){
+        items = after.split(';');
+      }else{
+        const m2 = /^(.*?)(?:,)?\s+(?:and|or)\s+([^,]+)$/i.exec(after);
+        items = m2 ? m2[1].split(',').concat([m2[2]]) : items;
+      }
+      items = items.map(x => x.replace(/^\s*(?:and|or)\s+/i,'').trim()).filter(Boolean);
+      if(tail && items.length) items[items.length-1] += tail;
+      return { stem, items };
+    }
+  }
+  if(tail) items[items.length-1] += tail;
+  return { stem, items };
+}
+
+/* Split and/or — the contract-parsing tool: every distinct promise on its own
+   line, indented under the clause that introduced it. */
+function txSplitConj(){
+  const out = [];
+  for(const line of txText().split('\n')){
+    if(!line.trim()){ out.push(''); continue; }
+    const d = txDepthOf(line), body = txStrip(line);
+    const parts = txConjSplit(body);
+    if(!parts){ out.push(line); continue; }
+    if(parts.stem) out.push(TX_IND.repeat(d) + parts.stem);
+    for(const it of parts.items){
+      out.push(TX_IND.repeat(d + (parts.stem ? 1 : 0)) + it);
+    }
+  }
+  return out.join('\n');
+}
+
+/* ---------- the dropdown transforms ---------- */
+function txTitleCase(s){
+  const small = new Set(['a','an','and','as','at','but','by','for','from','in',
+    'nor','of','on','or','per','the','to','via','vs','with']);
+  return s.split('\n').map(line =>
+    line.replace(/\b[\w'’]+\b/g, (w, i) =>
+      (i > 0 && small.has(w.toLowerCase()))
+        ? w.toLowerCase()
+        : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+  ).join('\n');
+}
+function txSentenceCase(s){
+  return s.split('\n').map(l =>
+    l.toLowerCase().replace(/(^\s*\w)|([.!?]\s+\w)/g, m => m.toUpperCase())
+  ).join('\n');
+}
+function txOutlineNumber(s){
+  const marks = [
+    n => n + '.',
+    n => String.fromCharCode(96 + ((n - 1) % 26) + 1) + '.',
+    n => txRoman(n).toLowerCase() + '.',
+    n => '(' + String.fromCharCode(96 + ((n - 1) % 26) + 1) + ')'
+  ];
+  const counters = [];
+  return s.split('\n').map(line => {
+    if(!line.trim()) return '';
+    const d = txDepthOf(line);
+    const body = txStrip(line).replace(txStripMarkRx, '');
+    counters.length = d + 1;
+    counters[d] = (counters[d] || 0) + 1;
+    for(let i = d + 1; i < counters.length; i++) counters[i] = 0;
+    const f = marks[Math.min(d, marks.length - 1)];
+    return TX_IND.repeat(d) + f(counters[d]) + ' ' + body;
+  }).join('\n');
+}
+function txRoman(n){
+  const t = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],
+             [50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  let out = '';
+  for(const [v,r] of t){ while(n >= v){ out += r; n -= v; } }
+  return out || 'I';
+}
+const txStripMarkRx = /^(?:\(\s*(?:\d+|[A-Za-z]|[ivxlcdm]{1,6})\s*\)|\d+[.)]|[A-Za-z][.)]|[ivxlcdm]{1,6}[.)]|[•▪◦·‣∙◘○●–—*+-])\s+/i;
+
+function txEdges(){
+  const stack = [];
+  const out = [];
+  for(const line of txOutSource().split('\n')){
+    if(!line.trim()) continue;
+    const d = txDepthOf(line), body = txStrip(line).replace(txStripMarkRx,'');
+    stack.length = d;
+    if(d > 0 && stack[d-1]) out.push(stack[d-1] + '  →  ' + body);
+    stack[d] = body;
+  }
+  return out.join('\n');
+}
+function txMermaid(){
+  const ids = new Map();
+  const id = t => {
+    if(!ids.has(t)) ids.set(t, 'n' + (ids.size + 1));
+    return ids.get(t);
+  };
+  const esc2 = t => '"' + t.replace(/"/g,"'").slice(0,80) + '"';
+  const stack = [], out = ['graph TD'];
+  for(const line of txOutSource().split('\n')){
+    if(!line.trim()) continue;
+    const d = txDepthOf(line), body = txStrip(line).replace(txStripMarkRx,'');
+    stack.length = d;
+    out.push('  ' + id(body) + '[' + esc2(body) + ']');
+    if(d > 0 && stack[d-1]) out.push('  ' + id(stack[d-1]) + ' --> ' + id(body));
+    stack[d] = body;
+  }
+  return [...new Set(out)].join('\n');
+}
+function txJson(){
+  const root = { children: [] };
+  const stack = [root];
+  for(const line of txOutSource().split('\n')){
+    if(!line.trim()) continue;
+    const d = txDepthOf(line), body = txStrip(line).replace(txStripMarkRx,'');
+    const node = { text: body, children: [] };
+    stack.length = d + 1;
+    (stack[d] || root).children.push(node);
+    stack[d+1] = node;
+  }
+  return JSON.stringify(root.children, null, 2);
+}
+function txTsv(){
+  return txOutSource().split('\n').filter(l => l.trim())
+    .map(l => txDepthOf(l) + '\t' + txStrip(l)).join('\n');
+}
+/* Graph exports read the OUTPUT when it already holds an outline, so you can
+   Smart-indent first and then export without a round trip through the input. */
+function txOutSource(){
+  const o = $('txout').value;
+  return (o && o.trim()) ? o : txText();
+}
+
+function txSentencesSplit(s){
+  return s.split('\n').map(l => {
+    const d = txDepthOf(l);
+    return txStrip(l)
+      .replace(/([.!?])\s+(?=[A-Z(“"])/g, '$1\n')
+      .split('\n').map(x => TX_IND.repeat(d) + x).join('\n');
+  }).join('\n');
+}
+
+function txDefinedTerms(s){
+  const found = new Map();
+  const push = (t, ctx) => { if(t && !found.has(t)) found.set(t, ctx.trim()); };
+  // "Term" means / “Term” shall mean / (the "Term")
+  const rx = [
+    /[“"]([^”"]{2,60})[”"]\s+(?:shall\s+)?means?\b([^.;]{0,120})/gi,
+    /\(\s*(?:the|each,?\s*an?|an?)?\s*[“"]([^”"]{2,60})[”"]\s*\)/gi
+  ];
+  for(const r of rx){
+    let m;
+    while((m = r.exec(s))) push(m[1], m[2] || '');
+  }
+  if(!found.size) return '(no defined terms found — they are usually in quotes)';
+  return [...found.entries()].sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([t,c]) => c ? `${t} — ${c}` : t).join('\n');
+}
+function txObligations(s){
+  const out = [];
+  for(const part of txSentencesSplit(s).split('\n')){
+    const t = part.trim();
+    if(/\b(shall|must|will|agrees to|undertakes to|is required to|responsible for)\b/i.test(t)){
+      out.push(t);
+    }
+  }
+  return out.length ? out.join('\n')
+    : '(nothing matched shall / must / will / agrees to / undertakes to)';
+}
+function txXrefs(s){
+  // The tail must end on a word character or ')' -- otherwise the sentence's
+  // own full stop is captured as part of the reference ("Clause 9." != "Clause 9").
+  const rx = /\b(?:section|clause|article|schedule|exhibit|annex|appendix|paragraph)\s+[\dA-Za-z](?:[\w.()-]*[\w)])?/gi;
+  const hits = [...new Set((s.match(rx) || []).map(x => x.trim()))];
+  return hits.length ? hits.sort().join('\n') : '(no cross-references found)';
+}
+function txParties(s){
+  const rx = /\b(?:[A-Z][A-Za-z&.'-]+\s+){0,4}(?:Inc|LLC|L\.L\.C|Ltd|Limited|Corp|Corporation|Company|GmbH|PLC|LLP|LP|Trust|Partners|Holdings)\b\.?/g;
+  const hits = [...new Set((s.match(rx) || []).map(x => x.trim()))];
+  return hits.length ? hits.sort().join('\n') : '(no company-like names found)';
+}
+
+/* ---------- dispatch ---------- */
+function txRun(name){
+  const src = () => ($('txout').value && $('txout').value.trim())
+    ? $('txout').value : txText();
+  const lines = f => src().split('\n').map(f).join('\n');
+  let r;
+  switch(name){
+    case 'clean':        r = txClean(); break;
+    case 'indent':       r = txIndent(); break;
+    case 'splitlist':    r = txSplitList(); break;
+    case 'splitconj':    r = txSplitConj(); break;
+
+    case 'straighten':   r = src().replace(/[“”]/g,'"').replace(/[‘’]/g,"'")
+                                  .replace(/[–—]/g,'-').replace(/…/g,'...'); break;
+    case 'unicodeclean': r = src().replace(/[​-‍﻿­]/g,'')
+                                  .replace(/ /g,' '); break;
+    case 'collapsews':   r = lines(l => l.replace(/[ \t]{2,}/g,' ')); break;
+    case 'trim':         r = lines(l => l.trim()); break;
+    case 'noblank':      r = src().split('\n').filter(l => l.trim()).join('\n'); break;
+    case 'dedupe':       { const seen = new Set();
+                           r = src().split('\n').filter(l => {
+                             const k = l.trim().toLowerCase();
+                             if(!k) return true;
+                             if(seen.has(k)) return false;
+                             seen.add(k); return true; }).join('\n'); break; }
+
+    case 'title':        r = txTitleCase(src()); break;
+    case 'sentence':     r = txSentenceCase(src()); break;
+    case 'upper':        r = src().toUpperCase(); break;
+    case 'lower':        r = src().toLowerCase(); break;
+
+    case 'sort':         r = src().split('\n').filter(l=>l.trim())
+                                  .sort((a,b)=>txStrip(a).toLowerCase()
+                                    .localeCompare(txStrip(b).toLowerCase())).join('\n'); break;
+    case 'sortlen':      r = src().split('\n').filter(l=>l.trim())
+                                  .sort((a,b)=>a.length-b.length).join('\n'); break;
+    case 'reverse':      r = src().split('\n').reverse().join('\n'); break;
+    case 'number':       { let n = 0;
+                           r = lines(l => l.trim() ? (++n) + '. ' + l : l); break; }
+    case 'join':         r = src().split('\n').map(l=>l.trim())
+                                  .filter(Boolean).join(' '); break;
+    case 'sentences':    r = txSentencesSplit(src()); break;
+    case 'semicolons':   r = lines(l => {
+                           const d = txDepthOf(l);
+                           return txStrip(l).split(';')
+                             .map(x=>x.trim()).filter(Boolean)
+                             .map(x=>TX_IND.repeat(d)+x).join('\n'); }); break;
+
+    case 'md':           r = lines(l => l.trim()
+                             ? '  '.repeat(txDepthOf(l)) + '- '
+                               + txStrip(l).replace(txStripMarkRx,'')
+                             : ''); break;
+    case 'outline':      r = txOutlineNumber(src()); break;
+    case 'flatten':      r = lines(l => txStrip(l)); break;
+    case 'stripmarks':   r = lines(l => TX_IND.repeat(txDepthOf(l))
+                             + txStrip(l).replace(txStripMarkRx,'')); break;
+    case 'indentplus':   r = lines(l => l.trim() ? TX_IND + l : l); break;
+    case 'indentminus':  r = lines(l => l.startsWith(TX_IND)
+                             ? l.slice(TX_IND.length) : txStrip(l)); break;
+
+    case 'obligations':  r = txObligations(src()); break;
+    case 'defined':      r = txDefinedTerms(src()); break;
+    case 'xrefs':        r = txXrefs(src()); break;
+    case 'parties':      r = txParties(src()); break;
+
+    case 'edges':        r = txEdges(); break;
+    case 'mermaid':      r = txMermaid(); break;
+    case 'json':         r = txJson(); break;
+    case 'tsv':          r = txTsv(); break;
+    default: return;
+  }
+  txSet(r);
+}
+
+function txInit(){
+  const box = $('txin');
+  if(!box || box.dataset.wired) return;
+  box.dataset.wired = '1';
+  document.querySelectorAll('[data-tx]').forEach(b => b.onclick = () => {
+    const n = b.dataset.tx;
+    if(n === '_copy'){
+      const t = $('txout');
+      t.select();
+      navigator.clipboard ? navigator.clipboard.writeText(t.value)
+                            .then(()=>toast('output copied'),
+                                  ()=>toast('press ⌘/Ctrl+C to copy', true))
+                          : toast('press ⌘/Ctrl+C to copy', true);
+      return;
+    }
+    if(n === '_swap'){
+      // Plain text back in: the output has no rich structure to preserve, and
+      // its INDENTATION is the structure now. textContent keeps it verbatim.
+      $('txin').textContent = $('txout').value;
+      txStat($('txout').value);
+      toast('output moved to input');
+      return;
+    }
+    if(n === '_clear'){
+      $('txin').innerHTML = ''; $('txout').value = ''; txStat('');
+      return;
+    }
+    txRun(n);
+  });
+  const menu = $('txmenu');
+  if(menu) menu.onchange = () => { if(menu.value){ txRun(menu.value); menu.value = ''; } };
+  box.addEventListener('input', () => {
+    const t = box.innerText || '';
+    $('txstat').textContent = `input: ${t.split('\n').length} lines · ${t.length} characters`;
+  });
+}
+
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt','log'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log','tx'])$('page-'+p).style.display=p===t?'':'none';
+  if(t==='tx')txInit();
   if(t==='os')renderOsTab();
   if(t==='log')renderChangelog();
   if(t==='bt'&&device)btCmd('list');
