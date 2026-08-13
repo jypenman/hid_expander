@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.7.1</title>
+<title>HID Config 20.7.3</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -92,6 +92,25 @@ label{display:block;margin:.45rem 0 .1rem;font-size:.84rem;opacity:.85}
 /* labels that sit on the same line as their control (checkbox + caption) */
 label.inl{display:inline-flex;align-items:center;gap:.3rem;margin:.3rem 0 0;cursor:pointer}
 label.inl input{margin:0}
+/* --- benchmark strip + preferences (20.7.3) --- */
+.benchstrip{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;
+  margin:.15rem 0 .5rem;font-size:.8rem;min-height:1.4rem}
+.bcell{display:inline-flex;align-items:baseline;gap:.25rem;padding:.1rem .5rem;
+  border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+.bcell .blab{opacity:.6;font-size:.72rem}
+.bcell b{font-variant-numeric:tabular-nums}
+.benchstrip .bage{font-size:.72rem}
+.pfrow{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;margin:.5rem 0}
+.pfrow label{margin:0;display:inline-flex;align-items:center;gap:.3rem}
+.pfwide{flex:1 1 22rem;min-width:14rem;font-family:ui-monospace,monospace;font-size:.8rem}
+.pfhelp{flex-basis:100%;margin:.15rem 0 0}
+.pfhelp summary{cursor:pointer;font-size:.76rem;opacity:.7}
+.pfhelp>div{font-size:.8rem;padding:.3rem 0 .2rem 1rem;border-left:2px solid var(--line);
+  margin-left:.2rem}
+.pfhelp pre{white-space:pre-wrap;word-break:break-all;font-size:.74rem;
+  background:var(--panel);padding:.4rem;border-radius:6px}
+.pfout{white-space:pre-wrap;font-size:.76rem;max-height:16rem;overflow:auto;
+  background:var(--panel);padding:.5rem;border-radius:6px}
 /* --- Text Transform (20.6.1) --- */
 /* Canvas/CanvasText are SYSTEM colours: they follow the page's color-scheme,
    so these surfaces stay readable in dark mode. Never hardcode one half of a
@@ -264,6 +283,19 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 
 <div class="bar">
   <h1 style="margin:0">🔌 HID Config</h1>
+<div id="benchstrip" class="benchstrip"></div>
+
+<div id="prefs" class="panel" style="display:none">
+  <div class="bar" style="margin-top:0">
+    <b>Preferences</b>
+    <span class="muted">⌘, / Ctrl+,</span>
+    <span style="flex:1"></span>
+    <button data-pfa="close">✕ Close</button>
+  </div>
+  <div class="pills" id="prefstabs"></div>
+  <div id="prefsbody"></div>
+</div>
+
   <button class="primary" id="connect">Connect</button>
   <span class="status off" id="conn">disconnected</span>
   <span style="flex:1"></span>
@@ -873,6 +905,7 @@ function onReport(e){
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===3){
         lastEng=obj;adoptEffective(obj);updateConStat();
+        if(typeof pfAdoptStats==='function')pfAdoptStats(obj);
         updateOsBtn();   // 3.1: refresh the OS-mismatch badge once the engine's
                          // active_os is known (post-save it was going stale)
         if(typeof renderDevices==='function')renderDevices();
@@ -957,6 +990,11 @@ $('connect').onclick=async()=>{
   // for. The Text Transform tab offers a button to pull it immediately.
   txScheduleLoad();
   setTimeout(applyBrowserOS,2600);           // this browser's OS == the host OS
+  // 20.7.3: an at-startup benchmark waits for the quiet window AFTER the
+  // config has loaded -- measuring while the mapping data is still in flight
+  // would measure the transfer, not the input path.
+  setTimeout(()=>{ try{ pfLoad();
+    if(PREFS.bench.at_startup && device) pfRunBenchmark(); }catch(e){} }, 6000);
   // config-read watchdog: if the Pi never answers, say so instead of
   // letting the page sit half-dead
   clearInterval(window._cfgT);window._cfgTries=0;
@@ -6166,6 +6204,360 @@ function txInit(){
   }, { passive:false });
 }
 
+/* ==================== Benchmark strip + Preferences (20.7.3) ==========
+   The numbers come from the Pi (bench.py writes devices/<id>.bench.json and
+   the engine publishes a summary in engine_status.json). The browser only
+   DISPLAYS them -- it never times anything itself, because the browser clock
+   and the Pi clock have no common base and subtracting them would measure
+   their offset rather than the path.
+   ==================================================================== */
+
+const PF_LS = 'hidcfg.prefs.v1';
+
+/* Default display recipe. One term per statistic:
+      source.field | label
+   sources: lat (latency ms), apm (actions/min), link (transport RTT)
+   fields : mean sd n min max p50 p95 band
+   Terms are shown left to right, so the recipe IS the order. */
+const PF_DEFAULT_RECIPE =
+  'lat.mean|Lat ; lat.p95|p95 ; lat.sd|± ; lat.n|n ; apm.mean|APM ; apm.band|';
+
+let PREFS = {
+  bench: {
+    recipe: PF_DEFAULT_RECIPE,
+    show: true,
+    device: 'link',
+    path: '',
+    at_startup: false,
+    random_enabled: false,
+    random_seconds: 20,
+    random_from: '09:00',
+    random_to: '18:00'
+  }
+};
+let pfLoaded = false;
+
+function pfLoad(){
+  if(pfLoaded) return;
+  pfLoaded = true;
+  try{
+    const r = localStorage.getItem(PF_LS);
+    if(r){
+      const d = JSON.parse(r);
+      for(const k in d) PREFS[k] = Object.assign(PREFS[k] || {}, d[k]);
+    }
+  }catch(e){ /* defaults are fine */ }
+}
+function pfSave(){
+  try{ localStorage.setItem(PF_LS, JSON.stringify(PREFS)); }
+  catch(e){ toast('could not save preferences in this browser', true); }
+}
+
+/* ---------- the strip under the title ---------- */
+function pfRenderStrip(stats){
+  const el = $('benchstrip');
+  if(!el) return;
+  pfLoad();
+  if(!PREFS.bench.show){ el.style.display = 'none'; return; }
+  el.style.display = '';
+  const s = stats || pfLastStats;
+  if(!s){
+    el.innerHTML = '<span class="muted">no benchmark yet</span>' +
+      ' <button data-pfa="run" class="txmini">▶ Benchmark</button>' +
+      ' <button data-pfa="open" class="txmini" title="Preferences (⌘, / Ctrl+,)">⚙</button>';
+    return;
+  }
+  const terms = String(PREFS.bench.recipe || PF_DEFAULT_RECIPE)
+    .split(';').map(t => t.trim()).filter(Boolean);
+  const cells = [];
+  for(const t of terms){
+    const [expr, rawLabel] = t.split('|');
+    const [src, field] = (expr || '').trim().split('.');
+    const v = (s[src] || {})[field];
+    if(v === undefined || v === null) continue;
+    const label = (rawLabel === undefined ? expr : rawLabel).trim();
+    const num = (typeof v === 'number')
+      ? (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1))
+      : v;
+    const unit = (src === 'lat' || src === 'link') && typeof v === 'number'
+      && field !== 'n' ? 'ms' : '';
+    cells.push(`<span class="bcell"${label ? '' : ' title="' + esc(expr) + '"'}>` +
+      (label ? `<span class="blab">${esc(label)}</span>` : '') +
+      `<b>${esc(String(num))}${unit}</b></span>`);
+  }
+  el.innerHTML = (cells.join('') || '<span class="muted">recipe matched nothing</span>')
+    + ` <span class="muted bage">${esc(s._age || '')}</span>`
+    + ' <button data-pfa="run" class="txmini">▶</button>'
+    + ' <button data-pfa="open" class="txmini" title="Preferences (⌘, / Ctrl+,)">⚙</button>';
+}
+
+let pfLastStats = null;
+
+/* Pull the latest numbers the Pi has. Read-only: the browser never measures. */
+function pfAdoptStats(eng){
+  if(!eng || !eng.bench) return;
+  const b = eng.bench;
+  pfLastStats = {
+    lat: b.lat || {}, apm: b.apm || {}, link: b.link || {},
+    _age: b.updated ? ('· ' + b.updated) : ''
+  };
+  pfRenderStrip(pfLastStats);
+}
+
+function pfRunBenchmark(){
+  if(!device){ toast('connect to the Pi first', true); return; }
+  const p = PREFS.bench;
+  toast('benchmark requested — the Pi runs it, results appear here');
+  // The engine owns the probes; the UI just asks. Sent on the profile
+  // channel, which already carries verb-style commands.
+  pfCmd('bench ' + (p.device || 'link') + ' ' + (p.path || '-'));
+  setTimeout(() => getFile(3), 4000);      // engine status carries the summary
+}
+
+/* ---------- preferences ---------- */
+const PF_TABS = [
+  { id:'map',    label:'Mapping'        },
+  { id:'macros', label:'Macros'         },
+  { id:'exp',    label:'Expansions'     },
+  { id:'tx',     label:'Text Transform' },
+  { id:'bench',  label:'Benchmark'      },
+  { id:'os',     label:'OS'             }
+];
+
+/* Each item: what it controls, the control itself, and instructions that are
+   COLLAPSED by default -- long help next to every field turns a settings page
+   into a wall of text. */
+function pfOpen(tab){
+  pfLoad();
+  const p = $('prefs');
+  p.style.display = 'block';
+  p.dataset.tab = tab || p.dataset.tab || 'bench';
+  pfRender();
+  p.scrollIntoView({ block:'nearest' });
+}
+function pfClose(){ $('prefs').style.display = 'none'; }
+
+function pfRender(){
+  const tab = $('prefs').dataset.tab || 'bench';
+  $('prefstabs').innerHTML = PF_TABS.map(t =>
+    `<div class="pill${t.id===tab?' on':''}" data-pftab="${t.id}">${esc(t.label)}</div>`).join('');
+  const body = $('prefsbody');
+  body.innerHTML = (PF_SECTIONS[tab] || (() => '<p class="muted">Nothing configurable here yet.</p>'))();
+}
+
+const pfHelp = (title, html) =>
+  `<details class="pfhelp"><summary>${esc(title)}</summary><div>${html}</div></details>`;
+
+const PF_SECTIONS = {
+
+  bench: () => {
+    const b = PREFS.bench;
+    return `
+    <div class="pfrow">
+      <label>Display recipe</label>
+      <input type="text" class="pfwide" id="pf-recipe" value="${esc(b.recipe)}">
+      <button data-pfa="recipe-reset" class="txmini">reset</button>
+      ${pfHelp('How the recipe works', `
+        <p>One term per statistic, separated by <code>;</code>. Each term is
+        <code>source.field|label</code>. <b>The order of the terms is the order
+        on screen</b>, and the label is whatever you want it called — leave it
+        empty to show the value with no caption.</p>
+        <p><b>Sources:</b> <code>lat</code> end-to-end latency (ms),
+        <code>link</code> transport round trip (ms), <code>apm</code> actions
+        per minute.<br>
+        <b>Fields:</b> <code>mean sd n min max p50 p95 band</code></p>
+        <p>Default:<br><code>${esc(PF_DEFAULT_RECIPE)}</code></p>
+        <p>Example — only the tail, which is what you actually feel:<br>
+        <code>lat.p95|slow ; lat.max|worst</code></p>`)}
+    </div>
+    <div class="pfrow">
+      <label><input type="checkbox" id="pf-show" ${b.show?'checked':''}> Show the strip under the title</label>
+    </div>
+    <div class="pfrow">
+      <label>Device profile</label>
+      <input type="text" id="pf-device" value="${esc(b.device)}" style="width:9rem">
+      <label>Route label</label>
+      <input type="text" id="pf-path" value="${esc(b.path)}" style="width:11rem"
+             placeholder="pi2-ble, pi2-pi1-usb…">
+      ${pfHelp('Why a route label', `
+        <p>A latency figure means nothing until you say which route it
+        travelled. Results merge per device <i>and</i> per label, so
+        <code>pi2-ble</code> and <code>pi2-pi1-usb</code> accumulate as
+        separate series and stay comparable.</p>`)}
+    </div>
+    <hr>
+    <div class="pfrow">
+      <label><input type="checkbox" id="pf-startup" ${b.at_startup?'checked':''}>
+        Run once when this page connects</label>
+      ${pfHelp('When this fires', `
+        <p>On connect, after the config has loaded — the same quiet window the
+        debug monitors use. It never runs while the mapping data is still in
+        flight.</p>`)}
+    </div>
+    <div class="pfrow">
+      <label><input type="checkbox" id="pf-rand" ${b.random_enabled?'checked':''}>
+        Also run for</label>
+      <input type="number" id="pf-secs" value="${b.random_seconds}" min="5" max="120" style="width:4.5rem"> s
+      <label>at a random time between</label>
+      <input type="time" id="pf-from" value="${esc(b.random_from)}">
+      <label>and</label>
+      <input type="time" id="pf-to" value="${esc(b.random_to)}">
+      ${pfHelp('An honest limit, and how to get round it', `
+        <p>This schedule lives in the browser, so it only fires <b>while this
+        page is open</b>. That is a real limitation, not a detail — a tab you
+        closed measures nothing.</p>
+        <p>For runs that happen whether or not you are looking, put it on the
+        Pi instead. Copy this into <code>crontab -e</code> on the Pi:</p>
+        <pre id="pf-cron">${esc(pfCronLine())}</pre>
+        <p>It picks a random minute inside your window each day, which is what
+        makes the sample representative rather than always-9am.</p>`)}
+    </div>
+    <div class="pfrow">
+      <button data-pfa="run" class="primary">▶ Run benchmark now</button>
+      <button data-pfa="bench-report">📋 Show stored history</button>
+      <span class="muted" id="pf-benchmsg"></span>
+    </div>
+    <pre id="pf-benchout" class="pfout" style="display:none"></pre>`;
+  },
+
+  tx: () => `
+    <div class="pfrow">
+      <label>Text Transform settings live in that tab</label>
+    </div>
+    <p class="muted">Transforms, categorizations and follow-on steps are edited
+    where they are used — the ✎ on each button and the ⚙ Manage panel. Putting
+    them here as well would give you two places to change the same thing and no
+    way to tell which won.</p>
+    <div class="pfrow"><button data-pfa="goto-tx">Open Text Transform →</button></div>`,
+
+  map: () => `
+    <div class="pfrow">
+      <label><input type="checkbox" id="pf-wfauto" checked disabled>
+        Auto-open "Not connected" wireframes when non-empty</label>
+      ${pfHelp('Why this is on', `
+        <p>Configured devices that no longer have an input node used to be
+        drawn into a collapsed group, and read as missing. It now opens itself
+        unless you close it — and once you close it, that choice sticks.</p>`)}
+    </div>
+    <div class="pfrow"><button data-pfa="goto-map">Open Mapping →</button></div>`,
+
+  macros: () => `
+    <p class="muted">Macro timing and playback are set per macro in the Macros
+    tab.</p>
+    <div class="pfrow"><button data-pfa="goto-macros">Open Macros →</button></div>`,
+
+  exp: () => `
+    <p class="muted">Expansion sets, triggers and the erase method are in the
+    Expansions tab.</p>
+    <div class="pfrow"><button data-pfa="goto-exp">Open Expansions →</button></div>`,
+
+  os: () => `
+    <p class="muted">OS selection, auto-detection and the OS pin are in the OS
+    tab. The pin is on by default: a background sniffer should not be able to
+    overrule a choice you made by hand.</p>
+    <div class="pfrow"><button data-pfa="goto-os">Open OS →</button></div>`
+};
+
+function pfCronLine(){
+  const b = PREFS.bench;
+  const [fh, fm] = String(b.random_from || '09:00').split(':').map(Number);
+  const [th] = String(b.random_to || '18:00').split(':').map(Number);
+  const hrs = (isFinite(fh) && isFinite(th) && th > fh) ? `${fh}-${th}` : '9-18';
+  return `${isFinite(fm) ? fm : 0} ${hrs} * * * sleep $((RANDOM \\% 3000)); ` +
+         `cd ~/expander && python3 bench.py --seconds ${b.random_seconds} ` +
+         `--device ${b.device || 'link'}` + (b.path ? ` --path ${b.path}` : '');
+}
+
+/* ---------- wiring ---------- */
+function pfInit(){
+  if(window._pfWired) return;
+  window._pfWired = true;
+  pfLoad();
+
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-pfa],[data-pftab]');
+    if(!t) return;
+    if(t.dataset.pftab){ $('prefs').dataset.tab = t.dataset.pftab; pfRender(); return; }
+    switch(t.dataset.pfa){
+      case 'open':  pfOpen(); break;
+      case 'close': pfClose(); break;
+      case 'run':   pfRunBenchmark(); break;
+      case 'recipe-reset':
+        PREFS.bench.recipe = PF_DEFAULT_RECIPE; pfSave(); pfRender(); pfRenderStrip(); break;
+      case 'bench-report': {
+        const o = $('pf-benchout');
+        o.style.display = 'block';
+        o.textContent = pfLastStats
+          ? JSON.stringify(pfLastStats, null, 1)
+          : 'No stored results in this browser yet. Run bench.py on the Pi, or press ▶.';
+        break; }
+      case 'goto-tx':     pfClose(); switchTab('tx'); break;
+      case 'goto-map':    pfClose(); switchTab('map'); break;
+      case 'goto-macros': pfClose(); switchTab('macros'); break;
+      case 'goto-exp':    pfClose(); switchTab('exp'); break;
+      case 'goto-os':     pfClose(); switchTab('os'); break;
+    }
+  });
+
+  document.addEventListener('input', e => {
+    const id = e.target.id;
+    if(!id || !id.startsWith('pf-')) return;
+    const b = PREFS.bench;
+    if(id === 'pf-recipe'){ b.recipe = e.target.value; pfRenderStrip(); }
+    else if(id === 'pf-show'){ b.show = e.target.checked; pfRenderStrip(); }
+    else if(id === 'pf-device') b.device = e.target.value.trim();
+    else if(id === 'pf-path')   b.path = e.target.value.trim();
+    else if(id === 'pf-startup') b.at_startup = e.target.checked;
+    else if(id === 'pf-rand')   { b.random_enabled = e.target.checked; pfSchedule(); }
+    else if(id === 'pf-secs')   b.random_seconds = +e.target.value || 20;
+    else if(id === 'pf-from')   { b.random_from = e.target.value; pfSchedule(); }
+    else if(id === 'pf-to')     { b.random_to = e.target.value; pfSchedule(); }
+    else return;
+    pfSave();
+    const c = $('pf-cron'); if(c) c.textContent = pfCronLine();
+  });
+
+  /* ⌘, / Ctrl+, — the macOS convention.
+     Guarded on the focused element: swallowing a comma while someone is
+     typing into a field would be a far worse bug than not having the
+     shortcut at all. */
+  document.addEventListener('keydown', e => {
+    if(e.key !== ',' || !(e.metaKey || e.ctrlKey)) return;
+    const t = e.target, tn = (t && t.tagName || '').toLowerCase();
+    if(tn === 'input' || tn === 'textarea' || tn === 'select' ||
+       (t && t.isContentEditable)) return;
+    e.preventDefault();
+    const p = $('prefs');
+    (p && p.style.display === 'block') ? pfClose() : pfOpen();
+  });
+
+  pfSchedule();
+  pfRenderStrip();
+}
+
+/* Browser-side scheduling. Honest about its own limits: it only fires while
+   the page is open, and the Preferences pane says so and offers a cron line. */
+let pfTimer = null;
+function pfSchedule(){
+  clearTimeout(pfTimer);
+  const b = PREFS.bench;
+  if(!b.random_enabled) return;
+  const now = new Date();
+  const mk = hhmm => {
+    const [h, m] = String(hhmm || '0:0').split(':').map(Number);
+    const d = new Date(now); d.setHours(h || 0, m || 0, 0, 0); return d;
+  };
+  let from = mk(b.random_from), to = mk(b.random_to);
+  if(to <= from) to = new Date(from.getTime() + 3600e3);
+  if(now > to){ from.setDate(from.getDate() + 1); to.setDate(to.getDate() + 1); }
+  const at = new Date(from.getTime() + Math.random() * (to - from));
+  const wait = Math.max(1000, at - now);
+  pfTimer = setTimeout(() => {
+    if(device) pfRunBenchmark();
+    pfSchedule();                       // pick a fresh time for tomorrow
+  }, Math.min(wait, 2147483000));
+}
+
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
@@ -6176,6 +6568,7 @@ function switchTab(t){
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
+pfInit();
 $('editorclose').onclick=closeEditor;
 $('editorrevert').onclick=revertEditor;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('editor').style.display==='block')closeEditor();});
