@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.6.1</title>
+<title>HID Config 20.7.1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -409,7 +409,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       </details>
       <details id="wfdisc" data-uikey="wf-disconnected" style="margin:.3rem 0">
         <summary style="cursor:pointer;font-weight:600;font-size:.88rem">⭘ Not connected
-          <span class="muted" id="wfdisccount" style="font-weight:400;font-size:.78rem"></span></summary>
+          <span class="muted" id="wfdisccount" style="font-weight:400;font-size:.78rem"></span>
+          <span class="muted" id="wfdischint" style="font-weight:400;font-size:.74rem"></span></summary>
         <div class="devrow" id="devcardsoff"></div>
       </details>
     </div>
@@ -684,6 +685,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <span id="osdetected" class="muted"></span>
       <label style="margin:0;display:inline"><input type="checkbox" id="osautoswitch"> follow this browser's OS</label>
       <label style="margin:0;display:inline"><input type="checkbox" id="osauto2"> engine auto-switch (no browser)</label>
+      <label style="margin:0;display:inline" title="When pinned, the OS you chose here always wins and background detection can never change it. Unpin only if you move the Pi between machines and want it to work that out for itself.">
+        <input type="checkbox" id="ospin"> <b>pin this OS</b> (detection can't override)</label>
       <label style="margin:0;display:inline">default: <select id="osdefault" style="width:auto"></select></label>
       <span style="flex:1"></span>
       <button id="osadd">＋ Add OS</button>
@@ -1006,8 +1009,9 @@ $('ostoggle').onclick=()=>{
   if(!cfg){toast('connect first',true);return;}
   const oses=osKnown();const i=oses.indexOf(cfg.active_os||'win');
   cfg.active_os=oses[(i+1)%oses.length];
+  cfg.os_pinned=true;                 // choosing by hand is a manual choice
   updateOsBtn();if($('page-os').style.display!=='none')renderOsTab();
-  toast('OS set to '+cfg.active_os+' — ⬆ Save to device to apply');};
+  toast('OS set to '+cfg.active_os+' (pinned) — ⬆ Save to device to apply');};
 $('read').onclick=()=>getFile(0);
 $('write').onclick=()=>{recordChanges();putFile(0,cfg);};
 $('dl').onclick=()=>{const a=document.createElement('a');
@@ -1572,7 +1576,23 @@ function renderStage(){
   set('wfconncount',`· ${nOn}`);
   set('wfdisccount',`· ${nOff}`);
   const dsec=$('wfdisc');
-  if(dsec&&nOn===0&&nOff>0&&!dsec.open)dsec.open=true;
+  // 20.7.1 #5: this used to open only when NOTHING was connected (nOn===0).
+  // So with one device connected and four not, the four were rendered into a
+  // collapsed disclosure whose only cue was a small "· 4" — and they read as
+  // missing. That is exactly what happened to the Kinesis when it moved behind
+  // Pi2: it was drawn, just folded away.
+  //
+  // Open it whenever it holds anything, unless you have collapsed it yourself
+  // (uiRestoreOpen records that in the UI-state map, and an explicit choice
+  // always wins over a default).
+  if(dsec&&nOff>0&&uiOpenMap()['wf-disconnected']===undefined&&!dsec.open)
+    dsec.open=true;
+  // Say WHY they are here, so "not connected" is a diagnosis rather than a
+  // mystery — most often the device is now claimed by the other Pi.
+  const dhint=$('wfdischint');
+  if(dhint)dhint.textContent=nOff
+    ? '— configured but no input node claimed on this Pi; if it works, another Pi or the C6 has it'
+    : '';
   window._supSet=suppressedMembers();
   renderGroupsCard(c);
   c.querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>toggleEdit(b.dataset.ed));
@@ -4693,7 +4713,7 @@ function applyBrowserOS(){
     if($('page-os').style.display!=='none')renderOsTab();
     toast('detected host OS = '+b+' (this browser) — ⬆ Save to device to apply');}}
 let osView=null;
-function setActiveOs(os){cfg.active_os=os;updateOsBtn();renderOsTab();
+function setActiveOs(os){cfg.active_os=os;cfg.os_pinned=true;updateOsBtn();renderOsTab();
   toast('active OS = '+os+' — ⬆ Save to device to apply');}
 window.setActiveOs=setActiveOs;
 function renderOsTab(){
@@ -4712,6 +4732,12 @@ function renderOsTab(){
     toast(($('osautoswitch').checked?'will':'will not')+' follow this browser\'s OS');};
   $('osauto2').checked=cfg.os_autoswitch!==false;
   $('osauto2').onchange=()=>{cfg.os_autoswitch=$('osauto2').checked;toast('⬆ Save to device to apply');};
+  // 20.6.1 BF1: defaults to PINNED. A background sniffer should not be able to
+  // overrule a choice you made by hand.
+  $('ospin').checked=cfg.os_pinned!==false;
+  $('ospin').onchange=()=>{cfg.os_pinned=$('ospin').checked;
+    toast(($('ospin').checked?'OS pinned — detection cannot change it'
+                             :'OS unpinned — detection may switch it')+' — ⬆ Save to device');};
   const dsel=$('osdefault');dsel.innerHTML=oses.map(o=>`<option value="${esc(o)}" ${(cfg.default_os||'win')===o?'selected':''}>${esc(o)}</option>`).join('');
   dsel.onchange=()=>{cfg.default_os=dsel.value;toast('default OS (when undetectable) — ⬆ Save to device');};
   // OS selector pills: click = edit that OS column; ★ = default/active
