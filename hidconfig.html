@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.7.3</title>
+<title>HID Config 20.7.3 BF2</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -1105,7 +1105,15 @@ function updateCurProf(){
   el.className='status'+(nm?' on':'');}
 function pfResult(text){
   if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
-  if(text.startsWith('restored')){toast('✓ '+text);return;}
+  if(text.startsWith('restored')){
+    // The device now holds the backup. Pull it into the browser BEFORE
+    // anything can be saved, so cfg and the device agree.
+    _bkPendingRestore=null;
+    getFile(0);
+    toast('✓ '+text+' — config re-read');
+    return;}
+  if(text.startsWith('restore failed')){
+    _bkPendingRestore=null; toast('✗ '+text, true); return;}
   if(text.startsWith('saved')||text.startsWith('loaded')){
     toast('\u2713 '+text); pfCmd('list');
     if(text.startsWith('loaded'))setTimeout(()=>getFile(0),800);  // refresh editor
@@ -1370,6 +1378,144 @@ function annotate(txt){
 const LAYER_NAMES=['0 · Base','1 · CapsLock','2 · Right-btn','3 · Back-btn','4 · Fwd-btn','5'];
 function btnLabel(n){return (cfg.button_labels&&cfg.button_labels[n])||
   ({1:'Left',2:'Right',3:'Wheel',4:'Back',5:'Forward'}[n]||('B'+n));}
+// ---- 20.7.3 BF2: three names for one button, reconciled -------------------
+// A mouse button has THREE identities and until now the UI showed one of them
+// without saying which: the number silkscreened on the hardware (the '7' on
+// the E9), the evdev code the kernel reports (276 = BTN_EXTRA), and the
+// logical button the engine maps on (5 = "Forward"). They are unrelated
+// numbers. Everything below keeps them apart and labels them.
+const BTN_EVDEV={1:272,2:273,3:274,4:275,5:276};   // logical -> evdev, default
+const EVDEV_BTN_NAME={272:'BTN_LEFT',273:'BTN_RIGHT',274:'BTN_MIDDLE',
+                      275:'BTN_SIDE',276:'BTN_EXTRA'};
+// The `btn:` in a wireframe definition is the element's DEFAULT logical id,
+// which is a stand-in for the physical button. Baseline can change what that
+// physical button reports as; btnIdent gives the id mappings are keyed on.
+function btnPhysCode(defBtn){return BTN_EVDEV[defBtn]||0;}
+function btnIdent(dev,defBtn){const c=btnPhysCode(defBtn);
+  const v=c?(cfg.baseline[dev]||{})['btn:'+c]:undefined;
+  return (v===undefined||v===null)?defBtn:v;}
+// Same question on the other code path: an E9 thumb digit arrives as a
+// KEYBOARD usage on the gesture node, and Baseline can give it a button
+// identity — which is how it inherits a button's layers wholesale.
+function p2BtnIdent(dev,usage){
+  const v=(cfg.baseline[dev]||{})['p2btn:0x'+usage.toString(16)];
+  return (v===undefined||v===null||v===0)?null:v;}
+
+// ---- 20.7.3 BF2: identity, and therefore swapping ------------------------
+// Moving a button's WHOLE behaviour is not a copy operation. Every layer
+// mapping, tap/hold pair, group membership and OS override is keyed on the
+// LOGICAL button id, so copying them one by one would be a dozen chances to
+// miss one. Change which physical input claims that logical id and all of it
+// follows by construction — nothing is duplicated and nothing can drift.
+// That is why "swap" here rewrites two Baseline entries and touches no
+// mappings at all.
+
+// Which physical input on this device currently reports as logical button n?
+// The editor's identity block. `ref` is the physical input being edited.
+function identityHTML(dev,ref,curLogical){
+  let where;
+  if(ref.kind==='p2'){
+    where=`the gesture-node key <b>${esc(KEYS[ref.usage]||('0x'+ref.usage.toString(16)))}</b>`
+      +` <span class="muted">(usage 0x${ref.usage.toString(16)})</span>`;
+  }else{
+    where=`<b>${EVDEV_BTN_NAME[ref.code]||('button code '+ref.code)}</b>`
+      +` <span class="muted">(evdev ${ref.code})</span>`;
+  }
+  const selfN=ref.kind==='btn'
+    ? Object.keys(BTN_EVDEV).map(Number).find(k=>BTN_EVDEV[k]===ref.code) : null;
+  let opts=`<option value="">${ref.kind==='p2'
+    ?'(not a button — types its key)'
+    :'(itself: Button '+(selfN||'?')+')'}</option>`
+    +`<option value="0" ${curLogical===0?'selected':''}>∅ Disabled — sends nothing</option>`;
+  for(let n=1;n<=5;n++)opts+=`<option value="${n}" ${curLogical===n?'selected':''}`
+    +`>Button ${n} — ${esc(btnLabel(n))}</option>`;
+  return `<details class="identblk" ${curLogical!==undefined&&curLogical!==null?'open':''}
+    style="margin:.4rem 0;padding:.4rem;border:1px solid var(--line);border-radius:6px">
+    <summary style="cursor:pointer;font-size:.8rem"><b>Identity (Baseline)</b>
+      — what this physical input <i>is</i></summary>
+    <p class="muted" style="font-size:.74rem;margin:.35rem 0">
+      This element is ${where} on <b>${esc(devName(dev))}</b>.
+      The number printed on the hardware, the code the kernel reports and the
+      logical button mappings are keyed on are three different numbers.
+      Changing the identity moves <b>every layer, tap/hold and group</b> with
+      it, because all of them are keyed on the logical button — nothing is
+      copied, so nothing can be left behind.</p>
+    <label>Reports as</label><select id="identsel">${opts}</select>
+    <label style="margin-top:.4rem;display:flex;gap:.4rem;align-items:flex-start">
+      <input type="checkbox" id="identswap" checked style="margin-top:.2rem">
+      <span>Swap — give whatever currently answers to that number
+        <i>this</i> input's identity, so the two trade places.
+        <span class="muted">Uncheck to take over one-way, leaving the other
+        input sharing the same mappings.</span></span></label>
+    <div id="identnote" class="muted" style="font-size:.74rem;margin-top:.35rem"></div>
+    <div class="muted" style="font-size:.72rem;margin-top:.35rem">
+      ⬆ Save to device to apply.</div></details>`;}
+
+function bindIdentity(dev,ref){
+  const s=$('identsel');if(!s)return;
+  const note=$('identnote');
+  const describe=()=>{
+    const n=s.value?+s.value:null;
+    if(!note)return;
+    if(n===null){note.textContent='';return;}
+    if(n===0){note.textContent='This input will send nothing. Its mappings are not deleted — re-point it at a button to get them back.';return;}
+    const own=btnOwner(dev,n);
+    const me=(ref.kind==='p2')?null:ref.code;
+    if(!own||(own.kind==='btn'&&own.code===me)){
+      note.textContent='Nothing else answers to Button '+n+' — nothing to swap.';
+      return;}
+    note.innerHTML=`Button ${n} is currently `+(own.kind==='p2'
+      ?`the gesture key <b>${esc(KEYS[own.usage]||'?')}</b>`
+      :`<b>${esc(EVDEV_BTN_NAME[own.code]||('code '+own.code))}</b>`)
+      +`. With Swap ticked, that input takes this one's place.`;};
+  s.onchange=()=>{
+    const n=s.value?+s.value:null;
+    const swap=$('identswap')&&$('identswap').checked;
+    // Read BOTH sides before writing either: setIdent mutates the table
+    // btnOwner reads, and doing it in the other order swaps an input with
+    // itself and silently loses one of the two identities.
+    const mineNow=(ref.kind==='p2')
+      ?p2BtnIdent(dev,ref.usage)
+      :btnIdent(dev,Object.keys(BTN_EVDEV).map(Number)
+                     .find(k=>BTN_EVDEV[k]===ref.code));
+    const own=(n!==null&&n!==0&&swap)?btnOwner(dev,n):null;
+    const sameEl=own&&((own.kind==='btn'&&ref.kind==='btn'&&own.code===ref.code)
+                    ||(own.kind==='p2'&&ref.kind==='p2'&&own.usage===ref.usage));
+    setIdent(dev,ref,n);
+    // The asymmetry worth being honest about: a mouse button cannot become a
+    // keyboard key, so when a gesture KEY takes a button's identity there is
+    // nothing to hand back. Passing null there would delete the displaced
+    // button's entry and restore its DEFAULT identity — leaving two inputs
+    // both firing button n, which is worse than either outcome the user
+    // asked for. Silence it instead (0 = disabled), visibly and reversibly.
+    if(own&&!sameEl)setIdent(dev,own,(mineNow===null||mineNow===undefined)?0:mineNow);
+    sel=null;render();
+    toast(n===null?'identity cleared — ⬆ Save to device to apply'
+                  :'now Button '+n+(own&&!sameEl?' (swapped) ':' ')
+                    +'— ⬆ Save to device to apply');};
+  describe();
+  if($('identswap'))$('identswap').onchange=describe;}
+
+function btnOwner(dev,n){
+  const bl=cfg.baseline[dev]||{};
+  for(const k of Object.keys(bl)){
+    if(k.startsWith('p2btn:')&&bl[k]===n)return{kind:'p2',usage:parseInt(k.slice(6),16)};
+    if(k.startsWith('btn:')&&bl[k]===n)return{kind:'btn',code:+k.slice(4)};}
+  // Nobody claimed it, so the button of that number still answers to itself —
+  // but only if its own entry hasn't been redirected elsewhere.
+  const c=BTN_EVDEV[n];
+  if(c&&bl['btn:'+c]===undefined)return{kind:'btn',code:c};
+  return null;}
+
+// Write one identity entry, deleting it when it would only restate the
+// default. A Baseline littered with no-op entries is a Baseline nobody reads.
+function setIdent(dev,ref,n){
+  cfg.baseline[dev]=cfg.baseline[dev]||{};
+  const bl=cfg.baseline[dev];
+  const key=ref.kind==='p2'?('p2btn:0x'+ref.usage.toString(16)):('btn:'+ref.code);
+  const isDefault=(ref.kind==='btn'&&BTN_EVDEV[n]===ref.code);
+  if(n===null||n===undefined||isDefault)delete bl[key];else bl[key]=n;
+  if(!Object.keys(bl).length)delete cfg.baseline[dev];}
 function macroLabel(n){const nm=(cfg.macro_names||{})[n];return nm?nm:('M'+n);}
 function actShort(a){if(!a)return'';const k=a[0];
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
@@ -1717,19 +1863,27 @@ function renderLayoutKbd(d,w){
       if(editing)bindEditKey(el,d,idx);else el.onclick=()=>{sel={type:'stepper'};render();};
       div.appendChild(el);return;}
     if(kind==='btn'){
-      const b=k.btn,eff=effMouse(d.id,layer,b);
+      // k.btn is the PHYSICAL element; b is what it reports as after
+      // Baseline, and mappings are keyed on b. Before 20.7.3 BF2 these were
+      // conflated, so there was no way to say "read button 7 as button 2".
+      const bPhys=k.btn,b=btnIdent(d.id,bPhys),eff=effMouse(d.id,layer,b);
       const src=Object.values(srcs).some(s2=>s2.type==='btn'&&s2.id===b);
       const gcol=ghl[`mouse:${layer},${b}`]||ghl[`mouse:*,${b}`];
       el.className='key'+(eff!==undefined?' mapped':'')+(src?' layerkey':'')+(gcol?' grouphl':'')
         +(sel&&sel.type==='btn'&&sel.id===b&&(sel.dev||'')===d.id?' sel':'')
         +(editing&&editSel===idx?' editsel':'');
       if(gcol)el.style.setProperty('--grpc',gcol);
-      el.dataset.btnLay=b;el.dataset.dev=d.id;
+      el.dataset.btnLay=b;el.dataset.dev=d.id;el.dataset.btnPhys=bPhys;
+      // A rebased button says so on the wireframe, so you are never looking
+      // at a key whose mappings belong to a number printed nowhere on it.
       el.innerHTML=(k.label||btnLabel(b))
+        +(b===0?`<span class="chip" title="Baseline: this physical button is disabled">∅</span>`
+          :b!==bPhys?`<span class="chip" title="Baseline: this physical button reports as ${esc(btnLabel(b))}">≡${b}</span>`:'')
         +(eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
         +elLayerBadge('btn',b);
       if(editing)bindEditKey(el,d,idx);
-      else el.onclick=e=>{if(e.shiftKey||e.altKey)return;sel={type:'btn',id:b,dev:d.id};render();};
+      else el.onclick=e=>{if(e.shiftKey||e.altKey)return;
+        sel={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};render();};
       div.appendChild(el);return;}
     // ---- keyboard usage element (incl. E9 gesture digits) ----
     const u=k.u,eff=effKey(d.id,layer,u);
@@ -1751,6 +1905,12 @@ function renderLayoutKbd(d,w){
     // shown as a gesture with its arrow, so the wireframe matches what fires.
     // NB: declared here, ABOVE first use — const is not hoisted (TDZ).
     const _isMouseDev=(d.kind==='mouse');
+    // 20.7.3 BF2: a gesture-node key can be given a BUTTON identity in
+    // Baseline. When it has one it stops being a key in every sense, so the
+    // wireframe says so and clicking it opens the button's editor — the
+    // mappings it now obeys are the button's, not this usage's.
+    // NB: declared above first use — const is not hoisted (TDZ).
+    const _p2b=_isMouseDev?p2BtnIdent(d.id,u):null;
     // 20.2 BF2: gesture is a fallback -- an explicit Custom binding wins, and
     // the chip must show the binding, not the gesture, or the wireframe lies.
     const _gest=(_isMouseDev&&eff.v===undefined)?gestureFor(eff.canon):null;
@@ -1772,14 +1932,19 @@ function renderLayoutKbd(d,w){
       : '';
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
-      +baseChip+`<span class="kcenter">${centerName}</span>`+(custChip||gestChip)+chordChip+elLayerBadge('key',eff.canon);
+      +baseChip+`<span class="kcenter">${centerName}</span>`
+      +(_p2b?`<span class="chip" title="Baseline: this key acts as mouse button ${_p2b} (${esc(btnLabel(_p2b))}) and follows that button's mappings on every layer">≡btn ${_p2b}</span>`
+            :(custChip||gestChip))
+      +chordChip+(_p2b?elLayerBadge('btn',_p2b):elLayerBadge('key',eff.canon));
     if(editing)bindEditKey(el,d,idx);
     else{
       el.onmousedown=e=>{if(e.shiftKey||e.altKey)e.preventDefault();};
       el.onclick=e=>{
         if(e.shiftKey){e.preventDefault();addComboSel(d.id,u);return;}
         if(e.altKey){e.preventDefault();addSeqSel(d.id,u);return;}
-        sel={type:'key',id:u,i:idx,dev:d.id};render();};
+        if(_p2b){sel={type:'btn',id:_p2b,phys:null,p2usage:u,label:k.label||'',
+                     dev:d.id};render();return;}
+        sel={type:'key',id:u,i:idx,p2:_isMouseDev,label:k.label||'',dev:d.id};render();};
       if(!MODS[u]&&u!==0x2c){
         el.setAttribute('draggable','true');
         el.ondragstart=e=>dragStart(e,{type:'key',id:eff.canon});
@@ -2788,6 +2953,10 @@ window.saveClips=async()=>{
    new transport.  Restoring stages the file into bridge_config.json on the Pi;
    the engine hot-reloads and the UI re-reads it. */
 let _bkList=null;
+// 20.7.3 BF1: which backup a restore is waiting on. Declared here rather than
+// created implicitly at first assignment, so it is visible to the reply
+// handler above and survives a future move to strict mode.
+let _bkPendingRestore=null;
 window.showBackups=()=>{
   if(!device){toast('connect first',true);return;}
   $('bkpane').style.display='block';
@@ -2816,8 +2985,14 @@ function renderBackups(lines){
   t.querySelectorAll('[data-bkload]').forEach(b=>b.onclick=()=>{
     const bk=_bkList[+b.dataset.bkload];
     if(!confirm(`Restore ${bk.name}?\n\nYour current config is backed up first, so this is reversible.`))return;
+    // 20.7.3 BF1: re-read when the Pi SAYS it is done, not after a guessed
+    // 1500ms. If the write ran long the old timer fired first, the browser
+    // re-read the pre-restore file, and the next "Save to device" pushed that
+    // stale copy straight back over the restore -- which looks exactly like
+    // "restore did nothing".
+    _bkPendingRestore = bk.name;
     pfCmd('restore '+bk.name);
-    setTimeout(()=>{getFile(0);toast('restored — re-reading config');},1500);});
+    toast('restoring '+bk.name+'…');});
   t.querySelectorAll('[data-bkdiff]').forEach(b=>b.onclick=()=>{
     const bk=_bkList[+b.dataset.bkdiff];
     // The change log already records what each save altered; jump there and
@@ -3887,7 +4062,10 @@ function renderEditor(){
       (Layer-specific modifier behavior isn't supported by the engine.)</p>`
       :scopeTabsHTML(selDev,'baseline')}
     <label>This physical key produces</label><select id="basetgt">${opts}</select>
+    ${sel.p2?identityHTML(selDev,{kind:'p2',usage:sel.id},
+                          p2BtnIdent(selDev,sel.id)):''}
     ${groupAssignHTML(`kbd:${layer},${canon}`)}`;
+    if(sel.p2)bindIdentity(selDev,{kind:'p2',usage:sel.id});
     $('basetgt').onchange=()=>{
       const v=$('basetgt').value;
       cfg.baseline[selDev]=cfg.baseline[selDev]||{};
@@ -3912,12 +4090,28 @@ function renderEditor(){
     :((!isBtn&&sel.physical!==undefined)?` <span class="muted">(E9 ${boxTag(sel.physical)})</span>`:'');
   const baseTag=!isBtn&&canon!==sel.id?` <span class="muted">(physical ${KEYS[sel.id]||'?'} ≡ ${KEYS[canon]||'?'} via ${esc(devName(selDev))} baseline)</span>`:'';
   const scopeSel=!isBtn&&selDev?scopeTabsHTML(selDev,scope):'';
+  // 20.7.3 BF2 — the identity block. Declared above first use (TDZ).
+  const identRef=!selDev?null
+    :isBtn?(sel.p2usage!=null?{kind:'p2',usage:sel.p2usage}
+                             :(btnPhysCode(sel.phys)?{kind:'btn',code:btnPhysCode(sel.phys)}:null))
+    :(sel.p2?{kind:'p2',usage:sel.id}:null);
+  const identCur=!identRef?undefined
+    :identRef.kind==='p2'?p2BtnIdent(selDev,identRef.usage)
+    :(cfg.baseline[selDev]||{})['btn:'+identRef.code];
+  const identBlock=identRef?identityHTML(selDev,identRef,identCur):'';
+  // Name all three identities in the heading rather than picking one and
+  // leaving the other two to be guessed at. "5 (arrow: Right)" was a true
+  // statement about a button the user only knows as 7.
+  const btnTitle=!isBtn?'':`${esc(btnLabel(sel.id))} <span class="muted">· Button ${sel.id}${
+    sel.label?' · marked “'+esc(sel.label)+'” on the device':''}${
+    sel.p2usage!=null?' · arrives as key '+esc(KEYS[sel.p2usage]||'?'):''}</span>`;
   const srcLayer=layerOfSource(isBtn?'btn':'key',canon);
   if(srcLayer!=null)ui.press='layer';
   const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)">Hold → Layer ${srcLayer}</span>`:'';
   const layerOpt=`<option value="layer" ${ui.press==='layer'?'selected':''}>Hold → Layer…</option>`;
-  ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnLabel(sel.id):(KEYS[canon]||'?')}${physTag}${baseTag} — layer ${layer}${layerBadge}</h2>
+  ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnTitle:(KEYS[canon]||'?')}${physTag}${baseTag} — layer ${layer}${layerBadge}</h2>
   ${scopeSel}
+  ${identBlock}
   <div class="row"><div>
     <label>On press</label><select id="press">
       <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
@@ -3941,6 +4135,7 @@ function renderEditor(){
     ${noteFieldHTML(noteKey(isBtn?'mouse':'kbd',layer,isBtn?sel.id:canon))}
     ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
   </div></div>`;
+  if(identRef)bindIdentity(selDev,identRef);
   function setLayerSource(L){
     if(L==null){ if(isBtn)delete cfg.tap_hold[sel.id];
       else{cfg.layer_keys=cfg.layer_keys||{};delete cfg.layer_keys[canon];} return; }
