@@ -1311,6 +1311,14 @@ function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wh
 'baseline','combos','mapping_groups','stepper_by_layer',
 'kbd_mappings_by_device','os_profiles','layer_keys'])if(!cfg[k])cfg[k]={};
 migrateDevices();migrateByDevice();repairGroupMembers();
+materialiseLayerDefaults();
+// 20.7.4 BF2: seed an "ios" profile from "mac". iPhone wants Cmd where Cmd
+// belongs -- exactly like macOS -- but the app switcher and other phone-only
+// behaviour need somewhere to live that is not your Mac's settings.
+if(cfg.os_profiles&&!cfg.os_profiles.ios){
+  const m=cfg.os_profiles.mac;
+  cfg.os_profiles.ios=m?JSON.parse(JSON.stringify(m)):{};
+  cfg.os_profiles.ios.unicode_method='mac_option_hex';}
 if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};}
 /* 19.4 #1.4 repair: earlier imports filed combos and modifier shortcuts under
    "kbd:*,<key>" -- a wildcard matching that key on EVERY layer.  That is why
@@ -1420,6 +1428,50 @@ function p2BtnIdent(dev,usage){
 // That is why "swap" here rewrites two Baseline entries and touches no
 // mappings at all.
 
+// 20.7.4 BF1 #2.3: point-and-click swap. Arming this puts the wireframe in
+// "pick a partner" mode; the next element you click is swapped with the one
+// whose editor you armed it from. Cross-wireframe works, because identity is
+// per device and both halves are written explicitly.
+let swapPick=null;      // {dev, ref, label} or null
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&swapPick){swapPick=null;toast('swap cancelled');render();}});
+function armSwapPick(dev,ref,label){
+  swapPick={dev:dev,ref:ref,label:label};
+  toast('now click the button or key you want to swap with (Esc to cancel)');
+  render();}
+// Turn a clicked wireframe element into an identity ref, or null if it is
+// something that cannot carry a button identity.
+function refOfClick(sel2){
+  if(!sel2)return null;
+  if(sel2.type==='btn'){
+    if(sel2.p2usage!=null)return{kind:'p2',usage:sel2.p2usage};
+    const c=btnPhysCode(sel2.phys);return c?{kind:'btn',code:c}:null;}
+  if(sel2.type==='key'&&sel2.p2)return{kind:'p2',usage:sel2.id};
+  return null;}
+function currentIdent(dev,ref){
+  return ref.kind==='p2'?p2BtnIdent(dev,ref.usage)
+    :btnIdent(dev,Object.keys(BTN_EVDEV).map(Number)
+                   .find(k=>BTN_EVDEV[k]===ref.code));}
+// The swap itself: exchange the two inputs' logical identities. Every layer
+// mapping, tap/hold pair and group is keyed on that identity, so all of it
+// moves together -- there is no list of things to remember to bring along.
+function doSwapPick(devB,refB){
+  const A=swapPick; swapPick=null;
+  if(!A)return;
+  const sameEl=A.dev===devB&&((A.ref.kind==='btn'&&refB.kind==='btn'&&A.ref.code===refB.code)
+                           ||(A.ref.kind==='p2'&&refB.kind==='p2'&&A.ref.usage===refB.usage));
+  if(sameEl){toast('that is the same input — nothing to swap');render();return;}
+  // Read BOTH identities before writing either. Writing first would make the
+  // second read see the value we just wrote and swap an input with itself.
+  const idA=currentIdent(A.dev,A.ref), idB=currentIdent(devB,refB);
+  // A mouse button cannot become a keyboard key, so when one side has no
+  // button identity to give back, the other is silenced rather than reset to
+  // its default -- which would leave two inputs firing the same button.
+  setIdent(A.dev,A.ref,(idB===null||idB===undefined)?0:idB);
+  setIdent(devB,refB,(idA===null||idA===undefined)?0:idA);
+  sel=null;render();
+  toast('swapped — all layers moved with the identity. ⬆ Save to device to apply');}
+
 // Which physical input on this device currently reports as logical button n?
 // The editor's identity block. `ref` is the physical input being edited.
 function identityHTML(dev,ref,curLogical){
@@ -1457,11 +1509,16 @@ function identityHTML(dev,ref,curLogical){
         <i>this</i> input's identity, so the two trade places.
         <span class="muted">Uncheck to take over one-way, leaving the other
         input sharing the same mappings.</span></span></label>
+    <button id="identpick" style="margin-top:.45rem">⇄ Swap with… (then click a button)</button>
+    <div class="muted" style="font-size:.72rem;margin-top:.2rem">Works across
+      wireframes too. Every layer, tap/hold and group moves with the identity.</div>
     <div id="identnote" class="muted" style="font-size:.74rem;margin-top:.35rem"></div>
     <div class="muted" style="font-size:.72rem;margin-top:.35rem">
       ⬆ Save to device to apply.</div></details>`;}
 
 function bindIdentity(dev,ref){
+  const pick=$('identpick');
+  if(pick)pick.onclick=()=>armSwapPick(dev,ref,'');
   const s=$('identsel');if(!s)return;
   const note=$('identnote');
   const describe=()=>{
@@ -1540,14 +1597,41 @@ if(k==='macro_both')return link(a[1])+'/'+link(a[2])+'↑';
 return actShort(a);}
 
 /* ============ layer sources ============ */
+/* 20.7.4 BF1 #2: layers used to be HARD-CODED in two places at once —
+   s2_mapping.py shipped `LAYER_KEY = {CAPSLOCK: 1}` and
+   `TAP_HOLD = {2:…, 4:(…,3), 5:(…,4)}`, and this file opened layerSources()
+   with a literal `{1:{type:'key',id:0x39}}` to match.
+
+   That is why swapping a button lost its layer. The identity swap moves
+   everything keyed on the logical button id, which is the right design — but
+   "button 5 holds for Layer 4" was never IN the profile to be moved. It lived
+   in Python. So the swap faithfully moved nothing.
+
+   The defaults are now written into the profile the first time a config is
+   seen. After that the profile is the single source of truth, layers are
+   assignable like anything else, and a swap carries them for free. */
+const ENGINE_LAYER_KEY_DEFAULT={0x39:1};                       // CapsLock
+const ENGINE_TAP_HOLD_DEFAULT={2:[['btn',2],2],4:[['macro',2],3],
+                               5:[['macro',1],4]};
+function materialiseLayerDefaults(){
+  if(!cfg)return;
+  cfg.layer_keys=cfg.layer_keys||{};
+  cfg.tap_hold=cfg.tap_hold||{};
+  // Only fill gaps. An explicit entry — including one that DISABLES a
+  // default — must never be overwritten by the default it replaced.
+  if(!cfg._layer_defaults_done){
+    for(const[u,L]of Object.entries(ENGINE_LAYER_KEY_DEFAULT))
+      if(!(u in cfg.layer_keys))cfg.layer_keys[u]=L;
+    for(const[b,v]of Object.entries(ENGINE_TAP_HOLD_DEFAULT))
+      if(!(b in cfg.tap_hold))cfg.tap_hold[b]=v;
+    cfg._layer_defaults_done=true;}}
 function layerSources(){ // layer -> {type:'key'|'btn', id}
-  const out={1:{type:'key',id:0x39}};
+  const out={};
   for(const[u,L]of Object.entries(cfg.layer_keys||{}))out[+L]={type:'key',id:+u};
   for(const[b,v]of Object.entries(cfg.tap_hold||{}))out[v[1]]={type:'btn',id:+b};
   return out;}
 function layerOfSource(type,id){
   if(type==='key'){
-    if(id===0x39&&!(cfg.layer_keys&&0x39 in cfg.layer_keys))return 1;   // built-in CapsLock
     const v=cfg.layer_keys&&cfg.layer_keys[id];return v!=null?+v:null;}
   const th=cfg.tap_hold&&cfg.tap_hold[id];return th?th[1]:null;}
 function allLayers(){
@@ -1893,7 +1977,11 @@ function renderLayoutKbd(d,w){
         +elLayerBadge('btn',b);
       if(editing)bindEditKey(el,d,idx);
       else el.onclick=e=>{if(e.shiftKey||e.altKey)return;
-        sel={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};render();};
+        const me={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};
+        if(swapPick){const r=refOfClick(me);
+          if(r)return doSwapPick(d.id,r);
+          toast('that element cannot hold a button identity',true);return;}
+        sel=me;render();};
       div.appendChild(el);return;}
     // ---- keyboard usage element (incl. E9 gesture digits) ----
     const u=k.u,eff=effKey(d.id,layer,u);
@@ -1952,9 +2040,14 @@ function renderLayoutKbd(d,w){
       el.onclick=e=>{
         if(e.shiftKey){e.preventDefault();addComboSel(d.id,u);return;}
         if(e.altKey){e.preventDefault();addSeqSel(d.id,u);return;}
-        if(_p2b){sel={type:'btn',id:_p2b,phys:null,p2usage:u,label:k.label||'',
-                     dev:d.id};render();return;}
-        sel={type:'key',id:u,i:idx,p2:_isMouseDev,label:k.label||'',dev:d.id};render();};
+        const me=_p2b
+          ?{type:'btn',id:_p2b,phys:null,p2usage:u,label:k.label||'',dev:d.id}
+          :{type:'key',id:u,i:idx,p2:_isMouseDev,label:k.label||'',dev:d.id};
+        if(swapPick){const r=refOfClick(me);
+          if(r)return doSwapPick(d.id,r);
+          toast('only mouse buttons and gesture-node keys can swap identity',true);
+          return;}
+        sel=me;render();};
       if(!MODS[u]&&u!==0x2c){
         el.setAttribute('draggable','true');
         el.ondragstart=e=>dragStart(e,{type:'key',id:eff.canon});
@@ -4687,9 +4780,20 @@ function uniSelectHTML(attrs,cur,hasNonAscii){
    The legacy {trigger: "date"} form still loads; it is upgraded on read. */
 const DYN_KIND_FMT={date:'%Y-%m-%d',time:'%H:%M:%S',datetime:'%Y-%m-%d %H:%M:%S'};
 const DYN_KIND_NAME={date:"Today's date",time:'Time',datetime:'Date + time'};
+// Which legacy kind best describes a format, so an OLD engine that only
+// understands "date"/"time"/"datetime" still types something sensible.
+function dynLegacyKind(fmt){
+  const f=String(fmt||'');
+  const hasD=/%[YymdeBbAaj]/.test(f), hasT=/%[HIMSp]/.test(f);
+  return (hasD&&hasT)?'datetime':hasT?'time':'date';}
 function normDynTriggers(){
   const out={};
-  for(const[t,v]of Object.entries(cfg.dynamic_triggers||{})){
+  // dynamic_formats is the rich table; dynamic_triggers is kept in the OLD
+  // shape beside it so an engine that has not been redeployed keeps working
+  // instead of silently typing nothing (20.7.4 BF1 #3).
+  const src=(cfg.dynamic_formats&&Object.keys(cfg.dynamic_formats).length)
+    ?cfg.dynamic_formats:(cfg.dynamic_triggers||{});
+  for(const[t,v]of Object.entries(src)){
     if(v&&typeof v==='object'){
       out[t]={fmt:v.fmt||DYN_KIND_FMT.date,space:!!v.space,name:v.name||t};
     }else{
@@ -4698,8 +4802,18 @@ function normDynTriggers(){
               // the legacy companion table, read once and then retired
               space:!!((cfg.dynamic_space||{})[k]),
               name:DYN_KIND_NAME[k]||k};}}
-  cfg.dynamic_triggers=out;
+  writeDynTriggers(out);
   delete cfg.dynamic_space;}
+
+// Always write BOTH keys. This is the whole fix for "date triggers expand to
+// nothing": the browser was pushing dicts into dynamic_triggers, and an older
+// engine compared those dicts against the strings "date"/"time"/"datetime",
+// matched none, and typed "".
+function writeDynTriggers(out){
+  cfg.dynamic_formats=out;
+  const legacy={};
+  for(const[t,spec]of Object.entries(out))legacy[t]=dynLegacyKind(spec.fmt);
+  cfg.dynamic_triggers=legacy;}
 
 // Render a strftime format in the browser so the row can show its own output.
 // Only the tokens the help lists are supported; anything else is left alone
@@ -4723,7 +4837,7 @@ function renderDynTable(){
   const t=$('dyntable');if(!t)return;
   t.innerHTML='<tr><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
     +'<td><b>Produces</b></td><td><b>Trailing space</b></td><td></td></tr>';
-  for(const[trig,spec]of Object.entries(cfg.dynamic_triggers)){
+  for(const[trig,spec]of Object.entries(cfg.dynamic_formats||{})){
     const tr=document.createElement('tr');
     tr.innerHTML=`<td><input type="text" class="dname" value="${esc(spec.name)}" style="width:9rem"></td>
       <td><input type="text" class="dtrig" value="${esc(trig)}" style="width:6rem"></td>
@@ -4747,7 +4861,7 @@ function renderDynTable(){
       nt[k]={fmt:tr.querySelector('.dfmt').value||'%Y-%m-%d',
              space:tr.querySelector('.dspace').checked,
              name:tr.querySelector('.dname').value||k};}
-    cfg.dynamic_triggers=nt;preview();
+    writeDynTriggers(nt);preview();
     toast('date/time triggers changed — press ⬆ Save to device (top) to apply');};
   t.oninput=rebind;t.onchange=rebind;
   t.querySelectorAll('.dkill').forEach(a=>a.onclick=e=>{
@@ -4755,9 +4869,10 @@ function renderDynTable(){
   preview();
   const add=$('dynadd');
   if(add)add.onclick=()=>{
-    let n=1;while(cfg.dynamic_triggers['\\new'+n])n++;
-    cfg.dynamic_triggers['\\new'+n]={fmt:'%H:%M',space:false,name:'New trigger'};
-    renderDynTable();
+    let n=1;while((cfg.dynamic_formats||{})['\\new'+n])n++;
+    const nt=Object.assign({},cfg.dynamic_formats);
+    nt['\\new'+n]={fmt:'%H:%M',space:false,name:'New trigger'};
+    writeDynTriggers(nt);renderDynTable();
     toast('added — set its trigger and format, then ⬆ Save to device');};}
 
 function renderExp(){
