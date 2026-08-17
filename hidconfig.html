@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.8.2</title>
+<title>HID Config 20.8.2 BF1</title>
 <style>
 /* 20.7.4 BF1 #4: the editor opener, on the selected key only. Small, in the
    corner, and absent until you have chosen something -- so the wireframe is
@@ -1502,100 +1502,105 @@ function _grpKeysFor(slot,L){
   return slot.kind==='btn'?[`mouse:${L},${slot.id}`,`mouse:*,${slot.id}`]
                           :[`kbd:${L},${slot.canon}`,`kbd:*,${slot.canon}`];}
 
-// Read EVERYTHING attached to a slot, across every layer, then erase it.
-function harvestSlot(slot){
-  const b={map:{},p2:{},dev:{},layer:null,tapAct:null,groups:[]};
-  const Ls=allLayers();
+// 20.8.2 BF1: a swap happens IN A SCOPE, and the scope is part of the meaning.
+//
+// The first version always wrote cfg.kbd_mappings -- the table shared by every
+// device. So swapping the E9's "1" onto "7" made "1" behave that way on the
+// Targus and the Kinesis too, and broke 1+click because the chord it belonged
+// to was device-scoped while the swap result was not.
+//
+//   'devcustom'  kbd_mappings_by_device[dev]  -- THIS key on THIS device
+//   'custom'     kbd_mappings                 -- the canonical key everywhere
+//   'baseline'   baseline[dev]                -- what the physical key IS here
+//
+// Default is devcustom: a swap you performed while looking at one wireframe
+// should not silently reach across your other keyboards.
+function _kmapFor(slot,scope){
+  if(scope==='devcustom'){
+    const t=(cfg.kbd_mappings_by_device=cfg.kbd_mappings_by_device||{});
+    return t[slot.dev]=t[slot.dev]||{};}
+  return cfg.kbd_mappings=cfg.kbd_mappings||{};}
+
+// Layer roles, tap/hold and group membership are GLOBAL constructs -- they are
+// keyed on the canonical key or logical button with no device dimension. They
+// can only travel in the 'custom' scope; in any other scope moving them would
+// silently change behaviour on devices you were not looking at.
+function harvestSlot(slot,scope){
+  const b={map:{},p2:{},layer:null,tapAct:null,groups:[],base:undefined};
+  // Baseline trades WHAT THE KEY IS, nothing else. Touching the mapping
+  // tables here would move Custom behaviour the user did not ask about, in a
+  // pane whose whole subject is identity.
+  const Ls=(scope==='baseline')?[]:allLayers();
   for(const L of Ls){
     if(slot.kind==='btn'){
       const k=`${L},${slot.id}`;
       if(k in (cfg.mouse_mappings||{})){b.map[L]=cfg.mouse_mappings[k];
                                         delete cfg.mouse_mappings[k];}
     }else{
-      const k=`${L},${slot.canon}`;
-      if(k in (cfg.kbd_mappings||{})){b.map[L]=cfg.kbd_mappings[k];
-                                      delete cfg.kbd_mappings[k];}
+      const tbl=_kmapFor(slot,scope), k=`${L},${slot.canon}`;
+      if(k in tbl){b.map[L]=tbl[k];delete tbl[k];}
       const pk=`${L},${slot.usage}`;
       if(pk in (cfg.port2_kbd||{})){b.p2[L]=cfg.port2_kbd[pk];
                                     delete cfg.port2_kbd[pk];}
-      const t=(cfg.kbd_mappings_by_device||{})[slot.dev];
-      if(t&&(k in t)){b.dev[L]=t[k];delete t[k];}
     }
-    // group memberships, recorded per layer so a wildcard stays a wildcard
-    for(const[name,g]of Object.entries(cfg.mapping_groups||{})){
-      const mem=g.members||[];
-      for(const key of _grpKeysFor(slot,L)){
-        const i=mem.indexOf(key);
-        if(i>=0){b.groups.push({name:name,wild:key.includes(':*,'),L:L});
-                 mem.splice(i,1);}}}
+    if(scope==='custom'){
+      for(const[name,g]of Object.entries(cfg.mapping_groups||{})){
+        const mem=g.members||[];
+        for(const key of _grpKeysFor(slot,L)){
+          const i=mem.indexOf(key);
+          if(i>=0){b.groups.push({name:name,wild:key.includes(':*,'),L:L});
+                   mem.splice(i,1);}}}}
   }
-  // the layer role
-  if(slot.kind==='btn'){
-    const th=(cfg.tap_hold||{})[slot.id];
-    if(th){b.layer=th[1];b.tapAct=th[0];delete cfg.tap_hold[slot.id];}
-  }else{
-    const v=(cfg.layer_keys||{})[slot.canon];
-    if(v!=null){b.layer=+v;delete cfg.layer_keys[slot.canon];}
+  if(scope==='baseline'&&slot.kind==='key'){
+    const bl=(cfg.baseline||{})[slot.dev];
+    if(bl&&(slot.usage in bl)){b.base=bl[slot.usage];delete bl[slot.usage];}
+    else b.base=null;                       // null = "was itself"
   }
+  if(scope==='custom'){
+    if(slot.kind==='btn'){
+      const th=(cfg.tap_hold||{})[slot.id];
+      if(th){b.layer=th[1];b.tapAct=th[0];delete cfg.tap_hold[slot.id];}
+    }else{
+      const v=(cfg.layer_keys||{})[slot.canon];
+      if(v!=null){b.layer=+v;delete cfg.layer_keys[slot.canon];}}}
   return b;}
 
 /* Translate one action between the button world and the key world.
    Returns {v, note}. A note means it could not cross intact. */
 function _xAct(v,toKind){
   if(v===undefined||v===null)return{v:undefined};
-  // key tables allow a BARE usage integer as shorthand for ["key",u]
   let a=Array.isArray(v)?v:(v===0?['suppress']:['key',v]);
   const k=a[0];
   if(toKind==='key'){
-    if(k==='key')return{v:a[1]};                 // back to the bare shorthand
+    if(k==='key')return{v:a[1]};                 // bare-usage shorthand
     if(k==='macro'||k==='suppress')return{v:a};
     return{v:undefined,note:`"${actShort(a)}" is button-only`};}
-  if(k==='key'||k==='macro'||k==='suppress')return{v:a};
   return{v:a};}
 
-function writeSlot(slot,b,notes){
+function writeSlot(slot,b,notes,scope){
   for(const[L,v]of Object.entries(b.map)){
     const r=_xAct(v,slot.kind);
     if(r.note){notes.push(`layer ${L}: ${r.note}`);continue;}
     if(r.v===undefined)continue;
     if(slot.kind==='btn')(cfg.mouse_mappings=cfg.mouse_mappings||{})[`${L},${slot.id}`]=r.v;
-    else (cfg.kbd_mappings=cfg.kbd_mappings||{})[`${L},${slot.canon}`]=r.v;}
+    else _kmapFor(slot,scope)[`${L},${slot.canon}`]=r.v;}
   if(slot.kind==='key'){
     for(const[L,v]of Object.entries(b.p2))
       (cfg.port2_kbd=cfg.port2_kbd||{})[`${L},${slot.usage}`]=v;
-    for(const[L,v]of Object.entries(b.dev)){
-      const t=(cfg.kbd_mappings_by_device=cfg.kbd_mappings_by_device||{});
-      (t[slot.dev]=t[slot.dev]||{})[`${L},${slot.canon}`]=v;}
   }else{
-    // A gesture key's macro binding and its per-device overlay have no button
-    // equivalent TABLE, but a button can express the same actions -- so fold
-    // them into the button's layer mapping rather than losing them. Mouse
-    // mappings are already device-scoped by the wireframe they sit on, so
-    // collapsing the per-device overlay loses no meaning.
     for(const[L,v]of Object.entries(b.p2))
-      (cfg.mouse_mappings=cfg.mouse_mappings||{})[`${L},${slot.id}`]=['macro',v];
-    for(const[L,v]of Object.entries(b.dev)){
-      const k=`${L},${slot.id}`;
-      const r=_xAct(v,'btn');
-      if(r.note){notes.push(`layer ${L} (device overlay): ${r.note}`);continue;}
-      if(r.v===undefined)continue;
-      // never overwrite the shared mapping we just wrote for this layer --
-      // say so instead, so nothing disappears without a word
-      if(k in (cfg.mouse_mappings||{}))
-        notes.push(`layer ${L}: device-specific "${actShort(r.v)}" dropped `
-                   +`(the shared mapping for that layer already moved across)`);
-      else (cfg.mouse_mappings=cfg.mouse_mappings||{})[k]=r.v;}
-  }
+      (cfg.mouse_mappings=cfg.mouse_mappings||{})[`${L},${slot.id}`]=['macro',v];}
+  if(b.base!==undefined&&slot.kind==='key'){
+    const bl=(cfg.baseline=cfg.baseline||{});
+    bl[slot.dev]=bl[slot.dev]||{};
+    if(b.base===null||b.base===undefined)delete bl[slot.dev][slot.usage];
+    else bl[slot.dev][slot.usage]=b.base;}
   if(b.layer!=null){
     if(slot.kind==='btn'){
-      // tap_hold needs a TAP action as well as the layer. Reuse the one that
-      // came with it; failing that, whatever this slot does on layer 0; and
-      // failing that, a plain click, so the button is never inert.
       let tap=b.tapAct;
       if(!tap){const r=_xAct(b.map[0],'btn');tap=(r.v&&Array.isArray(r.v))?r.v:['btn',slot.id];}
       (cfg.tap_hold=cfg.tap_hold||{})[slot.id]=[tap,b.layer];
-    }else{
-      (cfg.layer_keys=cfg.layer_keys||{})[slot.canon]=b.layer;}}
+    }else (cfg.layer_keys=cfg.layer_keys||{})[slot.canon]=b.layer;}
   for(const g of b.groups){
     const grp=(cfg.mapping_groups||{})[g.name];
     if(!grp)continue;
@@ -1605,21 +1610,39 @@ function writeSlot(slot,b,notes){
       :(slot.kind==='btn'?`mouse:${g.L},${slot.id}`:`kbd:${g.L},${slot.canon}`);
     if(!grp.members.includes(key))grp.members.push(key);}}
 
-function swapBehaviour(devA,elA,devB,elB){
+function swapBehaviour(devA,elA,devB,elB,scope){
+  scope=scope||'devcustom';
   const A=slotOf(devA,elA), B=slotOf(devB,elB);
   if(A.kind===B.kind&&((A.kind==='btn'&&A.id===B.id)
                     ||(A.kind==='key'&&A.dev===B.dev&&A.canon===B.canon))){
     toast('that is the same element — nothing to swap');return;}
-  // Harvest BOTH before writing EITHER. Writing first would let the second
-  // harvest pick up what we just put there and swap an element with itself.
-  const bagA=harvestSlot(A), bagB=harvestSlot(B);
   const notes=[];
-  writeSlot(A,bagB,notes);
-  writeSlot(B,bagA,notes);
+  // Mouse buttons have NO per-device table in the engine -- mouse_mappings is
+  // keyed on the logical button alone. Say so rather than implying a scope we
+  // cannot honour.
+  if((A.kind==='btn'||B.kind==='btn')&&scope!=='custom')
+    notes.push('mouse buttons have no per-device table in the engine, so the '
+              +'button half of this swap applies to every device');
+  if(scope==='baseline'&&(A.kind==='btn'||B.kind==='btn'))
+    notes.push('a mouse button has no Baseline key identity to trade');
+  // Harvest BOTH before writing EITHER, or the second harvest picks up what
+  // the first write just put there and swaps an element with itself.
+  const bagA=harvestSlot(A,scope), bagB=harvestSlot(B,scope);
+  writeSlot(A,bagB,notes,scope);
+  writeSlot(B,bagA,notes,scope);
   sel=null;render();
+  const where=scope==='devcustom'?'this device only'
+            :scope==='custom'?'all devices':'Baseline, this device';
+  const what=scope==='baseline'
+    ?'key identities traded'
+    :scope==='custom'
+      ?'mappings, layer role and groups traded on every layer'
+      :'mappings traded on every layer (layer role and groups are global and '
+       +'stay put — use “Custom · all devices” to move those)';
   toast(notes.length
-    ?`swapped, with ${notes.length} action(s) that could not cross: `+notes.join('; ')
-    :'swapped — mappings, layers and groups traded. Both are independently editable. ⬆ Save to device',
+    ?`swapped (${where}) — ${what}. Note: `+notes.join('; ')
+    :`swapped (${where}) — ${what}. Both remain independently editable. `
+     +`⬆ Save to device`,
     notes.length>0);}
 
 // 20.7.4 BF1 #2.3: point-and-click swap. Arming this puts the wireframe in
@@ -1629,8 +1652,8 @@ function swapBehaviour(devA,elA,devB,elB){
 let swapPick=null;      // {dev, ref, label} or null
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&swapPick){swapPick=null;toast('swap cancelled');render();}});
-function armSwapPick(dev,el){
-  swapPick={dev:dev,el:el};
+function armSwapPick(dev,el,scope){
+  swapPick={dev:dev,el:el,scope:scope||'devcustom'};
   toast('now click the button or key you want to swap with (Esc to cancel)');
   render();}
 // Turn a clicked wireframe element into an identity ref, or null if it is
@@ -1652,22 +1675,24 @@ function currentIdent(dev,ref){
 function doSwapPick(devB,elB){
   const A=swapPick; swapPick=null;
   if(!A){render();return;}
-  swapBehaviour(A.dev,A.el,devB,elB);}
+  swapBehaviour(A.dev,A.el,devB,elB,A.scope);}
 
 // Which physical input on this device currently reports as logical button n?
 // The editor's identity block. `ref` is the physical input being edited.
-function identityHTML(dev,ref,curLogical){
+function identityHTML(dev,ref,curLogical,scope){
   // 20.8.2: this was a whole "Identity (Baseline)" disclosure — a Reports-as
   // dropdown, a swap checkbox and three paragraphs — sitting at the top of
   // every editor. Since 20.8 BF1 swap moves BEHAVIOUR rather than identity,
   // that machinery no longer earns the space, so it is one button and the
   // explanation is a tooltip you read when you want it.
+  const where=scope==='custom'?'all devices'
+            :scope==='baseline'?'Baseline, this device':'this device only';
   return `<button id="identpick" style="margin:.35rem 0"
-    title="Swap behaviour with… — then click the key or button you want to trade with.&#10;&#10;Trades the mappings, layer role and group memberships on EVERY layer. Each element keeps its own identity, so afterwards you can edit the two independently.&#10;&#10;Works across wireframes, and between keys and buttons. Esc cancels.">⇄ Swap</button>`;}
+    title="Swap behaviour with… — then click the key or button you want to trade with.&#10;&#10;Applies IN THE SCOPE SELECTED ABOVE (${where}). Trades the mappings on every layer; the layer role and group memberships travel only on 'all devices', because those are global and moving them from a device-scoped view would change other keyboards silently.&#10;&#10;Each element keeps its identity, so you can edit both afterwards. Esc cancels.">⇄ Swap · ${where}</button>`;}
 
-function bindIdentity(dev,ref){
+function bindIdentity(dev,ref,scope){
   const pick=$('identpick');
-  if(pick)pick.onclick=()=>armSwapPick(dev,sel);}
+  if(pick)pick.onclick=()=>armSwapPick(dev,sel,scope||'devcustom');}
 
 function btnOwner(dev,n){
   const bl=cfg.baseline[dev]||{};
@@ -4371,7 +4396,10 @@ function renderEditor(){
   const selDev=sel.dev||'';
   const canon=isBtn?sel.id:baselineOf(selDev,sel.id);
   const isMod=!isBtn&&!!MODS[canon];      // block Custom only if STILL a modifier
-  const scope=isMod?'baseline':(sel.scope||'custom');
+  // 20.8.2 BF1 #2.1: default to the device you are looking at. Defaulting to
+  // the shared table meant an edit made from one wireframe silently applied to
+  // every keyboard -- which is how a swap broke 1+click, a device-scoped chord.
+  const scope=isMod?'baseline':(sel.scope||(selDev?'devcustom':'custom'));
   // ---- Baseline scope: what this physical key IS on this device ----
   if(!isBtn&&scope==='baseline'){
     const cur=(cfg.baseline[selDev]||{})[sel.id];
@@ -4385,9 +4413,9 @@ function renderEditor(){
       :scopeTabsHTML(selDev,'baseline')}
     <label>This physical key produces</label><select id="basetgt">${opts}</select>
     ${sel.p2?identityHTML(selDev,{kind:'p2',usage:sel.id},
-                          p2BtnIdent(selDev,sel.id)):''}
+                          p2BtnIdent(selDev,sel.id),'baseline'):''}
     ${groupAssignHTML(`kbd:${layer},${canon}`)}`;
-    if(sel.p2)bindIdentity(selDev,{kind:'p2',usage:sel.id});
+    if(sel.p2)bindIdentity(selDev,{kind:'p2',usage:sel.id},'baseline');
     $('basetgt').onchange=()=>{
       const v=$('basetgt').value;
       cfg.baseline[selDev]=cfg.baseline[selDev]||{};
@@ -4420,7 +4448,7 @@ function renderEditor(){
   const identCur=!identRef?undefined
     :identRef.kind==='p2'?p2BtnIdent(selDev,identRef.usage)
     :(cfg.baseline[selDev]||{})['btn:'+identRef.code];
-  const identBlock=identRef?identityHTML(selDev,identRef,identCur):'';
+  const identBlock=identRef?identityHTML(selDev,identRef,identCur,scope):'';
   // Name all three identities in the heading rather than picking one and
   // leaving the other two to be guessed at. "5 (arrow: Right)" was a true
   // statement about a button the user only knows as 7.
@@ -4457,7 +4485,7 @@ function renderEditor(){
     ${noteFieldHTML(noteKey(isBtn?'mouse':'kbd',layer,isBtn?sel.id:canon))}
     ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
   </div></div>`;
-  if(identRef)bindIdentity(selDev,identRef);
+  if(identRef)bindIdentity(selDev,identRef,scope);
   function setLayerSource(L){
     if(L==null){ if(isBtn)delete cfg.tap_hold[sel.id];
       else{cfg.layer_keys=cfg.layer_keys||{};delete cfg.layer_keys[canon];} return; }
