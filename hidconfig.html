@@ -1,8 +1,27 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.8.2 BF1</title>
+<title>HID Config 20.8.2 BF2</title>
 <style>
+/* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
+   both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
+   to device). --pick (amber) marks STATE: this thing is selected, or armed,
+   or waiting for you. Using the same colour for "press me" and "I am chosen"
+   is why the Swap button looked dead when it was in fact armed. */
+:root{--pick:#d97706;--pick-soft:rgba(217,119,6,.18)}
+button.armed{background:var(--pick)!important;color:#fff!important;
+  box-shadow:0 0 0 3px var(--pick-soft)}
+/* While a swap is armed the whole stage says so: the cursor changes, every
+   candidate lifts on hover, and a banner names what you are swapping. */
+body.swappicking .key{cursor:crosshair}
+body.swappicking .key:hover{outline:2px solid var(--pick);outline-offset:1px;
+  background:var(--pick-soft)}
+body.swappicking .devcard{box-shadow:0 0 0 2px var(--pick-soft)}
+#swapbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;
+  z-index:99;background:var(--pick);color:#fff;padding:.35rem .8rem;
+  border-radius:999px;font-size:.8rem;box-shadow:0 2px 10px rgba(0,0,0,.35);
+  display:none}
+body.swappicking #swapbanner{display:block}
 /* 20.7.4 BF1 #4: the editor opener, on the selected key only. Small, in the
    corner, and absent until you have chosen something -- so the wireframe is
    readable at a glance and the editor never appears uninvited. */
@@ -865,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.8.1';   // engine .py unchanged since 20.8.1
+const UI_ENGINE_EXPECT='20.8.2';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1516,10 +1535,22 @@ function _grpKeysFor(slot,L){
 // Default is devcustom: a swap you performed while looking at one wireframe
 // should not silently reach across your other keyboards.
 function _kmapFor(slot,scope){
+  if(slot.kind==='btn'){
+    // 20.8.2 BF2: mouse buttons now have a per-device table too, so
+    // "this device only" means the same thing on both sides of the picker.
+    if(scope==='devcustom'){
+      const t=(cfg.mouse_mappings_by_device=cfg.mouse_mappings_by_device||{});
+      return t[slot.dev]=t[slot.dev]||{};}
+    return cfg.mouse_mappings=cfg.mouse_mappings||{};}
   if(scope==='devcustom'){
     const t=(cfg.kbd_mappings_by_device=cfg.kbd_mappings_by_device||{});
     return t[slot.dev]=t[slot.dev]||{};}
   return cfg.kbd_mappings=cfg.kbd_mappings||{};}
+function _thFor(slot,scope){
+  if(scope==='devcustom'){
+    const t=(cfg.tap_hold_by_device=cfg.tap_hold_by_device||{});
+    return t[slot.dev]=t[slot.dev]||{};}
+  return cfg.tap_hold=cfg.tap_hold||{};}
 
 // Layer roles, tap/hold and group membership are GLOBAL constructs -- they are
 // keyed on the canonical key or logical button with no device dimension. They
@@ -1533,12 +1564,18 @@ function harvestSlot(slot,scope){
   const Ls=(scope==='baseline')?[]:allLayers();
   for(const L of Ls){
     if(slot.kind==='btn'){
-      const k=`${L},${slot.id}`;
-      if(k in (cfg.mouse_mappings||{})){b.map[L]=cfg.mouse_mappings[k];
-                                        delete cfg.mouse_mappings[k];}
+      const tblB=_kmapFor(slot,scope), k=`${L},${slot.id}`;
+      if(k in tblB){b.map[L]=tblB[k];delete tblB[k];}
+      else if(scope==='devcustom'&&k in (cfg.mouse_mappings||{}))
+        // Nothing device-specific yet, so what this button DOES here comes
+        // from the shared table. Inherit it (without deleting it -- other
+        // devices still rely on it) or the swap would trade two blanks.
+        b.map[L]=cfg.mouse_mappings[k];
     }else{
       const tbl=_kmapFor(slot,scope), k=`${L},${slot.canon}`;
       if(k in tbl){b.map[L]=tbl[k];delete tbl[k];}
+      else if(scope==='devcustom'&&k in (cfg.kbd_mappings||{}))
+        b.map[L]=cfg.kbd_mappings[k];        // inherited, see above
       const pk=`${L},${slot.usage}`;
       if(pk in (cfg.port2_kbd||{})){b.p2[L]=cfg.port2_kbd[pk];
                                     delete cfg.port2_kbd[pk];}
@@ -1556,11 +1593,19 @@ function harvestSlot(slot,scope){
     if(bl&&(slot.usage in bl)){b.base=bl[slot.usage];delete bl[slot.usage];}
     else b.base=null;                       // null = "was itself"
   }
-  if(scope==='custom'){
+  // A BUTTON's layer role is now per-device (tap_hold_by_device), so it can
+  // travel in either scope. A KEY's layer role still has no device dimension
+  // (layer_keys is global), so it only travels on "all devices".
+  if(scope!=='baseline'){
     if(slot.kind==='btn'){
-      const th=(cfg.tap_hold||{})[slot.id];
-      if(th){b.layer=th[1];b.tapAct=th[0];delete cfg.tap_hold[slot.id];}
-    }else{
+      const th=_thFor(slot,scope)[slot.id];
+      if(th){b.layer=th[1];b.tapAct=th[0];delete _thFor(slot,scope)[slot.id];}
+      else if(scope==='devcustom'){
+        // nothing device-specific yet: inherit the shared entry so the badge
+        // actually moves, which is what "swap everything" has to mean.
+        const sh=(cfg.tap_hold||{})[slot.id];
+        if(sh){b.layer=sh[1];b.tapAct=sh[0];}}
+    }else if(scope==='custom'){
       const v=(cfg.layer_keys||{})[slot.canon];
       if(v!=null){b.layer=+v;delete cfg.layer_keys[slot.canon];}}}
   return b;}
@@ -1582,14 +1627,14 @@ function writeSlot(slot,b,notes,scope){
     const r=_xAct(v,slot.kind);
     if(r.note){notes.push(`layer ${L}: ${r.note}`);continue;}
     if(r.v===undefined)continue;
-    if(slot.kind==='btn')(cfg.mouse_mappings=cfg.mouse_mappings||{})[`${L},${slot.id}`]=r.v;
-    else _kmapFor(slot,scope)[`${L},${slot.canon}`]=r.v;}
+    _kmapFor(slot,scope)[slot.kind==='btn'?`${L},${slot.id}`
+                                            :`${L},${slot.canon}`]=r.v;}
   if(slot.kind==='key'){
     for(const[L,v]of Object.entries(b.p2))
       (cfg.port2_kbd=cfg.port2_kbd||{})[`${L},${slot.usage}`]=v;
   }else{
     for(const[L,v]of Object.entries(b.p2))
-      (cfg.mouse_mappings=cfg.mouse_mappings||{})[`${L},${slot.id}`]=['macro',v];}
+      _kmapFor(slot,scope)[`${L},${slot.id}`]=['macro',v];}
   if(b.base!==undefined&&slot.kind==='key'){
     const bl=(cfg.baseline=cfg.baseline||{});
     bl[slot.dev]=bl[slot.dev]||{};
@@ -1599,7 +1644,7 @@ function writeSlot(slot,b,notes,scope){
     if(slot.kind==='btn'){
       let tap=b.tapAct;
       if(!tap){const r=_xAct(b.map[0],'btn');tap=(r.v&&Array.isArray(r.v))?r.v:['btn',slot.id];}
-      (cfg.tap_hold=cfg.tap_hold||{})[slot.id]=[tap,b.layer];
+      _thFor(slot,scope)[slot.id]=[tap,b.layer];
     }else (cfg.layer_keys=cfg.layer_keys||{})[slot.canon]=b.layer;}
   for(const g of b.groups){
     const grp=(cfg.mapping_groups||{})[g.name];
@@ -1612,6 +1657,7 @@ function writeSlot(slot,b,notes,scope){
 
 function swapBehaviour(devA,elA,devB,elB,scope){
   scope=scope||'devcustom';
+  swapPickChrome();
   const A=slotOf(devA,elA), B=slotOf(devB,elB);
   if(A.kind===B.kind&&((A.kind==='btn'&&A.id===B.id)
                     ||(A.kind==='key'&&A.dev===B.dev&&A.canon===B.canon))){
@@ -1620,9 +1666,6 @@ function swapBehaviour(devA,elA,devB,elB,scope){
   // Mouse buttons have NO per-device table in the engine -- mouse_mappings is
   // keyed on the logical button alone. Say so rather than implying a scope we
   // cannot honour.
-  if((A.kind==='btn'||B.kind==='btn')&&scope!=='custom')
-    notes.push('mouse buttons have no per-device table in the engine, so the '
-              +'button half of this swap applies to every device');
   if(scope==='baseline'&&(A.kind==='btn'||B.kind==='btn'))
     notes.push('a mouse button has no Baseline key identity to trade');
   // Harvest BOTH before writing EITHER, or the second harvest picks up what
@@ -1637,8 +1680,9 @@ function swapBehaviour(devA,elA,devB,elB,scope){
     ?'key identities traded'
     :scope==='custom'
       ?'mappings, layer role and groups traded on every layer'
-      :'mappings traded on every layer (layer role and groups are global and '
-       +'stay put — use “Custom · all devices” to move those)';
+      :'mappings and (for buttons) the layer role traded on every layer, for '
+       +'this device only. Key layer roles and groups are global — use '
+       +'“Custom · all devices” to move those.';
   toast(notes.length
     ?`swapped (${where}) — ${what}. Note: `+notes.join('; ')
     :`swapped (${where}) — ${what}. Both remain independently editable. `
@@ -1651,9 +1695,21 @@ function swapBehaviour(devA,elA,devB,elB,scope){
 // per device and both halves are written explicitly.
 let swapPick=null;      // {dev, ref, label} or null
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'&&swapPick){swapPick=null;toast('swap cancelled');render();}});
+  if(e.key==='Escape'&&swapPick){swapPick=null;swapPickChrome();
+    toast('swap cancelled');render();}});
+function swapPickChrome(){
+  document.body.classList.toggle('swappicking',!!swapPick);
+  let bn=document.getElementById('swapbanner');
+  if(!bn){bn=document.createElement('div');bn.id='swapbanner';
+          document.body.appendChild(bn);}
+  bn.textContent=swapPick
+    ?`⇄ Swap (${swapPick.scope==='custom'?'all devices'
+        :swapPick.scope==='baseline'?'Baseline':'this device only'}) — `
+     +`click the key or button to trade with · Esc to cancel`
+    :'';}
 function armSwapPick(dev,el,scope){
   swapPick={dev:dev,el:el,scope:scope||'devcustom'};
+  swapPickChrome();
   toast('now click the button or key you want to swap with (Esc to cancel)');
   render();}
 // Turn a clicked wireframe element into an identity ref, or null if it is
@@ -1673,7 +1729,7 @@ function currentIdent(dev,ref){
 // mapping, tap/hold pair and group is keyed on that identity, so all of it
 // moves together -- there is no list of things to remember to bring along.
 function doSwapPick(devB,elB){
-  const A=swapPick; swapPick=null;
+  const A=swapPick; swapPick=null; swapPickChrome();
   if(!A){render();return;}
   swapBehaviour(A.dev,A.el,devB,elB,A.scope);}
 
@@ -1692,7 +1748,10 @@ function identityHTML(dev,ref,curLogical,scope){
 
 function bindIdentity(dev,ref,scope){
   const pick=$('identpick');
-  if(pick)pick.onclick=()=>armSwapPick(dev,sel,scope||'devcustom');}
+  if(!pick)return;
+  if(swapPick)pick.classList.add('armed');
+  pick.onclick=()=>{pick.classList.add('armed');
+                    armSwapPick(dev,sel,scope||'devcustom');};}
 
 function btnOwner(dev,n){
   const bl=cfg.baseline[dev]||{};
