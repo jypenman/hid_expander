@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.8.2 BF2</title>
+<title>HID Config 20.8.2 BF3</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.8.2';
+const UI_ENGINE_EXPECT='20.8.2 BF3';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -953,23 +953,24 @@ function onReport(e){
       window._reReadTried=null;
       const obj=JSON.parse(new TextDecoder().decode(buf));
       if(curFile===0){cfg=obj;
-        // 20.8.1: shout if the Pi is running an older engine than this page
-        // expects. Symptoms of deploy skew (a setting that will not stick, an
-        // expansion that types nothing) look exactly like logic bugs.
-        try{
-          const ev=obj.engine_version||null;
-          showVersions(ev||'(pre-20.8.1)');
-          if(ev!==UI_ENGINE_EXPECT)
-            setTimeout(()=>toast(ev
-              ?`⚠ Pi engine is ${ev}, this UI expects ${UI_ENGINE_EXPECT} — `
-               +`re-deploy the .py files or settings may not take effect`
-              :`⚠ Pi engine predates version reporting — re-deploy the .py `
-               +`files; this UI expects ${UI_ENGINE_EXPECT}`,true),900);
-        }catch(e){}normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
+normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
         $('svcwarn').style.display='none';}
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===3){
         lastEng=obj;adoptEffective(obj);updateConStat();
+        // 20.8.2 BF3: read the engine version from HERE, not from the config.
+        // fid 0 is bridge_config.json served verbatim off the disk -- it is
+        // the file the UI itself wrote, so it can never carry anything the
+        // engine knows. The engine's own facts live in engine_status (fid 3).
+        // Looking in the wrong payload is why it always said "pre-20.8.1"
+        // while the Pi was demonstrably running 20.8.2.
+        try{
+          const ev=obj.engine_version||null;
+          showVersions(ev||'(pre-20.8.1)');
+          if(ev&&ev!==UI_ENGINE_EXPECT)
+            toast(`⚠ Pi engine is ${ev}, this UI expects ${UI_ENGINE_EXPECT}`
+                  +` — re-deploy the .py files`,true);
+        }catch(e){}
         if(typeof pfAdoptStats==='function')pfAdoptStats(obj);
         updateOsBtn();   // 3.1: refresh the OS-mismatch badge once the engine's
                          // active_os is known (post-save it was going stale)
@@ -1598,13 +1599,10 @@ function harvestSlot(slot,scope){
   // (layer_keys is global), so it only travels on "all devices".
   if(scope!=='baseline'){
     if(slot.kind==='btn'){
-      const th=_thFor(slot,scope)[slot.id];
-      if(th){b.layer=th[1];b.tapAct=th[0];delete _thFor(slot,scope)[slot.id];}
-      else if(scope==='devcustom'){
-        // nothing device-specific yet: inherit the shared entry so the badge
-        // actually moves, which is what "swap everything" has to mean.
-        const sh=(cfg.tap_hold||{})[slot.id];
-        if(sh){b.layer=sh[1];b.tapAct=sh[0];}}
+      const th=_thLookup(slot.id,slot.dev);
+      if(th){b.layer=th[1];b.tapAct=th[0];}
+      if(scope==='devcustom')_thFor(slot,scope)[slot.id]=null;  // vacate HERE
+      else delete _thFor(slot,scope)[slot.id];
     }else if(scope==='custom'){
       const v=(cfg.layer_keys||{})[slot.canon];
       if(v!=null){b.layer=+v;delete cfg.layer_keys[slot.canon];}}}
@@ -1815,15 +1813,46 @@ function materialiseLayerDefaults(){
     for(const[b,v]of Object.entries(ENGINE_TAP_HOLD_DEFAULT))
       if(!(b in cfg.tap_hold))cfg.tap_hold[b]=v;
     cfg._layer_defaults_done=true;}}
-function layerSources(){ // layer -> {type:'key'|'btn', id}
+/* 20.8.2 BF3: the gold "starts a layer" marker read ONLY cfg.tap_hold. Once
+   a button's layer role could live per-device (tap_hold_by_device, 20.8.2
+   BF2), a swap moved the role but the wireframe kept drawing the old one —
+   which is exactly what you saw: L4 appeared on "1" and never left "7".
+   Both tables are consulted now, device first, matching the engine's
+   tap_hold_for(). `dev` is optional so callers with no device still work. */
+// A device entry that is PRESENT BUT NULL means "explicitly no layer role
+// here", shadowing the shared table. Without it a device-scoped swap could
+// give the new button the role but never take it off the old one, because
+// deleting the shared entry would strip the role from every other mouse.
+// The engine agrees: tap_hold_for() returns the null and _btn_down's `if th:`
+// treats it as absent.
+function _thTables(dev){
+  const out=[];
+  if(dev&&cfg.tap_hold_by_device&&cfg.tap_hold_by_device[dev])
+    out.push(cfg.tap_hold_by_device[dev]);
+  out.push(cfg.tap_hold||{});
+  return out;}
+function _thLookup(id,dev){
+  for(const t of _thTables(dev)){
+    if(id in t)return t[id]||null;      // present-but-null = explicitly none
+  }
+  return null;}
+function layerSources(dev){ // layer -> {type:'key'|'btn', id}
   const out={};
   for(const[u,L]of Object.entries(cfg.layer_keys||{}))out[+L]={type:'key',id:+u};
+  // shared first, then device, so a device-specific role WINS the slot
   for(const[b,v]of Object.entries(cfg.tap_hold||{}))out[v[1]]={type:'btn',id:+b};
+  if(dev&&cfg.tap_hold_by_device&&cfg.tap_hold_by_device[dev])
+    for(const[b,v]of Object.entries(cfg.tap_hold_by_device[dev])){
+      if(!v){ // explicitly no role here: drop it if the shared table gave it one
+        for(const L of Object.keys(out))
+          if(out[L].type==='btn'&&out[L].id===+b)delete out[L];
+        continue;}
+      out[v[1]]={type:'btn',id:+b};}
   return out;}
-function layerOfSource(type,id){
+function layerOfSource(type,id,dev){
   if(type==='key'){
     const v=cfg.layer_keys&&cfg.layer_keys[id];return v!=null?+v:null;}
-  const th=cfg.tap_hold&&cfg.tap_hold[id];return th?th[1]:null;}
+  const th=_thLookup(id,dev);return th?th[1]:null;}
 function allLayers(){
   const set=new Set([0,1,2,3,4,5]);
   for(const L of Object.values(cfg.layer_keys||{}))set.add(+L);
@@ -2107,10 +2136,12 @@ function suppressedMembers(){
   return out;}
 function isSuppressed(prefix,L,id){const s=window._supSet||(window._supSet=suppressedMembers());
   return s.has(`${prefix}:${L},${id}`)||s.has(`${prefix}:*,${id}`);}
-function elLayerBadge(type,id){const L=layerOfSource(type,id);
+function elLayerBadge(type,id,dev){const L=layerOfSource(type,id,dev);
   return L!=null?`<span class="chiplayer" title="triggers layer ${L}">L${L}</span>`:'';}
 function renderLayoutKbd(d,w){
-  const lay=layoutFor(d),unit=lay.unit||40,srcs=layerSources();
+  // 20.8.2 BF3: this wireframe's own layer sources, so the gold "starts a
+  // layer" fill follows a device-scoped role instead of only the shared one.
+  const lay=layoutFor(d),unit=lay.unit||40,srcs=layerSources(d.id);
   const ghl=groupMembersVisible();
   let minx=0,miny=0,maxx=0,maxy=0;
   for(const k of lay.keys){minx=Math.min(minx,k.x);miny=Math.min(miny,k.y);
@@ -2166,7 +2197,7 @@ function renderLayoutKbd(d,w){
         +(b===0?`<span class="chip" title="Baseline: this physical button is disabled">∅</span>`
           :b!==bPhys?`<span class="chip" title="Baseline: this physical button reports as ${esc(btnLabel(b))}">≡${b}</span>`:'')
         +(eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
-        +elLayerBadge('btn',b);
+        +elLayerBadge('btn',b,d.id);
       if(editing)bindEditKey(el,d,idx);
       else el.onclick=e=>{if(e.shiftKey||e.altKey)return;
         const me={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};
@@ -4514,7 +4545,7 @@ function renderEditor(){
   const btnTitle=!isBtn?'':`${esc(btnLabel(sel.id))} <span class="muted">· Button ${sel.id}${
     sel.label?' · marked “'+esc(sel.label)+'” on the device':''}${
     sel.p2usage!=null?' · arrives as key '+esc(KEYS[sel.p2usage]||'?'):''}</span>`;
-  const srcLayer=layerOfSource(isBtn?'btn':'key',canon);
+  const srcLayer=layerOfSource(isBtn?'btn':'key',canon,selDev);
   if(srcLayer!=null)ui.press='layer';
   const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)">Hold → Layer ${srcLayer}</span>`:'';
   const layerOpt=`<option value="layer" ${ui.press==='layer'?'selected':''}>Hold → Layer…</option>`;
