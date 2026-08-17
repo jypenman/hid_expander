@@ -1,8 +1,16 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.8.1</title>
+<title>HID Config 20.8.2</title>
 <style>
+/* 20.7.4 BF1 #4: the editor opener, on the selected key only. Small, in the
+   corner, and absent until you have chosen something -- so the wireframe is
+   readable at a glance and the editor never appears uninvited. */
+.edcorner{position:absolute;top:1px;right:2px;font-size:.62rem;opacity:.75;
+  cursor:pointer;line-height:1;padding:1px 2px;border-radius:3px;
+  background:rgba(127,127,127,.22);z-index:3}
+.edcorner:hover{opacity:1;background:rgba(127,127,127,.45)}
+
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
 *{box-sizing:border-box}
@@ -282,7 +290,9 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </style></head><body>
 
 <div class="bar">
-  <h1 style="margin:0">🔌 HID Config</h1>
+  <h1 style="margin:0;line-height:1.05">🔌 HID Config<br>
+    <span id="uiver" style="font-size:.6rem;font-weight:400;opacity:.6"
+      title="UI version (from the page title) · engine version once connected"></span></h1>
 <div id="benchstrip" class="benchstrip"></div>
 
 <div id="prefs" class="panel" style="display:none">
@@ -855,7 +865,15 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.8.1';
+const UI_ENGINE_EXPECT='20.8.1';   // engine .py unchanged since 20.8.1
+// One source of truth for the version on screen: the <title>. A second
+// hard-coded string would drift from it the first time one of us forgot.
+const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
+function showVersions(engine){
+  const el=document.getElementById('uiver');if(!el)return;
+  el.textContent='v'+UI_VERSION+(engine?'  ·  engine '+engine:'');
+  el.style.color=(engine&&engine!==UI_ENGINE_EXPECT)?'var(--warn,#b45309)':'';}
+document.addEventListener('DOMContentLoaded',()=>showVersions(null));
 let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
@@ -921,6 +939,7 @@ function onReport(e){
         // expansion that types nothing) look exactly like logic bugs.
         try{
           const ev=obj.engine_version||null;
+          showVersions(ev||'(pre-20.8.1)');
           if(ev!==UI_ENGINE_EXPECT)
             setTimeout(()=>toast(ev
               ?`⚠ Pi engine is ${ev}, this UI expects ${UI_ENGINE_EXPECT} — `
@@ -1638,95 +1657,17 @@ function doSwapPick(devB,elB){
 // Which physical input on this device currently reports as logical button n?
 // The editor's identity block. `ref` is the physical input being edited.
 function identityHTML(dev,ref,curLogical){
-  let where;
-  if(ref.kind==='p2'){
-    where=`the gesture-node key <b>${esc(KEYS[ref.usage]||('0x'+ref.usage.toString(16)))}</b>`
-      +` <span class="muted">(usage 0x${ref.usage.toString(16)})</span>`;
-  }else{
-    where=`<b>${EVDEV_BTN_NAME[ref.code]||('button code '+ref.code)}</b>`
-      +` <span class="muted">(evdev ${ref.code})</span>`;
-  }
-  const selfN=ref.kind==='btn'
-    ? Object.keys(BTN_EVDEV).map(Number).find(k=>BTN_EVDEV[k]===ref.code) : null;
-  let opts=`<option value="">${ref.kind==='p2'
-    ?'(not a button — types its key)'
-    :'(itself: Button '+(selfN||'?')+')'}</option>`
-    +`<option value="0" ${curLogical===0?'selected':''}>∅ Disabled — sends nothing</option>`;
-  for(let n=1;n<=5;n++)opts+=`<option value="${n}" ${curLogical===n?'selected':''}`
-    +`>Button ${n} — ${esc(btnLabel(n))}</option>`;
-  return `<details class="identblk" ${curLogical!==undefined&&curLogical!==null?'open':''}
-    style="margin:.4rem 0;padding:.4rem;border:1px solid var(--line);border-radius:6px">
-    <summary style="cursor:pointer;font-size:.8rem"><b>Identity (Baseline)</b>
-      — what this physical input <i>is</i></summary>
-    <p class="muted" style="font-size:.74rem;margin:.35rem 0">
-      This element is ${where} on <b>${esc(devName(dev))}</b>.
-      The number printed on the hardware, the code the kernel reports and the
-      logical button mappings are keyed on are three different numbers.
-      Changing the identity moves <b>every layer, tap/hold and group</b> with
-      it, because all of them are keyed on the logical button — nothing is
-      copied, so nothing can be left behind.</p>
-    <label>Reports as</label><select id="identsel">${opts}</select>
-    <label style="margin-top:.4rem;display:flex;gap:.4rem;align-items:flex-start">
-      <input type="checkbox" id="identswap" checked style="margin-top:.2rem">
-      <span>Swap — give whatever currently answers to that number
-        <i>this</i> input's identity, so the two trade places.
-        <span class="muted">Uncheck to take over one-way, leaving the other
-        input sharing the same mappings.</span></span></label>
-    <button id="identpick" style="margin-top:.45rem">⇄ Swap behaviour with… (then click a key or button)</button>
-    <div class="muted" style="font-size:.72rem;margin-top:.2rem">Trades the
-      mappings, layer role and group memberships on <b>every layer</b>. Each
-      element keeps its own identity, so afterwards you can edit the two
-      independently. Works across wireframes and between keys and buttons.</div>
-    <div id="identnote" class="muted" style="font-size:.74rem;margin-top:.35rem"></div>
-    <div class="muted" style="font-size:.72rem;margin-top:.35rem">
-      ⬆ Save to device to apply.</div></details>`;}
+  // 20.8.2: this was a whole "Identity (Baseline)" disclosure — a Reports-as
+  // dropdown, a swap checkbox and three paragraphs — sitting at the top of
+  // every editor. Since 20.8 BF1 swap moves BEHAVIOUR rather than identity,
+  // that machinery no longer earns the space, so it is one button and the
+  // explanation is a tooltip you read when you want it.
+  return `<button id="identpick" style="margin:.35rem 0"
+    title="Swap behaviour with… — then click the key or button you want to trade with.&#10;&#10;Trades the mappings, layer role and group memberships on EVERY layer. Each element keeps its own identity, so afterwards you can edit the two independently.&#10;&#10;Works across wireframes, and between keys and buttons. Esc cancels.">⇄ Swap</button>`;}
 
 function bindIdentity(dev,ref){
   const pick=$('identpick');
-  if(pick)pick.onclick=()=>armSwapPick(dev,sel);
-  const s=$('identsel');if(!s)return;
-  const note=$('identnote');
-  const describe=()=>{
-    const n=s.value?+s.value:null;
-    if(!note)return;
-    if(n===null){note.textContent='';return;}
-    if(n===0){note.textContent='This input will send nothing. Its mappings are not deleted — re-point it at a button to get them back.';return;}
-    const own=btnOwner(dev,n);
-    const me=(ref.kind==='p2')?null:ref.code;
-    if(!own||(own.kind==='btn'&&own.code===me)){
-      note.textContent='Nothing else answers to Button '+n+' — nothing to swap.';
-      return;}
-    note.innerHTML=`Button ${n} is currently `+(own.kind==='p2'
-      ?`the gesture key <b>${esc(KEYS[own.usage]||'?')}</b>`
-      :`<b>${esc(EVDEV_BTN_NAME[own.code]||('code '+own.code))}</b>`)
-      +`. With Swap ticked, that input takes this one's place.`;};
-  s.onchange=()=>{
-    const n=s.value?+s.value:null;
-    const swap=$('identswap')&&$('identswap').checked;
-    // Read BOTH sides before writing either: setIdent mutates the table
-    // btnOwner reads, and doing it in the other order swaps an input with
-    // itself and silently loses one of the two identities.
-    const mineNow=(ref.kind==='p2')
-      ?p2BtnIdent(dev,ref.usage)
-      :btnIdent(dev,Object.keys(BTN_EVDEV).map(Number)
-                     .find(k=>BTN_EVDEV[k]===ref.code));
-    const own=(n!==null&&n!==0&&swap)?btnOwner(dev,n):null;
-    const sameEl=own&&((own.kind==='btn'&&ref.kind==='btn'&&own.code===ref.code)
-                    ||(own.kind==='p2'&&ref.kind==='p2'&&own.usage===ref.usage));
-    setIdent(dev,ref,n);
-    // The asymmetry worth being honest about: a mouse button cannot become a
-    // keyboard key, so when a gesture KEY takes a button's identity there is
-    // nothing to hand back. Passing null there would delete the displaced
-    // button's entry and restore its DEFAULT identity — leaving two inputs
-    // both firing button n, which is worse than either outcome the user
-    // asked for. Silence it instead (0 = disabled), visibly and reversibly.
-    if(own&&!sameEl)setIdent(dev,own,(mineNow===null||mineNow===undefined)?0:mineNow);
-    sel=null;render();
-    toast(n===null?'identity cleared — ⬆ Save to device to apply'
-                  :'now Button '+n+(own&&!sameEl?' (swapped) ':' ')
-                    +'— ⬆ Save to device to apply');};
-  describe();
-  if($('identswap'))$('identswap').onchange=describe;}
+  if(pick)pick.onclick=()=>armSwapPick(dev,sel);}
 
 function btnOwner(dev,n){
   const bl=cfg.baseline[dev]||{};
@@ -2135,7 +2076,9 @@ function renderLayoutKbd(d,w){
       el.dataset.btnLay=b;el.dataset.dev=d.id;el.dataset.btnPhys=bPhys;
       // A rebased button says so on the wireframe, so you are never looking
       // at a key whose mappings belong to a number printed nowhere on it.
-      el.innerHTML=(k.label||btnLabel(b))
+      const _isSel=sel&&sel.type==='btn'&&sel.id===b&&(sel.dev||'')===d.id;
+      el.innerHTML=(_isSel?`<span class="edcorner" title="Edit this mapping">✎</span>`:'')
+        +(k.label||btnLabel(b))
         +(b===0?`<span class="chip" title="Baseline: this physical button is disabled">∅</span>`
           :b!==bPhys?`<span class="chip" title="Baseline: this physical button reports as ${esc(btnLabel(b))}">≡${b}</span>`:'')
         +(eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
@@ -2144,7 +2087,13 @@ function renderLayoutKbd(d,w){
       else el.onclick=e=>{if(e.shiftKey||e.altKey)return;
         const me={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};
         if(swapPick)return doSwapPick(d.id,me);
+        // clicking the ✎ on an already-selected element opens the editor
+        if(e.target&&e.target.classList.contains('edcorner')){
+          sel=Object.assign({},me,{edit:true});render();return;}
         sel=me;render();};
+      el.ondblclick=e=>{if(swapPick)return;
+        sel=Object.assign({},{type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id},
+                          {edit:true});render();};
       div.appendChild(el);return;}
     // ---- keyboard usage element (incl. E9 gesture digits) ----
     const u=k.u,eff=effKey(d.id,layer,u);
@@ -2192,7 +2141,10 @@ function renderLayoutKbd(d,w){
           _ch.length>1?_ch.length:''}</span>`
       : '';
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
+    const _isSelK=sel&&((sel.type==='key'&&sel.id===u&&(sel.dev||'')===d.id)
+                     ||(sel.type==='btn'&&sel.p2usage===u&&(sel.dev||'')===d.id));
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
+      +(_isSelK?`<span class="edcorner" title="Edit this mapping">✎</span>`:'')
       +baseChip+`<span class="kcenter">${centerName}</span>`
       +(_p2b?`<span class="chip" title="Baseline: this key acts as mouse button ${_p2b} (${esc(btnLabel(_p2b))}) and follows that button's mappings on every layer">≡btn ${_p2b}</span>`
             :(custChip||gestChip))
@@ -2207,7 +2159,14 @@ function renderLayoutKbd(d,w){
           ?{type:'btn',id:_p2b,phys:null,p2usage:u,label:k.label||'',dev:d.id}
           :{type:'key',id:u,i:idx,p2:_isMouseDev,label:k.label||'',dev:d.id};
         if(swapPick)return doSwapPick(d.id,me);
+        if(e.target&&e.target.classList.contains('edcorner')){
+          sel=Object.assign({},me,{edit:true});render();return;}
         sel=me;render();};
+      el.ondblclick=e=>{if(swapPick)return;
+        const m2=_p2b
+          ?{type:'btn',id:_p2b,phys:null,p2usage:u,label:k.label||'',dev:d.id}
+          :{type:'key',id:u,i:idx,p2:_isMouseDev,label:k.label||'',dev:d.id};
+        sel=Object.assign({},m2,{edit:true});render();};
       if(!MODS[u]&&u!==0x2c){
         el.setAttribute('draggable','true');
         el.ondragstart=e=>dragStart(e,{type:'key',id:eff.canon});
@@ -4380,17 +4339,28 @@ function renderCaptureEditor(ed){
 function renderEditor(){
   const ed=$('editorbody');
   if(seqSel.length){return renderCaptureEditor(ed);}
-  if(!sel){$('editor').style.display='none';_edSnapKey=null;
+  // 20.7.4 BF1 #4: a plain click SELECTS -- which is what draws the chord
+  // lines showing what every other key does while this one is held. The
+  // editor panel used to open on that same click and cover the wireframe you
+  // were trying to read. It now waits for `sel.edit`, set by the ✎ on the
+  // selected element or by double-clicking it.
+  // Only KEY and BUTTON selections defer: those are the ones whose editor was
+  // covering the wireframe. Wheel, stepper, combo and mod-chord selections
+  // have no wireframe view to obscure and open immediately, as before.
+  if(!sel||((sel.type==='key'||sel.type==='btn')&&!sel.edit)){
+    $('editor').style.display='none';_edSnapKey=null;
   {const _drop=`<h2 style="font-size:1rem">Mapping editor</h2>
-  <p class="muted">Click any key or button on a wireframe to edit it. There are two kinds of edit:</p>
+  <p class="muted"><b>Click</b> a key or button to select it — dashed lines then show
+  what every other key does while it is held. <b>Double-click</b>, or press the
+  <b>✎</b> in its corner, to edit it here. There are two kinds of edit:</p>
   <p style="font-size:.85rem"><b>Baseline</b> — per-device. Defines what each physical key
   <i>is</i>. Set once when you add a keyboard (e.g. reshaping the Fintie to your
   standard layout). Chip: <b>≡X</b>.</p>
   <p style="font-size:.85rem"><b>Custom</b> — shared. Layers, chords, macros and combos on
   canonical keys — the same on every device (Caps+IJKL etc.). Chip: <b>Y</b> (bottom-right).</p>
   <p class="muted" style="font-size:.78rem">Gold keys start layers · dashed lines are chords (click one) ·
-  Shift-click keys = combo · Alt-click = typed sequence · ✎ Layout edits only the
-  wireframe drawing, never the mapping.</p>`;}return;}
+  Shift-click keys = combo · Alt-click = typed sequence · ✎ Layout (top right of a
+  wireframe) edits only the drawing, never the mapping.</p>`;}return;}
   positionEditor();
   $('editortitle').textContent=sel.type==='wheel'?'Wheel':sel.type==='stepper'?'E9 stepper':sel.type==='combo'?'Combo':sel.type==='modchord'?'Modifier shortcut':'Mapping editor';
   if(sel.type==='wheel'){return renderWheelEd(ed);}
