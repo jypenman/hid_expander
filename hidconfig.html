@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.8 BF1</title>
+<title>HID Config 20.8.1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -853,6 +853,9 @@ const CLOCK_CMD=0x60;
 function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   const b=new TextEncoder().encode(t);
   send([CLOCK_CMD,b.length,...b]);}
+// The engine build this page needs. Compared against engine_version in the
+// config the Pi returns.
+const UI_ENGINE_EXPECT='20.8.1';
 let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
@@ -912,7 +915,19 @@ function onReport(e){
         toast(`short read — ${missing} bytes missing. Reconnect and try again.`,true);return;}
       window._reReadTried=null;
       const obj=JSON.parse(new TextDecoder().decode(buf));
-      if(curFile===0){cfg=obj;normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
+      if(curFile===0){cfg=obj;
+        // 20.8.1: shout if the Pi is running an older engine than this page
+        // expects. Symptoms of deploy skew (a setting that will not stick, an
+        // expansion that types nothing) look exactly like logic bugs.
+        try{
+          const ev=obj.engine_version||null;
+          if(ev!==UI_ENGINE_EXPECT)
+            setTimeout(()=>toast(ev
+              ?`⚠ Pi engine is ${ev}, this UI expects ${UI_ENGINE_EXPECT} — `
+               +`re-deploy the .py files or settings may not take effect`
+              :`⚠ Pi engine predates version reporting — re-deploy the .py `
+               +`files; this UI expects ${UI_ENGINE_EXPECT}`,true),900);
+        }catch(e){}normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
         $('svcwarn').style.display='none';}
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===3){
@@ -5319,7 +5334,8 @@ function renderSetTable(){
         <option value="" ${!it.os?'selected':''}>all</option>
         ${_oses.map(o=>`<option value="${esc(o)}" ${[].concat(it.os||[])[0]===o?'selected':''}>${esc(o)} only</option>`).join('')}
       </select></td>`:''}
-      <td><button data-sdel="${i}">✕</button></td></tr>`;});
+      <td><button data-scopy="${i}" title="Duplicate this expansion so you can edit the copy">⧉</button>
+          <button data-sdel="${i}">✕</button></td></tr>`;});
   t.innerHTML=h;
   t.querySelectorAll('[data-si]').forEach(el=>el.onchange=()=>{
     const it=st.items[+el.dataset.si];if(!it)return;
@@ -5334,7 +5350,24 @@ function renderSetTable(){
     else it[f]=el.value;
     if(f==='trigger'&&it.regex){try{new RegExp(it.trigger)}catch(e){toast('regex error: '+e.message,true);}}});
   t.querySelectorAll('[data-sdel]').forEach(b=>b.onclick=()=>{
-    st.items.splice(+b.dataset.sdel,1);renderSets();});}
+    st.items.splice(+b.dataset.sdel,1);renderSets();});
+  // 20.8.1 #1.1: duplicate an expansion, with everything it carries — regex,
+  // case, keep, OS scope and Unicode method. Inserted directly BELOW the
+  // original rather than at the end, so the copy is where you were looking.
+  // The trigger gets a marker instead of being left identical: two items with
+  // the same trigger silently shadow each other in the engine (longest, then
+  // first, wins) and you would never see why the second never fired.
+  t.querySelectorAll('[data-scopy]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.scopy, src=st.items[i];
+    if(!src)return;
+    const c=JSON.parse(JSON.stringify(src));
+    let base=(c.trigger||'')+'-copy', t2=base, n=2;
+    const taken=new Set(st.items.map(x=>x.trigger));
+    while(taken.has(t2))t2=base+n++;
+    c.trigger=t2;
+    st.items.splice(i+1,0,c);
+    markSetsDirty();renderSets();
+    toast('copied — edit the trigger, then ⬆ Save sets');});}
 $('setadditem').onclick=()=>{
   if(!curSet)return;
   expSets[curSet].items.push({trigger:'',value:'',regex:false,case:'ignore',keep:false});
