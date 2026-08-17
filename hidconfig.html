@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.7.4 BF2</title>
+<title>HID Config 20.8</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -339,6 +339,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <input type="text" id="profname" placeholder="new profile name" style="width:170px">
   <button id="profsave" disabled>Save current as profile</button>
   <button id="profbackups" disabled title="every Save to device writes a timestamped backup on the Pi">🕘 Backups…</button>
+  <button id="bklocal" title="Download EVERYTHING currently loaded in this browser as one file, on this computer. Works with the device disconnected.">💾 Back up to this computer</button>
+  <label class="inl" title="Load a bundle saved with the button to its left. Nothing reaches the Pi until you press Save.">📂 Restore file<input type="file" id="bkrestore" accept=".json,application/json" style="display:none"></label>
   <span style="flex:1"></span>
   <label style="margin:0;display:inline">🕓 <select id="tzsel" style="width:auto"></select></label>
   <label style="margin:0;display:inline" title="How an expansion removes the trigger text. Shift+Left selects (safer outside text fields); Backspace deletes.">⌫ <select id="erasesel" style="width:auto"><option value="backspace">Backspace</option><option value="shift_left">Shift+Left select</option></select></label>
@@ -1141,6 +1143,16 @@ $('clipnew').onclick=()=>addClip();
 $('clipsave').onclick=()=>saveClips();
 $('clipreload').onclick=()=>{if(device)getFile(6);else toast('connect first',true);};
 $('profbackups').onclick=()=>showBackups();
+// 20.8 #1.4: local backup/restore. Bound unconditionally and NOT gated on a
+// connection -- the whole point is that it still works when the Pi does not.
+$('bklocal').onclick=()=>downloadBundle();
+$('bkrestore').onchange=e=>{
+  const f=e.target.files&&e.target.files[0];
+  if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{restoreBundle(String(r.result));e.target.value='';};
+  r.onerror=()=>{toast('could not read that file',true);e.target.value='';};
+  r.readAsText(f);};
 $('bkclose').onclick=()=>{$('bkpane').style.display='none';};
 $('profload').onclick=()=>{const n=$('proflist').value;
   if(n&&!n.startsWith('('))pfCmd('load '+n);};
@@ -3060,6 +3072,73 @@ let _bkList=null;
 // created implicitly at first assignment, so it is visible to the reply
 // handler above and survives a future move to strict mode.
 let _bkPendingRestore=null;
+/* ==== 20.8 #1.4: back up everything to THIS computer =====================
+   Deliberately ONE JSON file rather than a zip. A zip needs CRC32 and archive
+   framing written by hand (no bundler here), and the result is harder for you
+   to inspect or hand-edit when you actually need it -- which is precisely the
+   moment a backup matters. One readable file restores in one step and can be
+   diffed with ordinary tools.
+
+   This runs entirely in the browser and works with the device DISCONNECTED,
+   because a backup you can only take when everything is working is not much
+   of a backup. */
+const BK_VERSION=1;
+function collectBundle(){
+  return {
+    _bundle:'pi-hid-expander', _version:BK_VERSION,
+    _saved:new Date().toISOString(),
+    _ui:(document.title||''),
+    config:cfg||null,
+    expansions:exps||null,
+    expansion_sets:expSets||null,
+    layouts:layouts||null,
+    additions:additions||null,
+    clips:clips||null,
+    text_transform:(typeof TXstate!=='undefined')?TXstate:null,
+  };}
+function downloadBundle(){
+  const b=collectBundle();
+  // Name it after the moment, not "backup(3)" -- when you come looking, the
+  // only thing you know is roughly when it was.
+  const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const blob=new Blob([JSON.stringify(b,null,1)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`pi-hid-backup-${ts}.json`;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},0);
+  const n=Object.keys(b).filter(k=>k[0]!=='_'&&b[k]).length;
+  toast(`backed up ${n} sections to your Downloads folder`);}
+
+function restoreBundle(text){
+  let b;
+  try{b=JSON.parse(text);}catch(e){toast('not valid JSON: '+e.message,true);return;}
+  // Refuse anything that is not one of ours. Restoring a stray JSON file into
+  // the working config would leave the engine something it can parse and not
+  // use -- the same failure 20.7.3 BF1 fixed on the Pi side.
+  if(!b||b._bundle!=='pi-hid-expander'){
+    toast('that is not a Pi HID backup bundle — nothing changed',true);return;}
+  if(b._version>BK_VERSION&&!confirm(
+      `That bundle was written by a NEWER version of this UI (v${b._version} `
+      +`vs v${BK_VERSION}). Restoring it may drop sections this version does `
+      +`not understand. Continue?`))return;
+  const have=Object.keys(b).filter(k=>k[0]!=='_'&&b[k]);
+  if(!confirm(`Restore ${have.length} section(s) — ${have.join(', ')} — into `
+    +`this browser?\n\nSaved ${b._saved||'(unknown date)'}.\n\n`
+    +`Nothing is sent to the Pi until you press Save to device.`))return;
+  if(b.config){cfg=b.config;normalize();}
+  if(b.expansions)exps=b.expansions;
+  if(b.expansion_sets){expSets=b.expansion_sets;curSet=null;}
+  if(b.layouts)layouts=b.layouts;
+  if(b.additions)additions=b.additions;
+  if(b.clips)clips=b.clips;
+  if(b.text_transform&&typeof TXstate!=='undefined'){
+    TXstate=Object.assign(TXstate,b.text_transform);
+    // persist to this browser's storage too, or a reload undoes the restore
+    try{txSave();}catch(e){}}
+  render();
+  toast('restored into the browser — review it, then ⬆ Save to device');}
+
 window.showBackups=()=>{
   if(!device){toast('connect first',true);return;}
   $('bkpane').style.display='block';
