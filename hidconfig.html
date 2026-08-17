@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.8</title>
+<title>HID Config 20.8 BF1</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -1440,6 +1440,154 @@ function p2BtnIdent(dev,usage){
 // That is why "swap" here rewrites two Baseline entries and touches no
 // mappings at all.
 
+/* ==== 20.8 BF1: Swap moves BEHAVIOUR, not identity ========================
+   The previous swap re-pointed which physical input CLAIMED a logical button
+   id. Elegant, and it carried layers for free -- but it had two faults you
+   ran straight into:
+
+     * both inputs then read the SAME table row, so editing one edited what
+       the other pointed at. You wanted them independent afterwards.
+     * it cannot be symmetric across kinds. On the E9, "1" is a gesture-node
+       KEYBOARD key (evdev 2 -> usage 0x1e) while "7" is a real mouse button
+       (evdev 276 -> logical 5). A mouse button cannot become a keyboard key,
+       so one half of the trade always collapsed into "disabled".
+
+   So swap now COPIES the content between the two elements' own natural
+   slots. Each keeps its identity; the mappings, tap/hold, layer role and
+   group memberships change hands. Afterwards they are ordinary independent
+   elements. Actions that exist in both worlds (macro / key / suppress) cross
+   unchanged; the few that are button-only (dpi, click-a-button) are reported
+   rather than dropped silently. */
+
+// Where an element's behaviour actually LIVES.
+function slotOf(dev,el){
+  if(el.type==='btn')return{kind:'btn',dev:dev,id:el.id};
+  return{kind:'key',dev:dev,usage:el.id,canon:baselineOf(dev,el.id)};}
+
+function _grpKeysFor(slot,L){
+  return slot.kind==='btn'?[`mouse:${L},${slot.id}`,`mouse:*,${slot.id}`]
+                          :[`kbd:${L},${slot.canon}`,`kbd:*,${slot.canon}`];}
+
+// Read EVERYTHING attached to a slot, across every layer, then erase it.
+function harvestSlot(slot){
+  const b={map:{},p2:{},dev:{},layer:null,tapAct:null,groups:[]};
+  const Ls=allLayers();
+  for(const L of Ls){
+    if(slot.kind==='btn'){
+      const k=`${L},${slot.id}`;
+      if(k in (cfg.mouse_mappings||{})){b.map[L]=cfg.mouse_mappings[k];
+                                        delete cfg.mouse_mappings[k];}
+    }else{
+      const k=`${L},${slot.canon}`;
+      if(k in (cfg.kbd_mappings||{})){b.map[L]=cfg.kbd_mappings[k];
+                                      delete cfg.kbd_mappings[k];}
+      const pk=`${L},${slot.usage}`;
+      if(pk in (cfg.port2_kbd||{})){b.p2[L]=cfg.port2_kbd[pk];
+                                    delete cfg.port2_kbd[pk];}
+      const t=(cfg.kbd_mappings_by_device||{})[slot.dev];
+      if(t&&(k in t)){b.dev[L]=t[k];delete t[k];}
+    }
+    // group memberships, recorded per layer so a wildcard stays a wildcard
+    for(const[name,g]of Object.entries(cfg.mapping_groups||{})){
+      const mem=g.members||[];
+      for(const key of _grpKeysFor(slot,L)){
+        const i=mem.indexOf(key);
+        if(i>=0){b.groups.push({name:name,wild:key.includes(':*,'),L:L});
+                 mem.splice(i,1);}}}
+  }
+  // the layer role
+  if(slot.kind==='btn'){
+    const th=(cfg.tap_hold||{})[slot.id];
+    if(th){b.layer=th[1];b.tapAct=th[0];delete cfg.tap_hold[slot.id];}
+  }else{
+    const v=(cfg.layer_keys||{})[slot.canon];
+    if(v!=null){b.layer=+v;delete cfg.layer_keys[slot.canon];}
+  }
+  return b;}
+
+/* Translate one action between the button world and the key world.
+   Returns {v, note}. A note means it could not cross intact. */
+function _xAct(v,toKind){
+  if(v===undefined||v===null)return{v:undefined};
+  // key tables allow a BARE usage integer as shorthand for ["key",u]
+  let a=Array.isArray(v)?v:(v===0?['suppress']:['key',v]);
+  const k=a[0];
+  if(toKind==='key'){
+    if(k==='key')return{v:a[1]};                 // back to the bare shorthand
+    if(k==='macro'||k==='suppress')return{v:a};
+    return{v:undefined,note:`"${actShort(a)}" is button-only`};}
+  if(k==='key'||k==='macro'||k==='suppress')return{v:a};
+  return{v:a};}
+
+function writeSlot(slot,b,notes){
+  for(const[L,v]of Object.entries(b.map)){
+    const r=_xAct(v,slot.kind);
+    if(r.note){notes.push(`layer ${L}: ${r.note}`);continue;}
+    if(r.v===undefined)continue;
+    if(slot.kind==='btn')(cfg.mouse_mappings=cfg.mouse_mappings||{})[`${L},${slot.id}`]=r.v;
+    else (cfg.kbd_mappings=cfg.kbd_mappings||{})[`${L},${slot.canon}`]=r.v;}
+  if(slot.kind==='key'){
+    for(const[L,v]of Object.entries(b.p2))
+      (cfg.port2_kbd=cfg.port2_kbd||{})[`${L},${slot.usage}`]=v;
+    for(const[L,v]of Object.entries(b.dev)){
+      const t=(cfg.kbd_mappings_by_device=cfg.kbd_mappings_by_device||{});
+      (t[slot.dev]=t[slot.dev]||{})[`${L},${slot.canon}`]=v;}
+  }else{
+    // A gesture key's macro binding and its per-device overlay have no button
+    // equivalent TABLE, but a button can express the same actions -- so fold
+    // them into the button's layer mapping rather than losing them. Mouse
+    // mappings are already device-scoped by the wireframe they sit on, so
+    // collapsing the per-device overlay loses no meaning.
+    for(const[L,v]of Object.entries(b.p2))
+      (cfg.mouse_mappings=cfg.mouse_mappings||{})[`${L},${slot.id}`]=['macro',v];
+    for(const[L,v]of Object.entries(b.dev)){
+      const k=`${L},${slot.id}`;
+      const r=_xAct(v,'btn');
+      if(r.note){notes.push(`layer ${L} (device overlay): ${r.note}`);continue;}
+      if(r.v===undefined)continue;
+      // never overwrite the shared mapping we just wrote for this layer --
+      // say so instead, so nothing disappears without a word
+      if(k in (cfg.mouse_mappings||{}))
+        notes.push(`layer ${L}: device-specific "${actShort(r.v)}" dropped `
+                   +`(the shared mapping for that layer already moved across)`);
+      else (cfg.mouse_mappings=cfg.mouse_mappings||{})[k]=r.v;}
+  }
+  if(b.layer!=null){
+    if(slot.kind==='btn'){
+      // tap_hold needs a TAP action as well as the layer. Reuse the one that
+      // came with it; failing that, whatever this slot does on layer 0; and
+      // failing that, a plain click, so the button is never inert.
+      let tap=b.tapAct;
+      if(!tap){const r=_xAct(b.map[0],'btn');tap=(r.v&&Array.isArray(r.v))?r.v:['btn',slot.id];}
+      (cfg.tap_hold=cfg.tap_hold||{})[slot.id]=[tap,b.layer];
+    }else{
+      (cfg.layer_keys=cfg.layer_keys||{})[slot.canon]=b.layer;}}
+  for(const g of b.groups){
+    const grp=(cfg.mapping_groups||{})[g.name];
+    if(!grp)continue;
+    grp.members=grp.members||[];
+    const key=g.wild
+      ?(slot.kind==='btn'?`mouse:*,${slot.id}`:`kbd:*,${slot.canon}`)
+      :(slot.kind==='btn'?`mouse:${g.L},${slot.id}`:`kbd:${g.L},${slot.canon}`);
+    if(!grp.members.includes(key))grp.members.push(key);}}
+
+function swapBehaviour(devA,elA,devB,elB){
+  const A=slotOf(devA,elA), B=slotOf(devB,elB);
+  if(A.kind===B.kind&&((A.kind==='btn'&&A.id===B.id)
+                    ||(A.kind==='key'&&A.dev===B.dev&&A.canon===B.canon))){
+    toast('that is the same element — nothing to swap');return;}
+  // Harvest BOTH before writing EITHER. Writing first would let the second
+  // harvest pick up what we just put there and swap an element with itself.
+  const bagA=harvestSlot(A), bagB=harvestSlot(B);
+  const notes=[];
+  writeSlot(A,bagB,notes);
+  writeSlot(B,bagA,notes);
+  sel=null;render();
+  toast(notes.length
+    ?`swapped, with ${notes.length} action(s) that could not cross: `+notes.join('; ')
+    :'swapped — mappings, layers and groups traded. Both are independently editable. ⬆ Save to device',
+    notes.length>0);}
+
 // 20.7.4 BF1 #2.3: point-and-click swap. Arming this puts the wireframe in
 // "pick a partner" mode; the next element you click is swapped with the one
 // whose editor you armed it from. Cross-wireframe works, because identity is
@@ -1447,8 +1595,8 @@ function p2BtnIdent(dev,usage){
 let swapPick=null;      // {dev, ref, label} or null
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&swapPick){swapPick=null;toast('swap cancelled');render();}});
-function armSwapPick(dev,ref,label){
-  swapPick={dev:dev,ref:ref,label:label};
+function armSwapPick(dev,el){
+  swapPick={dev:dev,el:el};
   toast('now click the button or key you want to swap with (Esc to cancel)');
   render();}
 // Turn a clicked wireframe element into an identity ref, or null if it is
@@ -1467,22 +1615,10 @@ function currentIdent(dev,ref){
 // The swap itself: exchange the two inputs' logical identities. Every layer
 // mapping, tap/hold pair and group is keyed on that identity, so all of it
 // moves together -- there is no list of things to remember to bring along.
-function doSwapPick(devB,refB){
+function doSwapPick(devB,elB){
   const A=swapPick; swapPick=null;
-  if(!A)return;
-  const sameEl=A.dev===devB&&((A.ref.kind==='btn'&&refB.kind==='btn'&&A.ref.code===refB.code)
-                           ||(A.ref.kind==='p2'&&refB.kind==='p2'&&A.ref.usage===refB.usage));
-  if(sameEl){toast('that is the same input — nothing to swap');render();return;}
-  // Read BOTH identities before writing either. Writing first would make the
-  // second read see the value we just wrote and swap an input with itself.
-  const idA=currentIdent(A.dev,A.ref), idB=currentIdent(devB,refB);
-  // A mouse button cannot become a keyboard key, so when one side has no
-  // button identity to give back, the other is silenced rather than reset to
-  // its default -- which would leave two inputs firing the same button.
-  setIdent(A.dev,A.ref,(idB===null||idB===undefined)?0:idB);
-  setIdent(devB,refB,(idA===null||idA===undefined)?0:idA);
-  sel=null;render();
-  toast('swapped — all layers moved with the identity. ⬆ Save to device to apply');}
+  if(!A){render();return;}
+  swapBehaviour(A.dev,A.el,devB,elB);}
 
 // Which physical input on this device currently reports as logical button n?
 // The editor's identity block. `ref` is the physical input being edited.
@@ -1521,16 +1657,18 @@ function identityHTML(dev,ref,curLogical){
         <i>this</i> input's identity, so the two trade places.
         <span class="muted">Uncheck to take over one-way, leaving the other
         input sharing the same mappings.</span></span></label>
-    <button id="identpick" style="margin-top:.45rem">⇄ Swap with… (then click a button)</button>
-    <div class="muted" style="font-size:.72rem;margin-top:.2rem">Works across
-      wireframes too. Every layer, tap/hold and group moves with the identity.</div>
+    <button id="identpick" style="margin-top:.45rem">⇄ Swap behaviour with… (then click a key or button)</button>
+    <div class="muted" style="font-size:.72rem;margin-top:.2rem">Trades the
+      mappings, layer role and group memberships on <b>every layer</b>. Each
+      element keeps its own identity, so afterwards you can edit the two
+      independently. Works across wireframes and between keys and buttons.</div>
     <div id="identnote" class="muted" style="font-size:.74rem;margin-top:.35rem"></div>
     <div class="muted" style="font-size:.72rem;margin-top:.35rem">
       ⬆ Save to device to apply.</div></details>`;}
 
 function bindIdentity(dev,ref){
   const pick=$('identpick');
-  if(pick)pick.onclick=()=>armSwapPick(dev,ref,'');
+  if(pick)pick.onclick=()=>armSwapPick(dev,sel);
   const s=$('identsel');if(!s)return;
   const note=$('identnote');
   const describe=()=>{
@@ -1990,9 +2128,7 @@ function renderLayoutKbd(d,w){
       if(editing)bindEditKey(el,d,idx);
       else el.onclick=e=>{if(e.shiftKey||e.altKey)return;
         const me={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};
-        if(swapPick){const r=refOfClick(me);
-          if(r)return doSwapPick(d.id,r);
-          toast('that element cannot hold a button identity',true);return;}
+        if(swapPick)return doSwapPick(d.id,me);
         sel=me;render();};
       div.appendChild(el);return;}
     // ---- keyboard usage element (incl. E9 gesture digits) ----
@@ -2055,10 +2191,7 @@ function renderLayoutKbd(d,w){
         const me=_p2b
           ?{type:'btn',id:_p2b,phys:null,p2usage:u,label:k.label||'',dev:d.id}
           :{type:'key',id:u,i:idx,p2:_isMouseDev,label:k.label||'',dev:d.id};
-        if(swapPick){const r=refOfClick(me);
-          if(r)return doSwapPick(d.id,r);
-          toast('only mouse buttons and gesture-node keys can swap identity',true);
-          return;}
+        if(swapPick)return doSwapPick(d.id,me);
         sel=me;render();};
       if(!MODS[u]&&u!==0x2c){
         el.setAttribute('draggable','true');
@@ -3759,14 +3892,31 @@ function _actLabel(v){
   if(v===null)return'passthrough';
   if(typeof v==='number')return v===0?'suppressed':(KEYS[v]||MODS[v]||('0x'+v.toString(16)));
   return actShort(v)||JSON.stringify(v);}
+// Identity rows in a device Baseline read as buttons, not as key usages.
+function _baseKeyLabel(k){
+  const s=String(k);
+  if(s.startsWith('p2btn:')){
+    const u=parseInt(s.slice(6),16);
+    return `gesture key ${KEYS[u]||('0x'+u.toString(16))}`;}
+  if(s.startsWith('btn:')){
+    const c=+s.slice(4);
+    return `${EVDEV_BTN_NAME[c]||('button code '+c)}`;}
+  return KEYS[+k]||MODS[+k]||('0x'+(+k).toString(16));}
+function _baseValLabel(v,k){
+  const s=String(k);
+  if(s.startsWith('btn:')||s.startsWith('p2btn:'))
+    return v?`Button ${v} — ${btnLabel(v)}`:'∅ disabled';
+  return _actLabel(v);}
+// fmtVal receives the KEY as a second argument so a formatter can decide what
+// kind of value it is looking at. Formatters that ignore it are unaffected.
 function _diffMap(out,label,before,after,fmtKey,fmtVal){
   before=before||{};after=after||{};
   for(const k of Object.keys(after))
-    if(!(k in before))out.push(`+ ${label}: ${fmtKey(k)} → ${fmtVal(after[k])}`);
+    if(!(k in before))out.push(`+ ${label}: ${fmtKey(k)} → ${fmtVal(after[k],k)}`);
     else if(JSON.stringify(before[k])!==JSON.stringify(after[k]))
-      out.push(`~ ${label}: ${fmtKey(k)} — ${fmtVal(before[k])} → ${fmtVal(after[k])}`);
+      out.push(`~ ${label}: ${fmtKey(k)} — ${fmtVal(before[k],k)} → ${fmtVal(after[k],k)}`);
   for(const k of Object.keys(before))
-    if(!(k in after))out.push(`− ${label}: ${fmtKey(k)} (was ${fmtVal(before[k])})`);}
+    if(!(k in after))out.push(`− ${label}: ${fmtKey(k)} (was ${fmtVal(before[k],k)})`);}
 function diffConfig(a,b){
   const out=[],id=x=>x;
   _diffMap(out,'Key mapping',a.kbd_mappings,b.kbd_mappings,_keyLabel,_actLabel);
@@ -3777,7 +3927,12 @@ function diffConfig(a,b){
   const ab=a.baseline||{},bb=b.baseline||{};
   for(const dev of new Set([...Object.keys(ab),...Object.keys(bb)]))
     _diffMap(out,`Baseline (${devName(dev)})`,ab[dev],bb[dev],
-      u=>KEYS[+u]||MODS[+u]||('0x'+(+u).toString(16)),_actLabel);
+      // 20.8 BF1 #1.3: baseline keys are NOT all usage integers. Since
+      // 20.7.3 BF2 they can be "btn:<evdev>" or "p2btn:0x<usage>" identity
+      // entries, and `+u` on those is NaN -- which is where "0xNaN" came
+      // from. The VALUE is equally not a key usage for those rows: it is a
+      // logical button number, so rendering 5 as the key "B" was doubly wrong.
+      _baseKeyLabel,(v,k)=>_baseValLabel(v,k));
   // combos
   const ac=a.combos||{},bc=b.combos||{};
   const comboTxt=c=>`${(c.keys||[]).map(u=>KEYS[u]||MODS[u]||'?').join('+')} → ${_actLabel(c.action)}${c.os?' ['+[].concat(c.os).join('/')+' only]':''}${c.dev?' ('+devName(c.dev)+')':''}`;
