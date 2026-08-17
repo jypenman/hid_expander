@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.7.3 BF2</title>
+<title>HID Config 20.7.4 BF2</title>
 <style>
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
 --hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
@@ -679,14 +679,24 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <p class="muted">These are built into the engine (not stored in
     expansions.json) -- edit the trigger text below, then use the normal
     <b>⬆ Save to device</b> button at the top to apply.</p>
-    <div class="row">
-      <div><label>Today's date</label><input type="text" id="trigDate">
-        <label class="inl" title="type a space after the date, so you can keep typing without reaching for the spacebar"><input type="checkbox" id="spDate"> trailing space</label></div>
-      <div><label>Current time</label><input type="text" id="trigTime">
-        <label class="inl" title="type a space after the time"><input type="checkbox" id="spTime"> trailing space</label></div>
-      <div><label>Date + time</label><input type="text" id="trigDatetime">
-        <label class="inl" title="type a space after the date and time"><input type="checkbox" id="spDatetime"> trailing space</label></div>
-    </div>
+    <table style="width:100%" id="dyntable"></table>
+    <button id="dynadd" style="margin-top:.35rem">＋ Add date/time trigger</button>
+    <details style="margin-top:.4rem">
+      <summary class="muted" style="cursor:pointer;font-size:.78rem">Format tokens</summary>
+      <p class="muted" style="font-size:.74rem">Standard <code>strftime</code>.
+      The <b>Produces</b> column shows what your format gives right now, so you
+      never have to guess.</p>
+      <table class="muted" style="font-size:.74rem">
+        <tr><td><code>%Y</code> 2026</td><td><code>%m</code> 08</td><td><code>%d</code> 14</td><td><code>%B</code> August</td><td><code>%b</code> Aug</td></tr>
+        <tr><td><code>%H</code> 13 (24h)</td><td><code>%I</code> 01 (12h)</td><td><code>%M</code> 37</td><td><code>%S</code> 06</td><td><code>%p</code> PM</td></tr>
+        <tr><td><code>%A</code> Friday</td><td><code>%a</code> Fri</td><td><code>%j</code> day of year</td><td><code>%%</code> a literal %</td><td></td></tr>
+      </table>
+      <p class="muted" style="font-size:.74rem"><b>Trailing space</b> adds one
+      space <i>after the expanded text</i> — so <code>\tm</code> gives
+      <code>13:37:06&nbsp;</code> and you can keep typing. It is a checkbox
+      rather than something you type into the format because a trailing space
+      in a text field is invisible and one stray backspace from being lost.</p>
+    </details>
   </div>
   <div class="panel">
   <div class="bar"><button id="expread" disabled>⬇ Read expansions</button>
@@ -4634,32 +4644,133 @@ function collectDevs(){
     if(/^new-device-/.test(d.id)&&(d.pin||d.name))d.id=slug(d.name||d.pin);});
   renderStage();updateConStat();
   toast('device list changed — ⬆ Save to device; engine restart picks up new devices');}
+/* ==== 20.7.4 #1: per-expansion Unicode typing method ======================
+   One catalogue, used by the OS tab and by the per-expansion picker, so the
+   two can never drift apart. The blurb is folded into the OPTION LABEL rather
+   than hidden in a tooltip: choosing between six mechanisms you cannot see is
+   the whole difficulty, and a name like "win_alt_x" tells you nothing about
+   where it works. ⚙ marks the ones needing the EnableHexNumpad registry edit.
+   Fuller detail stays in "Which method should I pick?" below the table. */
+const UNI_METHODS=[
+  {id:'',                 label:'Use global setting',
+   blurb:'whatever the current OS profile says'},
+  {id:'win_auto',         label:'Windows · automatic',
+   blurb:'picks per character; the safe default on Windows'},
+  {id:'win_alt_dec',      label:'Windows · Alt + decimal (numpad)',
+   blurb:'works almost everywhere; Latin-1 range only'},
+  {id:'win_alt_hex',      label:'Windows · Alt + hex ⚙',
+   blurb:'full Unicode, but needs the EnableHexNumpad registry edit — without it, letters a–f become menu shortcuts'},
+  {id:'win_alt_x',        label:'Windows · type code then Alt+X',
+   blurb:'Word, WordPad and Outlook only; ignored in browsers'},
+  {id:'mac_option_hex',   label:'macOS · Option + hex',
+   blurb:'needs the "Unicode Hex Input" source enabled AND active'},
+  {id:'linux_ctrl_shift_u',label:'Linux · Ctrl+Shift+U',
+   blurb:'GTK apps; not Qt, not most terminals'},
+  {id:'none',             label:'Don’t type non-ASCII',
+   blurb:'skips the character rather than guessing'},
+];
+function uniSelectHTML(attrs,cur,hasNonAscii){
+  // A select that is empty for the vast majority of (ASCII) expansions should
+  // not shout. It dims itself until the value actually contains something a
+  // Unicode method would touch.
+  return `<select ${attrs} style="max-width:11rem${
+      (!cur&&!hasNonAscii)?';opacity:.45':''}"
+    title="How non-ASCII characters in this expansion are typed">`
+    +UNI_METHODS.map(m=>`<option value="${m.id}" ${m.id===cur?'selected':''}
+       title="${esc(m.blurb)}">${esc(m.label)}${m.id?' — '+esc(m.blurb):''}</option>`).join('')
+    +`</select>`;}
+
+/* ==== 20.7.4 BF2: editable date/time triggers ============================
+   These were three fixed rows wired to three hard-coded strftime formats in
+   the engine. You could rename the triggers and nothing else. Now each row
+   owns its own format, so "\hm" -> "%H:%M" is just another row.
+   The legacy {trigger: "date"} form still loads; it is upgraded on read. */
+const DYN_KIND_FMT={date:'%Y-%m-%d',time:'%H:%M:%S',datetime:'%Y-%m-%d %H:%M:%S'};
+const DYN_KIND_NAME={date:"Today's date",time:'Time',datetime:'Date + time'};
+function normDynTriggers(){
+  const out={};
+  for(const[t,v]of Object.entries(cfg.dynamic_triggers||{})){
+    if(v&&typeof v==='object'){
+      out[t]={fmt:v.fmt||DYN_KIND_FMT.date,space:!!v.space,name:v.name||t};
+    }else{
+      const k=String(v);
+      out[t]={fmt:DYN_KIND_FMT[k]||DYN_KIND_FMT.date,
+              // the legacy companion table, read once and then retired
+              space:!!((cfg.dynamic_space||{})[k]),
+              name:DYN_KIND_NAME[k]||k};}}
+  cfg.dynamic_triggers=out;
+  delete cfg.dynamic_space;}
+
+// Render a strftime format in the browser so the row can show its own output.
+// Only the tokens the help lists are supported; anything else is left alone
+// rather than silently blanked, so a typo looks like a typo.
+function strftimePreview(fmt){
+  const d=new Date(),p2=n=>String(n).padStart(2,'0');
+  const MON=['January','February','March','April','May','June','July',
+             'August','September','October','November','December'];
+  const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const h=d.getHours(),h12=(h%12)||12;
+  const start=new Date(d.getFullYear(),0,0);
+  const map={Y:d.getFullYear(),y:p2(d.getFullYear()%100),m:p2(d.getMonth()+1),
+    d:p2(d.getDate()),e:String(d.getDate()),H:p2(h),I:p2(h12),
+    M:p2(d.getMinutes()),S:p2(d.getSeconds()),p:h<12?'AM':'PM',
+    B:MON[d.getMonth()],b:MON[d.getMonth()].slice(0,3),
+    A:DAY[d.getDay()],a:DAY[d.getDay()].slice(0,3),
+    j:String(Math.floor((d-start)/86400000)).padStart(3,'0'),'%':'%'};
+  return String(fmt||'').replace(/%(.)/g,(m,c)=>c in map?map[c]:m);}
+
+function renderDynTable(){
+  const t=$('dyntable');if(!t)return;
+  t.innerHTML='<tr><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
+    +'<td><b>Produces</b></td><td><b>Trailing space</b></td><td></td></tr>';
+  for(const[trig,spec]of Object.entries(cfg.dynamic_triggers)){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><input type="text" class="dname" value="${esc(spec.name)}" style="width:9rem"></td>
+      <td><input type="text" class="dtrig" value="${esc(trig)}" style="width:6rem"></td>
+      <td><input type="text" class="dfmt" value="${esc(spec.fmt)}" style="width:11rem"></td>
+      <td class="dprev muted" style="font-family:monospace"></td>
+      <td style="text-align:center"><input type="checkbox" class="dspace" ${spec.space?'checked':''}></td>
+      <td><a class="mlink dkill" title="remove">✕</a></td>`;
+    t.appendChild(tr);}
+  const preview=()=>[...t.querySelectorAll('tr')].slice(1).forEach(tr=>{
+    const f=tr.querySelector('.dfmt'),c=tr.querySelector('.dprev');
+    if(f&&c)c.textContent=strftimePreview(f.value)
+      +(tr.querySelector('.dspace').checked?'␣':'');});
+  const rebind=()=>{
+    // Trailing spaces in the TRIGGER are kept verbatim — a trigger like "dt "
+    // only fires after the space, and stripping it is why "dt " once reverted
+    // to "\dt". Longest trigger wins in the engine, so "tdt " beats "dt ".
+    const nt={};
+    for(const tr of [...t.querySelectorAll('tr')].slice(1)){
+      const k=tr.querySelector('.dtrig').value;
+      if(!k)continue;
+      nt[k]={fmt:tr.querySelector('.dfmt').value||'%Y-%m-%d',
+             space:tr.querySelector('.dspace').checked,
+             name:tr.querySelector('.dname').value||k};}
+    cfg.dynamic_triggers=nt;preview();
+    toast('date/time triggers changed — press ⬆ Save to device (top) to apply');};
+  t.oninput=rebind;t.onchange=rebind;
+  t.querySelectorAll('.dkill').forEach(a=>a.onclick=e=>{
+    e.target.closest('tr').remove();rebind();renderDynTable();});
+  preview();
+  const add=$('dynadd');
+  if(add)add.onclick=()=>{
+    let n=1;while(cfg.dynamic_triggers['\\new'+n])n++;
+    cfg.dynamic_triggers['\\new'+n]={fmt:'%H:%M',space:false,name:'New trigger'};
+    renderDynTable();
+    toast('added — set its trigger and format, then ⬆ Save to device');};}
+
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
   if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};
-  // 20.3: trailing space is keyed by KIND, not by trigger text, so renaming a
-  // trigger keeps the setting instead of silently resetting it.
-  if(!cfg.dynamic_space)cfg.dynamic_space={};
-  const byKind=k=>Object.keys(cfg.dynamic_triggers).find(t=>cfg.dynamic_triggers[t]===k)||'';
-  $('trigDate').value=byKind('date');
-  $('trigTime').value=byKind('time');
-  $('trigDatetime').value=byKind('datetime');
-  $('spDate').checked=!!cfg.dynamic_space.date;
-  $('spTime').checked=!!cfg.dynamic_space.time;
-  $('spDatetime').checked=!!cfg.dynamic_space.datetime;
-  const rebind=()=>{
-    // NOTE: keep trailing spaces verbatim — a trigger like "dt " only fires
-    // after the space, and stripping it (old bug) is why "dt " reverted to
-    // "\dt".  Longest trigger wins in the engine, so "tdt " beats "dt ".
-    const nt={};
-    const dv=$('trigDate').value, tv=$('trigTime').value, dtv=$('trigDatetime').value;
-    if(dv)nt[dv]='date'; if(tv)nt[tv]='time'; if(dtv)nt[dtv]='datetime';
-    cfg.dynamic_triggers=nt;
-    cfg.dynamic_space={date:$('spDate').checked,time:$('spTime').checked,
-                       datetime:$('spDatetime').checked};
-    toast('date/time triggers changed — press ⬆ Save to device (top) to apply');};
-  ['trigDate','trigTime','trigDatetime'].forEach(id=>{$(id).oninput=rebind;$(id).onchange=rebind;});
-  ['spDate','spTime','spDatetime'].forEach(id=>{$(id).onchange=rebind;});
+  // (cfg.dynamic_space is the retired 20.3 companion table; normDynTriggers
+  // folds it into each trigger's own `space` and deletes it.)
+  // 20.7.4 BF2: normalise to the dict form on the way in, so the rest of the
+  // UI has one shape to deal with. Old configs stored {trigger: kind} with
+  // three fixed kinds and the format hidden in the engine — which is why
+  // there was no way to add HH:MM or change what any of them produced.
+  normDynTriggers();
+  renderDynTable();
   const t=$('exptable');
   t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
   for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
@@ -4840,6 +4951,7 @@ function renderSetTable(){
   let h=`<tr><td><b>On</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td>
     <td><b>Regex</b></td><td><b>Case</b></td>
     <td><b title="Keep the trigger on screen and add the value after it, instead of replacing it">Keep</b></td>
+    <td><b title="How non-ASCII characters in this expansion are typed. Blank = use the OS-wide setting.">Unicode</b></td>
     ${_oses.length>1?'<td><b>OS</b></td>':''}<td></td></tr>`;
   (st.items||[]).forEach((it,i)=>{
     h+=`<tr${it.off?' class="addoff"':''}>
@@ -4852,6 +4964,8 @@ function renderSetTable(){
         <option value="match" ${it.case==='match'?'selected':''}>match</option></select></td>
       <td><input type="checkbox" data-si="${i}" data-f="keep" ${it.keep?'checked':''}
           title="Don't replace the trigger: leave what you typed and append the value"></td>
+      <td>${uniSelectHTML('data-si="'+i+'" data-f="uni"',it.uni||'',
+             /[^\x00-\x7f]/.test(String(it.value||'')))}</td>
       ${_oses.length>1?`<td><select data-si="${i}" data-f="os" title="which OS this expansion applies on">
         <option value="" ${!it.os?'selected':''}>all</option>
         ${_oses.map(o=>`<option value="${esc(o)}" ${[].concat(it.os||[])[0]===o?'selected':''}>${esc(o)} only</option>`).join('')}
@@ -4865,6 +4979,7 @@ function renderSetTable(){
     if(f==='off'){it.off=!el.checked;renderSets();return;}
     if(f==='regex')it.regex=el.checked;
     else if(f==='keep')it.keep=el.checked;
+    else if(f==='uni'){if(el.value)it.uni=el.value;else delete it.uni;}
     else if(f==='value')it.value=el.value.replace(/\\n/g,'\n');
     else if(f==='os'){if(el.value)it.os=[el.value];else delete it.os;}   // 19.2R #3
     else it[f]=el.value;
@@ -4988,14 +5103,37 @@ function renderOsTab(){
       const inv=((cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].scroll_invert)||{})[d.id];
       return `<td><label style="display:inline"><input type="checkbox" ${inv?'checked':''}
         onchange="osScrollSet('${esc(o)}','${d.id}',this.checked)"> invert</label></td>`;}).join('')+'</tr>';}
+  // 20.7.4 #3: horizontal scroll acceleration. Not per-OS and not per-device
+  // — it is a property of the engine's wheel pipeline, so it sits under the
+  // table rather than pretending to be another column.
+  sh+=`<tr><td colspan="${oses.length+1}" style="padding-top:.5rem;border-top:1px solid var(--line)">
+    <label style="display:flex;gap:.4rem;align-items:flex-start">
+      <input type="checkbox" id="panaccel" ${(cfg.scroll&&cfg.scroll.pan_accel)?'checked':''}
+        style="margin-top:.2rem">
+      <span>Accelerate horizontal scroll the same as vertical
+        <div class="muted" style="font-size:.74rem">Right button + wheel emitted
+        raw detents while vertical scroll went through the acceleration curve,
+        which is why one axis flew and the other crawled. This puts both on the
+        same curve. Each axis keeps its own speed accumulator, so a fast
+        vertical flick does not fling the next horizontal nudge.</div></span>
+    </label></td></tr>`;
   $('osscroll').innerHTML=sh;
+  if($('panaccel'))$('panaccel').onchange=e=>{
+    cfg.scroll=cfg.scroll||{};
+    if(e.target.checked)cfg.scroll.pan_accel=true;else delete cfg.scroll.pan_accel;
+    if(!Object.keys(cfg.scroll).length)delete cfg.scroll;
+    toast('horizontal scroll acceleration '+(e.target.checked?'on':'off')
+          +' — ⬆ Save to device to apply');};
   // unicode method
-  const methods=['','none','win_auto','mac_option_hex','win_alt_hex','win_alt_x','win_alt_dec','linux_ctrl_shift_u'];
+  // 20.7.4 #1: same catalogue as the per-expansion picker, so a method can
+  // never appear in one list and not the other.
   let uh=`<tr><td><b>OS</b></td><td><b>Unicode method</b></td></tr>`;
   for(const o of oses){
     const cur=(cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].unicode_method)||'';
     uh+=`<tr><td>${esc(o)}</td><td><select onchange="osUniSet('${esc(o)}',this.value)">`
-      +methods.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m||'(default for '+esc(o)+')'}</option>`).join('')
+      +UNI_METHODS.map(m=>`<option value="${m.id}" ${m.id===cur?'selected':''}
+         title="${esc(m.blurb)}">${m.id?esc(m.label)+' — '+esc(m.blurb)
+                                     :'(default for '+esc(o)+')'}</option>`).join('')
       +`</select></td></tr>`;}
   $('osuni').innerHTML=uh;
   // macro differences grid: base (win macros) vs each OS override
