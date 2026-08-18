@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9.3</title>
+<title>HID Config 20.9.4</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9.3';
+const UI_ENGINE_EXPECT='20.9.3';   // engine .py unchanged since 20.9.3
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1481,6 +1481,17 @@ function btnIdent(dev,defBtn){const c=btnPhysCode(defBtn);
 // Same question on the other code path: an E9 thumb digit arrives as a
 // KEYBOARD usage on the gesture node, and Baseline can give it a button
 // identity — which is how it inherits a button's layers wholesale.
+// 20.9.4: a physical BUTTON that Baseline has turned into a KEY.
+// Without this the wireframe kept drawing it as its DEFAULT logical button,
+// so clicking it opened that button's editor -- the very button another
+// element had just been given. Editing one then edited the other, which is
+// exactly the symptom: giving "8" a key identity is not enough if the UI goes
+// on treating "8" as button 4.
+function btnKeyIdent(dev,defBtn){
+  const c=BTN_EVDEV[defBtn];
+  if(!c)return null;
+  const v=(cfg.baseline[dev]||{})['btnkey:'+c];
+  return (v===undefined||v===null||v===0)?null:v;}
 function p2BtnIdent(dev,usage){
   const v=(cfg.baseline[dev]||{})['p2btn:0x'+usage.toString(16)];
   return (v===undefined||v===null||v===0)?null:v;}
@@ -2181,7 +2192,36 @@ function renderLayoutKbd(d,w){
       // k.btn is the PHYSICAL element; b is what it reports as after
       // Baseline, and mappings are keyed on b. Before 20.7.3 BF2 these were
       // conflated, so there was no way to say "read button 7 as button 2".
-      const bPhys=k.btn,b=btnIdent(d.id,bPhys),eff=effMouse(d.id,layer,b);
+      const bPhys=k.btn;
+      const bAsKey=btnKeyIdent(d.id,bPhys);
+      if(bAsKey){
+        // It is a KEY now, so it must look like one, select like one and be
+        // edited like one -- on the canonical usage, NOT on a button id it no
+        // longer has.
+        const ek=effKey(d.id,layer,bAsKey);
+        const me={type:'key',id:bAsKey,i:idx,dev:d.id,
+                  phys:bPhys,btnCode:BTN_EVDEV[bPhys],label:k.label||''};
+        el.className='key mapped'
+          +((sel&&sel.type==='key'&&sel.id===bAsKey&&(sel.dev||'')===d.id)?' sel':'')
+          +(editing&&editSel===idx?' editsel':'');
+        el.dataset.dev=d.id;el.dataset.usage=bAsKey;
+        el.innerHTML=((sel&&sel.type==='key'&&sel.id===bAsKey&&(sel.dev||'')===d.id)
+            ?`<span class="edcorner" title="Edit this mapping">✎</span>`:'')
+          +`<span class="kcenter">${esc(KEYS[bAsKey]||MODS[bAsKey]||'?')}</span>`
+          +`<span class="chip" title="Baseline: this button IS this key">≡key</span>`
+          +(ek.v!==undefined?`<span class="chip">${esc(actShort(ek.v))}</span>`:'')
+          +elLayerBadge('key',ek.canon);
+        if(editing)bindEditKey(el,d,idx);
+        else{
+          el.onclick=e=>{
+            if(e.shiftKey||e.altKey)return;
+            if(swapPick)return doSwapPick(d.id,me);
+            if(e.target&&e.target.classList.contains('edcorner')){
+              sel=Object.assign({},me,{edit:true});render();return;}
+            sel=me;render();};
+          el.ondblclick=()=>{if(!swapPick){sel=Object.assign({},me,{edit:true});render();}};}
+        div.appendChild(el);return;}
+      const b=btnIdent(d.id,bPhys),eff=effMouse(d.id,layer,b);
       const src=Object.values(srcs).some(s2=>s2.type==='btn'&&s2.id===b);
       const gcol=ghl[`mouse:${layer},${b}`]||ghl[`mouse:*,${b}`];
       el.className='key'+(eff!==undefined?' mapped':'')+(src?' layerkey':'')+(gcol?' grouphl':'')
@@ -4542,7 +4582,7 @@ function renderEditor(){
   const btnTitle=!isBtn?''
     :esc(btnLabel(sel.id))+' <span class="muted">· Button '+sel.id
       +(_tParts.length?' · '+_tParts.join(' · '):'')+'</span>';
-  if(isBtn&&scope==='baseline'){
+  if((isBtn||sel.btnCode!=null)&&scope==='baseline'){
     const isKeyBorn=(sel.p2usage!=null);
     const bkey=isKeyBorn?('p2btn:0x'+sel.p2usage.toString(16))
                         :('btn:'+btnPhysCode(sel.phys));
@@ -4570,7 +4610,11 @@ function renderEditor(){
       for(const[u,n]of Object.entries(MODS))
         o+=`<option value="k${u}" ${curK===+u?'selected':''}>${esc(n)} (modifier)</option>`;
       o+=`</optgroup>`;}
-    ed.innerHTML=`<h2 style="font-size:1rem">${btnTitle} — Baseline · ${esc(devName(selDev))}</h2>
+    const _hdr=btnTitle||(esc(KEYS[sel.id]||MODS[sel.id]||'?')
+      +' <span class="muted">· from '
+      +esc(EVDEV_BTN_NAME[btnPhysCode(sel.phys)]||'a button')
+      +(sel.label?' · marked “'+esc(sel.label)+'”':'')+'</span>');
+    ed.innerHTML=`<h2 style="font-size:1rem">${_hdr} — Baseline · ${esc(devName(selDev))}</h2>
       ${scopeSel}
       <p class="muted" style="font-size:.76rem">Identity of ${what}.
       ${isKeyBorn?'Clear it to make this a normal key again.'
