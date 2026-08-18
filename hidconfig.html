@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9.4</title>
+<title>HID Config 20.9.5</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9.3';   // engine .py unchanged since 20.9.3
+const UI_ENGINE_EXPECT='20.9.5';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -4633,6 +4633,31 @@ function renderEditor(){
       else if(v.charAt(0)==='k'){
         delete cfg.baseline[selDev][bkey];
         cfg.baseline[selDev][kkey]=+v.slice(1);
+        // 20.9.5: THE ORPHAN PROBLEM. This button is no longer a button, but
+        // the Custom mappings made for it are keyed on the LOGICAL BUTTON and
+        // stay behind. Whatever input inherits that logical button next then
+        // silently picks them up -- which is how pressing the "2" keycap
+        // emitted a Right arrow configured for "8" long before.
+        //
+        // Shadow them on THIS device with the explicit "nothing here"
+        // sentinel. Device-scoped, so other mice keep the shared mapping;
+        // reversible, because nothing is deleted.
+        const orphan=(sel.phys!=null)?sel.phys:null;
+        if(orphan!=null){
+          const md=(cfg.mouse_mappings_by_device=cfg.mouse_mappings_by_device||{});
+          const t=(md[selDev]=md[selDev]||{});
+          let n=0;
+          for(const L of allLayers())
+            if((`${L},${orphan}` in (cfg.mouse_mappings||{}))
+               &&t[`${L},${orphan}`]!==null){t[`${L},${orphan}`]=null;n++;}
+          const th=(cfg.tap_hold_by_device=cfg.tap_hold_by_device||{});
+          const tt=(th[selDev]=th[selDev]||{});
+          if((cfg.tap_hold||{})[orphan]!==undefined&&tt[orphan]!==null){
+            tt[orphan]=null;n++;}
+          if(n)toast(`${n} mapping(s) that belonged to this button as `
+            +`Button ${orphan} were shadowed on this device, so they cannot `
+            +`follow whatever becomes Button ${orphan} next`);
+        }
       }else cfg.baseline[selDev][bkey]=+v;
       if(!Object.keys(cfg.baseline[selDev]).length)delete cfg.baseline[selDev];
       sel=null;render();
