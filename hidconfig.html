@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.8.2 BF4</title>
+<title>HID Config 20.9</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.8.2 BF4';
+const UI_ENGINE_EXPECT='20.9';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -3964,7 +3964,14 @@ function scopeOf(kind,key){
    On every "Save to device" we diff the config against the snapshot taken at
    the last save/load and append plain-English lines to cfg._changelog, which
    travels with the profile (so the history lives on the Pi, not just here). */
-const CHANGELOG_MAX=60;      // keep the profile small enough to transfer reliably
+const CHANGELOG_MAX=60;      // hard ceiling on entry COUNT
+// 20.9 #1: cap the history by BYTES, not entries — bytes are the thing that
+// is actually scarce. The config channel runs at roughly 9 KB/s, and a
+// 60-entry history had grown to 5.8 KB: 15% of the whole profile and about
+// 0.6 s of every read, spent on UI bookkeeping the engine never looks at.
+// That is a direct contributor to short reads. 1.5 KB still holds plenty of
+// history to answer "what did I change?" without taxing every transfer.
+const CHANGELOG_BYTES=1500;
 const CHANGELOG_LINES=40;   // per-entry cap
 let _cfgSnap=null;
 function snapCfg(){try{_cfgSnap=JSON.stringify(cfgForDiff());}catch(_){_cfgSnap=null;}}
@@ -4082,7 +4089,13 @@ function recordChanges(){
     cfg._changelog.push({ts:new Date().toISOString(),
       profile:cfg._profile_name||'working config',changes:trimmed});
     if(cfg._changelog.length>CHANGELOG_MAX)
-      cfg._changelog=cfg._changelog.slice(-CHANGELOG_MAX);}
+      cfg._changelog=cfg._changelog.slice(-CHANGELOG_MAX);
+    // Then drop oldest entries until the history fits its byte budget. Always
+    // keep at least one: a history that trims itself to nothing because a
+    // single save was enormous is worse than one slightly over budget.
+    while(cfg._changelog.length>1
+          &&JSON.stringify(cfg._changelog).length>CHANGELOG_BYTES)
+      cfg._changelog.shift();}
   snapCfg();
   if($('page-log')&&$('page-log').style.display!=='none')renderChangelog();
   return lines.length;}
