@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9.5</title>
+<title>HID Config 20.9.6</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9.5';
+const UI_ENGINE_EXPECT='20.9.5';   // engine .py unchanged since 20.9.5
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1378,6 +1378,7 @@ function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wh
 'kbd_mappings_by_device','os_profiles','layer_keys'])if(!cfg[k])cfg[k]={};
 migrateDevices();migrateByDevice();repairGroupMembers();
 materialiseLayerDefaults();
+repairOrphanShadows();
 // 20.7.4 BF2: seed an "ios" profile from "mac". iPhone wants Cmd where Cmd
 // belongs -- exactly like macOS -- but the app switcher and other phone-only
 // behaviour need somewhere to live that is not your Mac's settings.
@@ -1847,6 +1848,30 @@ function _thLookup(id,dev){
     if(id in t)return t[id]||null;      // present-but-null = explicitly none
   }
   return null;}
+// 20.9.6 repair: 20.9.5 wrote "explicitly nothing here" nulls for a logical
+// button even when another input on the same device had just been given that
+// button. Those nulls shadow mappings that are not orphans, which is how a
+// freshly-set Hold->Layer vanished. Drop any null whose button IS claimed.
+function repairOrphanShadows(){
+  if(!cfg)return;
+  let fixed=0;
+  for(const dev of Object.keys(cfg.baseline||{})){
+    const bl=cfg.baseline[dev]||{};
+    const claimed=new Set();
+    for(const k of Object.keys(bl))
+      if(k.startsWith('p2btn:')||k.startsWith('btn:'))
+        if(bl[k])claimed.add(+bl[k]);
+    const strip=(tbl,keyOf)=>{
+      const t=tbl&&tbl[dev];if(!t)return;
+      for(const k of Object.keys(t))
+        if(t[k]===null&&claimed.has(keyOf(k))){delete t[k];fixed++;}};
+    strip(cfg.tap_hold_by_device,k=>+k);
+    strip(cfg.mouse_mappings_by_device,k=>+String(k).split(',')[1]);
+  }
+  if(fixed)setTimeout(()=>toast(
+    `repaired ${fixed} mapping shadow(s) left by 20.9.5 — press ⬆ Save to `
+    +`device to persist`),1200);}
+
 function layerSources(dev){ // layer -> {type:'key'|'btn', id}
   const out={};
   for(const[u,L]of Object.entries(cfg.layer_keys||{}))out[+L]={type:'key',id:+u};
@@ -4642,8 +4667,27 @@ function renderEditor(){
         // Shadow them on THIS device with the explicit "nothing here"
         // sentinel. Device-scoped, so other mice keep the shared mapping;
         // reversible, because nothing is deleted.
+        // 20.9.6: ONLY shadow if the logical button is genuinely orphaned.
+        // 20.9.5 shadowed unconditionally, which broke the very case it was
+        // written for: once the "2" keycap has been given button 4, those
+        // mappings are not leftovers, they are 2's. Shadowing them wiped the
+        // Hold->Layer that had just been configured. "Nobody owns this any
+        // more" is the condition, and it has to be checked, not assumed.
         const orphan=(sel.phys!=null)?sel.phys:null;
-        if(orphan!=null){
+        const claimedByOther=orphan!=null&&(()=>{
+          const bl=cfg.baseline[selDev]||{};
+          for(const k of Object.keys(bl)){
+            if(k===kkey||k===bkey)continue;
+            if((k.startsWith('p2btn:')||k.startsWith('btn:'))&&bl[k]===orphan)
+              return true;}
+          // an untouched button of that number still answers to itself
+          const c=BTN_EVDEV[orphan];
+          return !!(c&&c!==btnPhysCode(sel.phys)&&bl['btn:'+c]===undefined);
+        })();
+        if(claimedByOther)
+          toast(`Button ${orphan} is claimed by another input on this device, `
+            +`so its mappings were left alone — they belong to that input now.`);
+        if(orphan!=null&&!claimedByOther){
           const md=(cfg.mouse_mappings_by_device=cfg.mouse_mappings_by_device||{});
           const t=(md[selDev]=md[selDev]||{});
           let n=0;
@@ -4798,7 +4842,7 @@ function renderEditor(){
             ?'selected':''}>${lbl}</option>`).join('')}</select>
         <div class="muted" style="font-size:.72rem">Wheel ticks fire on press
         only — a tick is an event, not a state you can hold.</div>`:
-      p==='layer'?`<select id="pressLayer">${allLayers().map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(LAYER_NAMES[L]||('Layer '+L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
+      p==='layer'?`<select id="pressLayer">${allLayers().filter(L=>L!==0).map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(LAYER_NAMES[L]||('Layer '+L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
     // quick-assign boxes only make sense for direct actions, not layer/dpi
     $('pressAssign').style.display=(p==='key'||p==='macro'||p==='suppress'||p==='pass')?'':'none';
     const r=$('release').value;
