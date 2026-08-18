@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9.2</title>
+<title>HID Config 20.9.3</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9.2';
+const UI_ENGINE_EXPECT='20.9.3';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -4550,12 +4550,26 @@ function renderEditor(){
     const what=isKeyBorn
       ?`the key <b>${esc(KEYS[sel.p2usage]||'?')}</b> on ${esc(devName(selDev))}`
       :`<b>${esc(EVDEV_BTN_NAME[btnPhysCode(sel.phys)]||'this button')}</b>`;
+    // 20.9.3: a real BUTTON can also be given a KEY identity ("button 8 IS
+    // the right arrow"). Stored as btnkey:<evdev code> -- the mirror image of
+    // p2btn: -- so Baseline can express BOTH directions. Saying it as a
+    // Custom mapping instead would make it per-layer, and therefore not an
+    // identity at all.
+    const kkey='btnkey:'+btnPhysCode(sel.phys);
+    const curK=isKeyBorn?undefined:(cfg.baseline[selDev]||{})[kkey];
     let o=`<option value="">${isKeyBorn
       ?'(not a button — types its key again)'
       :'(itself: Button '+(sel.phys||'?')+')'}</option>`
       +`<option value="0" ${curB===0?'selected':''}>∅ Disabled</option>`;
     for(let n=1;n<=5;n++)o+=`<option value="${n}" ${curB===n?'selected':''}`
       +`>Button ${n} — ${esc(btnLabel(n))}</option>`;
+    if(!isKeyBorn){
+      o+=`<optgroup label="…or make this button a KEY">`;
+      for(const[u,n]of Object.entries(KEYS))
+        o+=`<option value="k${u}" ${curK===+u?'selected':''}>${esc(n)}</option>`;
+      for(const[u,n]of Object.entries(MODS))
+        o+=`<option value="k${u}" ${curK===+u?'selected':''}>${esc(n)} (modifier)</option>`;
+      o+=`</optgroup>`;}
     ed.innerHTML=`<h2 style="font-size:1rem">${btnTitle} — Baseline · ${esc(devName(selDev))}</h2>
       ${scopeSel}
       <p class="muted" style="font-size:.76rem">Identity of ${what}.
@@ -4566,8 +4580,16 @@ function renderEditor(){
     $('btnbase').onchange=()=>{
       const v=$('btnbase').value;
       cfg.baseline[selDev]=cfg.baseline[selDev]||{};
-      if(v==='')delete cfg.baseline[selDev][bkey];
-      else cfg.baseline[selDev][bkey]=+v;
+      // The two identities are mutually exclusive -- a physical button is
+      // either a button or a key. Leaving both entries would let the engine's
+      // key branch (checked first) shadow a button identity the UI still
+      // showed, which is precisely the class of bug this pane exists to fix.
+      delete cfg.baseline[selDev][kkey];
+      if(v===''){delete cfg.baseline[selDev][bkey];}
+      else if(v.charAt(0)==='k'){
+        delete cfg.baseline[selDev][bkey];
+        cfg.baseline[selDev][kkey]=+v.slice(1);
+      }else cfg.baseline[selDev][bkey]=+v;
       if(!Object.keys(cfg.baseline[selDev]).length)delete cfg.baseline[selDev];
       sel=null;render();
       toast('baseline updated — ⬆ Save to device to apply');};
