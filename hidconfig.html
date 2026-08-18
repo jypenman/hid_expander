@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9.7</title>
+<title>HID Config 20.9.8</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -892,7 +892,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9.7';
+const UI_ENGINE_EXPECT='20.9.7';   // engine .py unchanged since 20.9.7
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -2094,9 +2094,15 @@ function renderMouse(w,devid){   // retired: E9 now uses the unified renderLayou
 // 20.0 #2.1: a device is "connected" when the engine has claimed an input
 // node for it, or its Bluetooth link reports connected.
 function devIsConnected(d){
+  // 20.9.8 #3: for a BLUETOOTH device its own link status is the truth and is
+  // checked FIRST. Node presence used to win, and BlueZ leaves the evdev node
+  // in place for a while after a link drops -- so a keyboard that had walked
+  // out of range still showed as Connected. A node is evidence; the radio is
+  // the fact.
+  if(d.mac&&btStat[d.mac]===false)return false;
+  if(d.mac&&btStat[d.mac]===true)return true;
   const nodes=(lastEng&&lastEng.all_nodes)||[];
   if(nodes.some(n=>n.device===d.id))return true;
-  if(d.mac&&btStat[d.mac]===true)return true;
   if(!lastEng&&!d.mac)return true;          // not connected yet: don't hide things
   return false;}
 function renderStage(){
@@ -2289,7 +2295,18 @@ function renderLayoutKbd(d,w){
         +(eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
         +elLayerBadge('btn',b,d.id);
       if(editing)bindEditKey(el,d,idx);
-      else el.onclick=e=>{if(e.shiftKey||e.altKey)return;
+      else el.onclick=e=>{
+        if(e.shiftKey||e.altKey){
+          // 20.9.8 #1: combos and typed sequences are built from CANONICAL
+          // KEYS -- the engine feeds only keys to the combo detector, so a
+          // mouse button can never be a member. Silently ignoring the click
+          // made that look like a bug in the wireframe. Say it, and point at
+          // the mechanism that does work.
+          toast('Combos and sequences are key-only: the engine\'s combo '
+            +'detector is fed canonical keys and never sees mouse buttons. '
+            +'For “button + button”, give one button Hold → Layer and map '
+            +'the other on that layer.', true);
+          return;}
         const me={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};
         if(swapPick)return doSwapPick(d.id,me);
         // clicking the ✎ on an already-selected element opens the editor
@@ -2329,7 +2346,12 @@ function renderLayoutKbd(d,w){
     // 20.2 BF2: gesture is a fallback -- an explicit Custom binding wins, and
     // the chip must show the binding, not the gesture, or the wireframe lies.
     const _gest=(_isMouseDev&&eff.v===undefined)?gestureFor(eff.canon):null;
-    const centerName=(_gest?_gest.glyph:null)
+    // 20.9.8 #2: once Baseline says this keycap IS a mouse button, the
+    // face should read as that button. Showing "2" while the thing sends
+    // Back is the same conflation that caused the last four bugfixes: the
+    // silkscreen is not the identity.
+    const centerName=_p2b?btnLabel(_p2b)
+      :(_gest?_gest.glyph:null)
       ||k.label||MODS[eff.sends]||KEYS[eff.sends]||MODS[eff.canon]||KEYS[eff.canon]||'?';
     const baseChip=eff.base?`<span class="chipbase" title="original ${esc(KEYS[u]||MODS[u]||'?')} before this device's Baseline">${esc(KEYS[u]||MODS[u]||'?')}</span>`:'';
     const gestChip=(_gest&&_gest.macro)?`<span class="chip" title="gesture on layer ${layer}">${esc(macroLabel(_gest.macro))}</span>`:'';
@@ -2984,7 +3006,12 @@ function asgSelect(r){
   if(r.kind==='combo'){sel={type:'combo',id:r.id};}
   else if(r.kind==='mc'){const[L,m,u]=r.id.split(',').map(Number);
     sel={type:'modchord',mods:m,canon:u,keys:[u],mcKey:r.id,os:r.os||''};}
-  else sel={type:r.type==='key'?'key':'btn',id:r.id};
+  else sel={type:r.type==='key'?'key':'btn',id:r.id,dev:r.dev||''};
+  // 20.9.8 #4: 20.8.2 made the editor wait for sel.edit so a wireframe click
+  // would stop covering the wireframe. This list has no wireframe to cover --
+  // clicking a row here IS a request to edit it -- so it must ask explicitly.
+  // A gate added for one caller silently broke every other one.
+  if(sel&&(sel.type==='key'||sel.type==='btn'))sel.edit=true;
   render();}
 function asgDeleteRow(r){
   if(r.kind==='combo'){delete cfg.combos[r.id];return;}
