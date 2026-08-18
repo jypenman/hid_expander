@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9.6</title>
+<title>HID Config 20.9.7</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -368,6 +368,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <input type="text" id="profname" placeholder="new profile name" style="width:170px">
   <button id="profsave" disabled>Save current as profile</button>
   <button id="profbackups" disabled title="every Save to device writes a timestamped backup on the Pi">🕘 Backups…</button>
+  <button id="histbtn" title="Browse saved versions and undo individual changes">↺ History…</button>
   <button id="bklocal" title="Download EVERYTHING currently loaded in this browser as one file, on this computer. Works with the device disconnected.">💾 Back up to this computer</button>
   <label class="inl" title="Load a bundle saved with the button to its left. Nothing reaches the Pi until you press Save.">📂 Restore file<input type="file" id="bkrestore" accept=".json,application/json" style="display:none"></label>
   <span style="flex:1"></span>
@@ -513,6 +514,13 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       </details>
     </div>
   </details>
+ </div>
+ <div class="panel" id="histpanel" style="display:none">
+   <div class="bar"><b>↺ History</b>
+     <span class="muted">every Save to device adds a version</span>
+     <span style="flex:1"></span>
+     <button onclick="document.getElementById('histpanel').style.display='none'">✕</button></div>
+   <div id="histbody"></div>
  </div>
  <div class="panel" id="editor">
    <div id="editorhead"><span id="editortitle">Mapping editor</span>
@@ -884,7 +892,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9.5';   // engine .py unchanged since 20.9.5
+const UI_ENGINE_EXPECT='20.9.7';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1171,6 +1179,13 @@ function updateCurProf(){
   el.className='status'+(nm?' on':'');}
 function pfResult(text){
   if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
+  if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
+  if(text.startsWith('HISTCFG ')){
+    const nl=text.indexOf('\n');
+    const seq=+text.slice(8,nl);
+    try{renderHistoryDiff(seq,JSON.parse(text.slice(nl+1)));}
+    catch(e){toast('could not parse that version: '+e.message,true);}
+    return;}
   if(text.startsWith('restored')){
     // The device now holds the backup. Pull it into the browser BEFORE
     // anything can be saved, so cfg and the device agree.
@@ -1199,6 +1214,7 @@ $('clipreload').onclick=()=>{if(device)getFile(6);else toast('connect first',tru
 $('profbackups').onclick=()=>showBackups();
 // 20.8 #1.4: local backup/restore. Bound unconditionally and NOT gated on a
 // connection -- the whole point is that it still works when the Pi does not.
+$('histbtn').onclick=()=>showHistory();
 $('bklocal').onclick=()=>downloadBundle();
 $('bkrestore').onchange=e=>{
   const f=e.target.files&&e.target.files[0];
@@ -1669,6 +1685,17 @@ function swapBehaviour(devA,elA,devB,elB,scope){
   scope=scope||'devcustom';
   swapPickChrome();
   const A=slotOf(devA,elA), B=slotOf(devB,elB);
+  // 20.8.2 (finally): refuse a Baseline key<->button swap UP FRONT rather
+  // than doing nothing and explaining afterwards. Baseline stores "what is
+  // this key?"; a mouse button has no key identity, so there is literally no
+  // field to trade. Reporting that after the fact -- which is what it used to
+  // do -- reads as a bug even though the fact is real.
+  if(scope==='baseline'&&A.kind!==B.kind){
+    toast('Baseline swaps an identity, and a mouse button has no key identity '
+      +'to trade — there is no field to exchange. Use “Custom” to swap a key '
+      +'with a button, or set each side’s identity separately in Baseline.',
+      true);
+    render();return;}
   if(A.kind===B.kind&&((A.kind==='btn'&&A.id===B.id)
                     ||(A.kind==='key'&&A.dev===B.dev&&A.canon===B.canon))){
     toast('that is the same element — nothing to swap');return;}
@@ -1676,8 +1703,6 @@ function swapBehaviour(devA,elA,devB,elB,scope){
   // Mouse buttons have NO per-device table in the engine -- mouse_mappings is
   // keyed on the logical button alone. Say so rather than implying a scope we
   // cannot honour.
-  if(scope==='baseline'&&(A.kind==='btn'||B.kind==='btn'))
-    notes.push('a mouse button has no Baseline key identity to trade');
   // Harvest BOTH before writing EITHER, or the second harvest picks up what
   // the first write just put there and swaps an element with itself.
   const bagA=harvestSlot(A,scope), bagB=harvestSlot(B,scope);
@@ -3425,6 +3450,189 @@ function restoreBundle(text){
     try{txSave();}catch(e){}}
   render();
   toast('restored into the browser — review it, then ⬆ Save to device');}
+
+/* ==== 20.8 #1.3: From / To history, with per-change revert ================
+   history.py can reconstruct any past version. This turns that into something
+   you can act on: pick a version, see exactly what changed between it and
+   now, and undo individual changes rather than the whole thing.
+
+   WHY STRUCTURED ROWS RATHER THAN THE PROSE DIFF
+   diffConfig() writes lines for a human to read. You cannot revert a
+   sentence. Cherry-picking needs the PATH and the two VALUES, so histRows()
+   produces those and the prose is rendered FROM them -- one source of truth
+   for what changed, rather than a display that can disagree with the action.
+
+   THE HONEST CAVEAT
+   Reverting changes out of order can produce a config that never existed:
+   drop "created layer 5" while keeping "bound button 4 to layer 5" and the
+   binding dangles. That is a real hazard of cherry-picking rather than a bug
+   to engineer away, so it is DETECTED AND REPORTED, not prevented -- you keep
+   control, and you are told. */
+const HIST_DELETED = " __deleted__";      // must match history.py
+
+function histRows(oldCfg, newCfg, path){
+  path = path || [];
+  const rows = [];
+  const SKIP = new Set(['_changelog','_layer_defaults_done','_profile_name']);
+  const a = oldCfg || {}, b = newCfg || {};
+  for(const k of new Set([...Object.keys(a), ...Object.keys(b)])){
+    if(!path.length && SKIP.has(k)) continue;
+    const p = path.concat(k);
+    const av = a[k], bv = b[k];
+    if(JSON.stringify(av) === JSON.stringify(bv)) continue;
+    const bothPlain = av && bv && typeof av === 'object'
+      && typeof bv === 'object' && !Array.isArray(av) && !Array.isArray(bv);
+    if(bothPlain) rows.push(...histRows(av, bv, p));
+    else rows.push({path: p, from: av, to: bv});
+  }
+  return rows;
+}
+
+function histValLabel(v){
+  if(v === undefined || v === HIST_DELETED) return '(absent)';
+  if(v === null) return 'null';
+  if(Array.isArray(v)) return actShort(v) || JSON.stringify(v);
+  if(typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+function histPathLabel(p){
+  const head = p[0], rest = p.slice(1);
+  const pretty = {kbd_mappings:'Key mapping', mouse_mappings:'Button mapping',
+    kbd_mappings_by_device:'Key mapping (device)',
+    mouse_mappings_by_device:'Button mapping (device)',
+    baseline:'Baseline', macros:'Macro', tap_hold:'Tap/hold',
+    tap_hold_by_device:'Tap/hold (device)', layer_keys:'Layer key',
+    mod_chords:'Mod chord', combos:'Combo', os_profiles:'OS profile',
+    mapping_groups:'Group', port2_kbd:'Gesture'}[head] || head;
+  return pretty + (rest.length ? ' · ' + rest.join(' · ') : '');
+}
+
+// Put one row's OLD value back onto the live config.
+function histRevertRow(row){
+  let node = cfg;
+  for(const k of row.path.slice(0, -1)){
+    if(typeof node[k] !== 'object' || node[k] === null) node[k] = {};
+    node = node[k];
+  }
+  const last = row.path[row.path.length - 1];
+  if(row.from === undefined || row.from === HIST_DELETED) delete node[last];
+  else node[last] = JSON.parse(JSON.stringify(row.from));
+}
+
+/* References nothing satisfies. Run after a cherry-pick, because that is
+   exactly when a config can reach a state no single save ever produced. */
+function histDangling(c){
+  const out = [];
+  const layers = new Set([0]);
+  for(const L of Object.values(c.layer_keys || {})) layers.add(+L);
+  for(const v of Object.values(c.tap_hold || {})) if(v) layers.add(+v[1]);
+  for(const t of Object.values(c.tap_hold_by_device || {}))
+    for(const v of Object.values(t || {})) if(v) layers.add(+v[1]);
+  const macros = new Set(Object.keys(c.macros || {}).map(Number));
+  const scan = (tbl, what) => {
+    for(const [k, v] of Object.entries(tbl || {})){
+      const L = +String(k).split(',')[0];
+      if(!Number.isNaN(L) && L !== -1 && !layers.has(L))
+        out.push(what + ' on layer ' + L + ', which no key or button opens');
+      if(Array.isArray(v) && v[0] === 'macro' && !macros.has(+v[1]))
+        out.push(what + ' runs macro ' + v[1] + ', which does not exist');
+    }
+  };
+  scan(c.kbd_mappings, 'a key mapping');
+  scan(c.mouse_mappings, 'a button mapping');
+  for(const t of Object.values(c.kbd_mappings_by_device || {}))
+    scan(t, 'a device key mapping');
+  for(const t of Object.values(c.mouse_mappings_by_device || {}))
+    scan(t, 'a device button mapping');
+  return [...new Set(out)];   // twenty identical complaints help nobody
+}
+
+/* ---- panel ------------------------------------------------------------- */
+let _histIndex = null, _histPicked = null, _histCfg = null;
+
+window.showHistory = () => {
+  _histIndex = null; _histPicked = null; _histCfg = null;
+  pfCmd('hist');
+  toast('reading history from the Pi…');
+};
+
+function renderHistory(lines){
+  _histIndex = (lines || []).filter(l => l && l.indexOf('\t') > 0).map(l => {
+    const [seq, kind, ts, bytes, note] = l.split('\t');
+    return {seq:+seq, kind, ts:+ts, bytes:+bytes, note:note||''};
+  });
+  const el = $('histbody'); if(!el) return;
+  $('histpanel').style.display = 'block';
+  if(!_histIndex.length){ el.innerHTML =
+    '<p class="muted">No history yet. It is written on each Save to device.</p>';
+    return; }
+  el.innerHTML = '<table style="width:100%">'
+    + '<tr><td><b>When</b></td><td><b>Note</b></td><td><b>Kind</b></td><td></td></tr>'
+    + _histIndex.map(e => `<tr>
+        <td>${new Date(e.ts*1000).toLocaleString()}</td>
+        <td>${esc(e.note)}</td>
+        <td class="muted">${e.kind}${e.kind==='full'?' ●':''} ${e.bytes}B</td>
+        <td><button data-hseq="${e.seq}">Compare with now…</button></td>
+      </tr>`).join('') + '</table>';
+  el.querySelectorAll('[data-hseq]').forEach(b => b.onclick = () => {
+    _histPicked = +b.dataset.hseq;
+    pfCmd('histget ' + _histPicked);
+    toast('fetching that version…');
+  });
+}
+
+function renderHistoryDiff(seq, oldCfg){
+  _histCfg = oldCfg;
+  const rows = histRows(oldCfg, cfg);
+  const el = $('histbody'); if(!el) return;
+  const when = (_histIndex||[]).find(e => e.seq === seq);
+  const head = `<div class="bar"><b>Version ${seq}</b>
+      <span class="muted">${when ? new Date(when.ts*1000).toLocaleString() : ''}</span>
+      <span style="flex:1"></span>
+      <button id="histback">← list</button>
+      <button id="histall">↺ Restore this whole version</button></div>`;
+  if(!rows.length){
+    el.innerHTML = head + '<p class="muted">Identical to the current config.</p>';
+  } else {
+    el.innerHTML = head
+      + `<p class="muted" style="font-size:.78rem">${rows.length} change(s)
+         since then. ✕ puts that one value back; everything else stays as
+         it is now.</p>`
+      + '<table style="width:100%"><tr><td><b>What</b></td><td><b>Then</b></td>'
+      + '<td><b>Now</b></td><td></td></tr>'
+      + rows.map((r,i) => `<tr>
+          <td>${esc(histPathLabel(r.path))}</td>
+          <td class="muted">${esc(histValLabel(r.from))}</td>
+          <td>${esc(histValLabel(r.to))}</td>
+          <td><a class="mlink" data-hrow="${i}" title="put the 'Then' value back">✕</a></td>
+        </tr>`).join('') + '</table>';
+    el.querySelectorAll('[data-hrow]').forEach(a => a.onclick = () => {
+      const r = rows[+a.dataset.hrow];
+      histRevertRow(r);
+      const bad = histDangling(cfg);
+      render();
+      renderHistoryDiff(seq, oldCfg);
+      toast(bad.length
+        ? `reverted — but this leaves ${bad.length} dangling reference(s): `
+          + bad.slice(0,3).join('; ')
+        : 'reverted that one change — ⬆ Save to device to apply',
+        bad.length > 0);
+    });
+  }
+  $('histback').onclick = () => renderHistory(
+    (_histIndex||[]).map(e => [e.seq,e.kind,e.ts,e.bytes,e.note].join('\t')));
+  $('histall').onclick = () => {
+    if(!confirm(`Replace the working config with version ${seq}?\n\n`
+      + `Nothing reaches the Pi until you press Save to device.`)) return;
+    cfg = JSON.parse(JSON.stringify(oldCfg));
+    normalize(); render();
+    const bad = histDangling(cfg);
+    toast(bad.length
+      ? `restored, with ${bad.length} dangling reference(s)`
+      : 'restored into the browser — ⬆ Save to device to apply',
+      bad.length > 0);
+  };
+}
 
 window.showBackups=()=>{
   if(!device){toast('connect first',true);return;}
