@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9 BF1</title>
+<title>HID Config 20.9.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9 BF1';
+const UI_ENGINE_EXPECT='20.9.2';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -3927,13 +3927,20 @@ if(k==='suppress')return{press:'suppress',release:'none'};
 if(k==='dpi_cycle')return{press:'dpi',release:'none'};
 if(k==='macro_up')return{press:'suppress',release:'macro',relMacro:a[1]};
 if(k==='macro_both')return{press:'macro',pressMacro:a[1],release:'macro',relMacro:a[2]};
+// 20.9 BF2 #4: wheel/pan ticks as an OUTPUT of a key or button.
+if(k==='wheel'||k==='hwheel')
+  return{press:'wheel',pressWheelKind:k,pressWheelN:+(a[1]||1),release:'none'};
 return{press:'pass',release:'none'};}
 function uiToAction(u){
 if(u.release==='macro')return u.press==='macro'?['macro_both',+u.pressMacro,+u.relMacro]:['macro_up',+u.relMacro];
 if(u.press==='pass')return null;if(u.press==='suppress')return['suppress'];
 if(u.press==='dpi')return['dpi_cycle'];
 if(u.press==='btn')return['btn',+u.pressBtn];if(u.press==='key')return['key',+u.pressKey];
-if(u.press==='macro')return['macro',+u.pressMacro];return null;}
+if(u.press==='macro')return['macro',+u.pressMacro];
+if(u.press==='wheel'){
+  const [k,n]=String(u.pressWheel||'wheel:1').split(':');
+  return[k==='hwheel'?'hwheel':'wheel',+n||1];}
+return null;}
 function keyOpts(v){return Object.entries(KEYS).map(([u,n])=>`<option value="${u}" ${+u===+v?'selected':''}>${n}</option>`).join('');}
 /* ===== 19.2R #3: OS scope selector ==========================================
    "Both / Mac only / Win only" wherever something is added.  Only OSes that
@@ -4503,6 +4510,69 @@ function renderEditor(){
   // the shared table meant an edit made from one wireframe silently applied to
   // every keyboard -- which is how a swap broke 1+click, a device-scoped chord.
   const scope=isMod?'baseline':(sel.scope||(selDev?'devcustom':'custom'));
+  // ---- Baseline scope for a BUTTON element -------------------------------
+  // 20.9 BF2: THE WAY BACK. Giving a key a button identity used to be a
+  // one-way door: the button editor had no Baseline pane, so the entry that
+  // created the identity became unreachable and only a profile reload undid
+  // it. Whatever a pane can do, it must be able to undo.
+  // 20.9 BF2: declared ABOVE the Baseline panes that use them. const is
+  // not hoisted, and the button Baseline pane below reads btnTitle,
+  // identBlock and identRef -- 100 lines before their old position.
+  const scopeSel=selDev?scopeTabsHTML(selDev,scope):'';
+  // 20.7.3 BF2 — the identity block. Declared above first use (TDZ).
+  const identRef=!selDev?null
+    :isBtn?(sel.p2usage!=null?{kind:'p2',usage:sel.p2usage}
+                             :(btnPhysCode(sel.phys)?{kind:'btn',code:btnPhysCode(sel.phys)}:null))
+    :(sel.p2?{kind:'p2',usage:sel.id}:null);
+  const identCur=!identRef?undefined
+    :identRef.kind==='p2'?p2BtnIdent(selDev,identRef.usage)
+    :(cfg.baseline[selDev]||{})['btn:'+identRef.code];
+  const identBlock=identRef?identityHTML(selDev,identRef,identCur,scope):'';
+  // Name all three identities in the heading rather than picking one and
+  // leaving the other two to be guessed at. "5 (arrow: Right)" was a true
+  // statement about a button the user only knows as 7.
+  // Built in pieces rather than as one nested template: tdz_scan masks
+  // strings but not strings nested inside a ${} substitution, so it read the
+  // word "key" in the old one-liner as an identifier use and flagged a TDZ
+  // error that was not there. Clearer to a reader too.
+  const _tParts=[];
+  if(sel.label)_tParts.push('marked “'+esc(sel.label)+'” on the device');
+  if(sel.p2usage!=null)
+    _tParts.push('arrives as the ' + esc(KEYS[sel.p2usage]||'?') + ' keycap');
+  const btnTitle=!isBtn?''
+    :esc(btnLabel(sel.id))+' <span class="muted">· Button '+sel.id
+      +(_tParts.length?' · '+_tParts.join(' · '):'')+'</span>';
+  if(isBtn&&scope==='baseline'){
+    const isKeyBorn=(sel.p2usage!=null);
+    const bkey=isKeyBorn?('p2btn:0x'+sel.p2usage.toString(16))
+                        :('btn:'+btnPhysCode(sel.phys));
+    const curB=(cfg.baseline[selDev]||{})[bkey];
+    const what=isKeyBorn
+      ?`the key <b>${esc(KEYS[sel.p2usage]||'?')}</b> on ${esc(devName(selDev))}`
+      :`<b>${esc(EVDEV_BTN_NAME[btnPhysCode(sel.phys)]||'this button')}</b>`;
+    let o=`<option value="">${isKeyBorn
+      ?'(not a button — types its key again)'
+      :'(itself: Button '+(sel.phys||'?')+')'}</option>`
+      +`<option value="0" ${curB===0?'selected':''}>∅ Disabled</option>`;
+    for(let n=1;n<=5;n++)o+=`<option value="${n}" ${curB===n?'selected':''}`
+      +`>Button ${n} — ${esc(btnLabel(n))}</option>`;
+    ed.innerHTML=`<h2 style="font-size:1rem">${btnTitle} — Baseline · ${esc(devName(selDev))}</h2>
+      ${scopeSel}
+      <p class="muted" style="font-size:.76rem">Identity of ${what}.
+      ${isKeyBorn?'Clear it to make this a normal key again.'
+                 :'Point it at another number to rebase the button.'}</p>
+      <label>Reports as</label><select id="btnbase">${o}</select>
+      ${identBlock}`;
+    $('btnbase').onchange=()=>{
+      const v=$('btnbase').value;
+      cfg.baseline[selDev]=cfg.baseline[selDev]||{};
+      if(v==='')delete cfg.baseline[selDev][bkey];
+      else cfg.baseline[selDev][bkey]=+v;
+      if(!Object.keys(cfg.baseline[selDev]).length)delete cfg.baseline[selDev];
+      sel=null;render();
+      toast('baseline updated — ⬆ Save to device to apply');};
+    if(identRef)bindIdentity(selDev,identRef,scope);
+    return;}
   // ---- Baseline scope: what this physical key IS on this device ----
   if(!isBtn&&scope==='baseline'){
     const cur=(cfg.baseline[selDev]||{})[sel.id];
@@ -4545,34 +4615,30 @@ function renderEditor(){
   // ---- Custom scope: keyed on the CANONICAL key. Port-scoped custom
   // writes kbd_mappings_by_device[device]; shared writes kbd_mappings. ----
   const key=`${layer},${canon}`;
-  const devScoped=!isBtn&&scope==='devcustom'&&selDev;
-  const kmap=devScoped
-    ?(cfg.kbd_mappings_by_device[selDev]=cfg.kbd_mappings_by_device[selDev]||{})
-    :cfg.kbd_mappings;
+  const devScoped=scope==='devcustom'&&!!selDev;
+  const kmap=!devScoped?(isBtn?cfg.mouse_mappings:cfg.kbd_mappings)
+    :isBtn
+      ?((cfg.mouse_mappings_by_device=cfg.mouse_mappings_by_device||{}),
+        (cfg.mouse_mappings_by_device[selDev]=
+           cfg.mouse_mappings_by_device[selDev]||{}))
+      :(cfg.kbd_mappings_by_device[selDev]=
+          cfg.kbd_mappings_by_device[selDev]||{});
   const rawk=isBtn?undefined:kmap[key];
-  const cur=isBtn?cfg.mouse_mappings[key]
+  const cur=isBtn?(devScoped
+                   ?((cfg.mouse_mappings_by_device||{})[selDev]||{})[key]
+                   :cfg.mouse_mappings[key])
     :(rawk===undefined?null:Array.isArray(rawk)?rawk:rawk===0?['suppress']:['key',rawk]);
   const ui=actionToUI(cur);
   const physTag=(isBtn&&sel.physical!==undefined&&sel.physical!==sel.id)
     ?` <span class="muted">(${boxTag(sel.physical)})</span>`
     :((!isBtn&&sel.physical!==undefined)?` <span class="muted">(E9 ${boxTag(sel.physical)})</span>`:'');
   const baseTag=!isBtn&&canon!==sel.id?` <span class="muted">(physical ${KEYS[sel.id]||'?'} ≡ ${KEYS[canon]||'?'} via ${esc(devName(selDev))} baseline)</span>`:'';
-  const scopeSel=!isBtn&&selDev?scopeTabsHTML(selDev,scope):'';
-  // 20.7.3 BF2 — the identity block. Declared above first use (TDZ).
-  const identRef=!selDev?null
-    :isBtn?(sel.p2usage!=null?{kind:'p2',usage:sel.p2usage}
-                             :(btnPhysCode(sel.phys)?{kind:'btn',code:btnPhysCode(sel.phys)}:null))
-    :(sel.p2?{kind:'p2',usage:sel.id}:null);
-  const identCur=!identRef?undefined
-    :identRef.kind==='p2'?p2BtnIdent(selDev,identRef.usage)
-    :(cfg.baseline[selDev]||{})['btn:'+identRef.code];
-  const identBlock=identRef?identityHTML(selDev,identRef,identCur,scope):'';
-  // Name all three identities in the heading rather than picking one and
-  // leaving the other two to be guessed at. "5 (arrow: Right)" was a true
-  // statement about a button the user only knows as 7.
-  const btnTitle=!isBtn?'':`${esc(btnLabel(sel.id))} <span class="muted">· Button ${sel.id}${
-    sel.label?' · marked “'+esc(sel.label)+'” on the device':''}${
-    sel.p2usage!=null?' · arrives as key '+esc(KEYS[sel.p2usage]||'?'):''}</span>`;
+  // 20.9 BF2: BUTTONS get the same three scopes as keys. Without them a
+  // button had exactly one home (the shared table), which is why editing the
+  // E9's "2" also changed its "8" -- both resolve to logical button 4, and a
+  // shared table cannot tell them apart. It is also why a key given a button
+  // identity became un-editable: the button editor had no Baseline pane, so
+  // there was no way back short of reloading a profile.
   const srcLayer=layerOfSource(isBtn?'btn':'key',canon,selDev);
   if(srcLayer!=null)ui.press='layer';
   const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)">Hold → Layer ${srcLayer}</span>`:'';
@@ -4587,6 +4653,7 @@ function renderEditor(){
       ${isBtn?`<option value="btn" ${ui.press==='btn'?'selected':''}>Mouse button…</option>`:''}
       <option value="key" ${ui.press==='key'?'selected':''}>Key…</option>
       <option value="macro" ${ui.press==='macro'?'selected':''}>Macro…</option>
+      <option value="wheel" ${ui.press==='wheel'?'selected':''}>Scroll wheel…</option>
       ${layerOpt}
       ${isBtn?`<option value="dpi" ${ui.press==='dpi'?'selected':''}>DPI cycle</option>`:''}
     </select><div id="pressArg"></div>
@@ -4631,6 +4698,15 @@ function renderEditor(){
     $('pressArg').innerHTML=p==='btn'?`<select id="pressBtn">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===+(ui.pressBtn||1)?'selected':''}>${btnLabel(n)}</option>`).join('')}</select>`:
       p==='key'?`<select id="pressKey">${keyOpts(ui.pressKey||0x28)}</select>`:
       p==='macro'?`<select id="pressMacro">${macOpts(ui.pressMacro||1)}</select>`:
+      p==='wheel'?`<select id="pressWheel">${
+        [['wheel',1,'▲ Wheel up ×1'],['wheel',3,'▲▲ Wheel up ×3'],
+         ['wheel',-1,'▼ Wheel down ×1'],['wheel',-3,'▼▼ Wheel down ×3'],
+         ['hwheel',1,'▶ Pan right ×1'],['hwheel',-1,'◀ Pan left ×1']]
+        .map(([k,n,lbl])=>`<option value="${k}:${n}" ${
+          (ui.pressWheelKind||'wheel')===k&&(ui.pressWheelN||1)===n
+            ?'selected':''}>${lbl}</option>`).join('')}</select>
+        <div class="muted" style="font-size:.72rem">Wheel ticks fire on press
+        only — a tick is an event, not a state you can hold.</div>`:
       p==='layer'?`<select id="pressLayer">${allLayers().map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(LAYER_NAMES[L]||('Layer '+L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
     // quick-assign boxes only make sense for direct actions, not layer/dpi
     $('pressAssign').style.display=(p==='key'||p==='macro'||p==='suppress'||p==='pass')?'':'none';
@@ -4663,7 +4739,8 @@ function renderEditor(){
       if(srcLayer!=null&&p!=='layer')setLayerSource(null);
       apply(uiToAction({press:p,release:$('release').value,
         pressBtn:$('pressBtn')?.value,pressKey:$('pressKey')?.value,
-        pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value}));
+        pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value,
+        pressWheel:$('pressWheel')?.value}));
       render();});
   bindEditorCommon(apply);
   bindNoteField(noteKey(isBtn?'mouse':'kbd',layer,isBtn?sel.id:canon));
