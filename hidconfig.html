@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9</title>
+<title>HID Config 20.9 BF1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -884,7 +884,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9';
+const UI_ENGINE_EXPECT='20.9 BF1';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -4506,7 +4506,13 @@ function renderEditor(){
   // ---- Baseline scope: what this physical key IS on this device ----
   if(!isBtn&&scope==='baseline'){
     const cur=(cfg.baseline[selDev]||{})[sel.id];
+    // 20.9 BF1: "this physical key IS a mouse button" now belongs here.
+    // The engine gained the branch for it on ANY key node, not just the E9's
+    // gesture node -- without which a key<->button swap could never complete,
+    // because half the trade had nowhere to land.
+    const curB=(cfg.baseline[selDev]||{})['p2btn:0x'+sel.id.toString(16)];
     let opts=`<option value="">(itself: ${KEYS[sel.id]||MODS[sel.id]||'?'})</option><option value="0" ${cur===0?'selected':''}>∅ Disabled</option>`;
+    for(let n=1;n<=5;n++)opts+=`<option value="btn${n}" ${curB===n?'selected':''}>Mouse button ${n} — ${esc(btnLabel(n))}</option>`;
     for(const[u,n]of Object.entries(MODS))opts+=`<option value="${u}" ${+u===cur?'selected':''}>${n} (modifier)</option>`;
     for(const[u,n]of Object.entries(KEYS))opts+=`<option value="${u}" ${+u===cur?'selected':''}>${n}</option>`;
     ed.innerHTML=`<h2 style="font-size:1rem">${MODS[sel.id]||KEYS[sel.id]||'?'} — Baseline · ${esc(devName(selDev))}</h2>
@@ -4522,8 +4528,17 @@ function renderEditor(){
     $('basetgt').onchange=()=>{
       const v=$('basetgt').value;
       cfg.baseline[selDev]=cfg.baseline[selDev]||{};
-      if(v==='')delete cfg.baseline[selDev][sel.id];
-      else cfg.baseline[selDev][sel.id]=+v;
+      const bkey='p2btn:0x'+sel.id.toString(16);
+      // The two identities are mutually exclusive: a key is either a key or a
+      // button. Leaving both entries would let the engine's button branch
+      // shadow a key remap the UI was still showing.
+      if(v.indexOf('btn')===0){
+        delete cfg.baseline[selDev][sel.id];
+        cfg.baseline[selDev][bkey]=+v.slice(3);
+      }else{
+        delete cfg.baseline[selDev][bkey];
+        if(v==='')delete cfg.baseline[selDev][sel.id];
+        else cfg.baseline[selDev][sel.id]=+v;}
       render();toast('baseline updated — ⬆ Save to device to apply');};
     bindGroupAssign(`kbd:${layer},${canon}`);
     return;}
