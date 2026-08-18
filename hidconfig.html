@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 20.9.8</title>
+<title>HID Config 21.0</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -380,11 +380,11 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab on" data-t="map">Mapping</div>
   <div class="tab" data-t="macros">Macros</div>
   <div class="tab" data-t="exp">Expansions</div>
-  <div class="tab" data-t="expr">Expressions</div>
   <div class="tab" data-t="os">OS</div>
   <div class="tab" data-t="bt">Bluetooth</div>
   <div class="tab" data-t="tx">Text Transform</div>
   <div class="tab" data-t="log">Changes</div>
+  <div class="tab" data-t="usage">Usage</div>
 </div>
 
 <details class="dbg" id="debugmon" data-uikey="debug"><summary>🐞 Debug monitors</summary>
@@ -666,6 +666,24 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       padding:.6rem;margin-top:.5rem;max-height:65vh;overflow:auto"></div>
   </div>
 </div>
+<div id="page-usage" style="display:none">
+  <div class="tabs" id="usagetabs" style="margin-bottom:.4rem">
+    <div class="tab on" data-ut="usage">Usage</div>
+    <div class="tab" data-ut="train">Training</div>
+  </div>
+  <div class="panel" id="usagepane">
+    <h2 style="font-size:1rem">What you actually reach for</h2>
+    <p class="muted" style="font-size:.8rem">Recorded on the Pi, one counter
+      per key-down, written to disk on a timer. Two ledgers, because shortcuts
+      and expansions are edited in different places. Loaded <b>after</b>
+      everything else so the mapping data is never held up behind statistics.</p>
+    <div id="usagebody"></div>
+  </div>
+  <div class="panel" id="trainpane" style="display:none">
+    <h2 style="font-size:1rem">Training</h2>
+    <div id="trainbody"></div>
+  </div>
+</div>
 <div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div></div>
 
 <div id="page-exp" style="display:none">
@@ -892,7 +910,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='20.9.7';   // engine .py unchanged since 20.9.7
+const UI_ENGINE_EXPECT='21.0';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1180,6 +1198,11 @@ function updateCurProf(){
 function pfResult(text){
   if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
   if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
+  if(text.startsWith('USAGE')){
+    try{ usageData=JSON.parse(text.slice(text.indexOf('\n')+1));
+         renderUsage(); renderTraining(); toast('usage statistics loaded'); }
+    catch(e){ toast('usage payload unreadable: '+e.message,true); }
+    return;}
   if(text.startsWith('HISTCFG ')){
     const nl=text.indexOf('\n');
     const seq=+text.slice(8,nl);
@@ -1478,7 +1501,8 @@ function annotate(txt){
 }
 const LAYER_NAMES=['0 · Base','1 · CapsLock','2 · Right-btn','3 · Back-btn','4 · Fwd-btn','5'];
 function btnLabel(n){return (cfg.button_labels&&cfg.button_labels[n])||
-  ({1:'Left',2:'Right',3:'Wheel',4:'Back',5:'Forward'}[n]||('B'+n));}
+  ({1:'Left (MB1)',2:'Right (MB2)',3:'Wheel (MB3)',
+     4:'Back (MB4)',5:'FWD (MB5)'}[n]||('MB'+n));}
 // ---- 20.7.3 BF2: three names for one button, reconciled -------------------
 // A mouse button has THREE identities and until now the UI showed one of them
 // without saying which: the number silkscreened on the hardware (the '7' on
@@ -2005,7 +2029,16 @@ function effKey(dev,L,u){
   return{canon,sends,base:(canon!==u)||(sends!==canon),
     v:dv!==undefined?dv:cfg.kbd_mappings[`${L},${canon}`],
     devScoped:dv!==undefined};}
-function effMouse(dev,L,b){return (cfg.mouse_mappings||{})[`${L},${b}`];}
+// 21.0 #1.1: effKey learned about per-device tables in 19.9; effMouse never
+// did, so after 20.8.2 BF2 gave buttons a device overlay the wireframe kept
+// showing the SHARED mapping. Switching to “Layer 2 (Right-btn)”
+// therefore showed nothing new, because the layer-2 entry lived in the
+// overlay the chip was not reading. A present-but-null overlay entry means
+// “explicitly nothing here”, exactly as the engine reads it.
+function effMouse(dev,L,b){
+  const dd=dev&&cfg.mouse_mappings_by_device&&cfg.mouse_mappings_by_device[dev];
+  if(dd&&(`${L},${b}` in dd))return dd[`${L},${b}`]||undefined;
+  return (cfg.mouse_mappings||{})[`${L},${b}`];}
 
 /* ============ wireframe layouts ============ */
 // Split-keyboard physical rows (HID usages). -1 = blank spacer; 0x2c repeated
@@ -3659,6 +3692,183 @@ function renderHistoryDiff(seq, oldCfg){
       : 'restored into the browser — ⬆ Save to device to apply',
       bad.length > 0);
   };
+}
+
+/* ==== 21.0 Usage ==========================================================
+   Two tables, not one, because they come from two ledgers on disk and answer
+   different questions: shortcuts live in the Mapping tab, expansions in the
+   Expansions tab, and the ✎ link has to know which. Each collapses on its own.
+
+   ON "SPECIFIC COMBINATION" vs "VIA A LAYER"
+   Josh asked whether these should be separate. They should NOT: from the
+   hand's point of view "hold Right-btn, press 2" is one gesture, and splitting
+   it would make the ranking answer a question nobody asked. They are one list,
+   with the layer shown as part of the name so you can still tell them apart.
+
+   LOADED LAST, ON PURPOSE. The mapping data has to arrive first at 9 KB/s;
+   statistics are the least urgent thing on the page. */
+let usageData = null, usageSort = 'per_week', usageFilter = '',
+    usageTab = 'usage';
+
+function usageRows(kind){
+  if(!usageData) return [];
+  const src = usageData[kind] || {};
+  const rows = Object.entries(src).map(([id, v]) => ({
+    id, count: v.count, per_week: v.per_week,
+    os: Object.keys(v.os || {}).join(', '),
+    desc: (usageData.describe || {})[id] || null,
+  }));
+  const q = usageFilter.trim().toLowerCase();
+  const filtered = q ? rows.filter(r =>
+    r.id.toLowerCase().includes(q)
+    || (r.desc && (r.desc.text || '').toLowerCase().includes(q))
+    || r.os.toLowerCase().includes(q)) : rows;
+  return filtered.sort((a, b) =>
+    usageSort === 'id' ? a.id.localeCompare(b.id)
+    : (b[usageSort] || 0) - (a[usageSort] || 0));
+}
+
+// Jump to where the thing is EDITED, rather than opening an editor here.
+// A statistics page that quietly becomes an editor is how you change
+// something you were only looking at.
+function usageGoto(kind, id){
+  if(kind === 'expansions'){
+    showTab('exp');
+    setTimeout(() => {
+      const box = [...document.querySelectorAll('#exptable .etrig, .settable input')]
+        .find(i => i.value === id);
+      if(box){ box.scrollIntoView({block:'center'}); box.focus();
+               box.style.outline = '2px solid var(--pick)'; }
+      else toast('That trigger is not in the currently loaded sets.', true);
+    }, 120);
+    return;
+  }
+  showTab('map');
+  toast('Shortcut usage is recorded by the chord text; find “' + id
+        + '” in Assignments to edit it.');
+}
+
+function renderUsage(){
+  const el = $('usagebody'); if(!el) return;
+  if(!usageData){
+    el.innerHTML = '<p class="muted">No usage data loaded yet. It is fetched '
+      + 'after everything else, so the mapping data is not held up behind it. '
+      + '<button id="usageload">Load now</button></p>';
+    const b = $('usageload'); if(b) b.onclick = () => loadUsage();
+    return;
+  }
+  const table = (kind, title, openDefault) => {
+    const rows = usageRows(kind);
+    return `<details ${openDefault ? 'open' : ''} data-uikey="usage-${kind}">
+      <summary style="cursor:pointer"><b>${title}</b>
+        <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}</span></summary>
+      ${rows.length ? `<table style="width:100%">
+        <tr><td><b>What you press</b></td><td><b>Per week</b></td>
+            <td><b>Total</b></td><td><b>OS</b></td><td><b>Does what</b></td><td></td></tr>
+        ${rows.map(r => `<tr>
+          <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
+          <td>${r.per_week}</td><td class="muted">${r.count}</td>
+          <td class="muted">${esc(r.os)}</td>
+          <td>${r.desc ? esc(r.desc.text)
+              + (r.desc.url ? ` <a class="mlink" href="${esc(r.desc.url)}"
+                   target="_blank" rel="noopener"
+                   title="${esc(r.desc.source||'')} · retrieved ${esc(r.desc.retrieved||'?')}">source</a>` : '')
+              : '<span class="muted">—</span>'}</td>
+          <td><a class="mlink" data-ugo="${kind}" data-uid="${esc(r.id)}"
+                 title="Go to where this is defined">✎</a></td>
+        </tr>`).join('')}</table>`
+        : '<p class="muted">Nothing recorded yet.</p>'}
+    </details>`;
+  };
+  el.innerHTML = `
+    <div class="bar">
+      <input type="text" id="usagefilter" placeholder="filter…"
+             value="${esc(usageFilter)}" style="width:12rem">
+      <label style="margin:0">sort
+        <select id="usagesort">
+          <option value="per_week" ${usageSort==='per_week'?'selected':''}>average per week</option>
+          <option value="count" ${usageSort==='count'?'selected':''}>total</option>
+          <option value="id" ${usageSort==='id'?'selected':''}>name</option>
+        </select></label>
+      <span class="muted">over the last ${usageData.weeks} week(s)</span>
+      <span style="flex:1"></span>
+      <button id="usagereload">⟳ Reload</button>
+    </div>
+    ${table('shortcuts', 'Key combinations, layers and macros', true)}
+    ${table('expansions', 'Text expansions', true)}
+    ${usageSetsHTML()}`;
+  $('usagefilter').oninput = e => { usageFilter = e.target.value; renderUsage();
+    const b = $('usagefilter'); if(b){ b.focus(); b.setSelectionRange(b.value.length, b.value.length); } };
+  $('usagesort').onchange = e => { usageSort = e.target.value; renderUsage(); };
+  $('usagereload').onclick = () => loadUsage();
+  el.querySelectorAll('[data-ugo]').forEach(a =>
+    a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
+}
+
+function usageSetsHTML(){
+  const sets = usageData.sets || [];
+  if(!sets.length) return '<p class="muted" style="font-size:.78rem">'
+    + 'No reference shortcut sets. Drop JSON files into '
+    + '<code>expander/shortcut_sets/</code> to name what a combination does.</p>';
+  return `<details data-uikey="usage-sets"><summary style="cursor:pointer" class="muted">
+      Reference shortcut sets · ${sets.length}</summary>
+    <table style="width:100%">${sets.map(s => `<tr>
+      <td>${esc(s.name)}</td><td class="muted">${s.n} shortcuts</td>
+      <td class="muted">${esc(s.os||'any')}</td>
+      <td>${s.url ? `<a class="mlink" href="${esc(s.url)}" target="_blank"
+            rel="noopener">source</a> <span class="muted">${esc(s.retrieved||'')}</span>`
+          : '<span style="color:var(--warn)">no citation</span>'}</td>
+      <td style="color:var(--warn)">${esc((s.warnings||[]).join('; '))}</td>
+    </tr>`).join('')}</table>
+    <p class="muted" style="font-size:.74rem">A shortcut list without a source
+    and a date is folklore: OS defaults change, and an undated scrape presented
+    as fact is worse than no list. Uncited sets still load, and are flagged.</p>
+  </details>`;
+}
+
+function loadUsage(weeks){
+  pfCmd('usage ' + (weeks || 12));
+  const el = $('usagebody');
+  if(el && !usageData) el.innerHTML = '<p class="muted">reading…</p>';
+}
+
+/* ---- Training ----------------------------------------------------------
+   The point is not "here is a leaderboard" -- you already know your top few.
+   It is the opposite end: things you SET UP and never reach for, which are
+   either worth learning or worth deleting. Both are useful answers, and the
+   page says so rather than nagging. */
+function renderTraining(){
+  const el = $('trainbody'); if(!el) return;
+  if(!usageData){ el.innerHTML = '<p class="muted">Load the Usage tab first.</p>';
+    return; }
+  const used = new Set(Object.keys(usageData.shortcuts || {}));
+  const rows = usageRows('shortcuts');
+  const top = rows.slice().sort((a,b)=>b.per_week-a.per_week).slice(0,10);
+  const rare = rows.filter(r => r.per_week < 1)
+    .sort((a,b)=>a.per_week-b.per_week).slice(0,20);
+  el.innerHTML = `
+    <p class="muted" style="font-size:.8rem">Two lists, because "use it more"
+    and "delete it" are both good outcomes for something you configured and
+    never press.</p>
+    <details open><summary style="cursor:pointer"><b>Your hands know these</b>
+      <span class="muted">· top ${top.length}</span></summary>
+      <table style="width:100%">${top.map(r=>`<tr>
+        <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
+        <td>${r.per_week}/wk</td>
+        <td class="muted">${r.desc?esc(r.desc.text):''}</td></tr>`).join('')}</table>
+    </details>
+    <details open><summary style="cursor:pointer"><b>Set up, barely used</b>
+      <span class="muted">· under once a week</span></summary>
+      ${rare.length ? `<table style="width:100%">${rare.map(r=>`<tr>
+        <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
+        <td>${r.per_week}/wk</td>
+        <td class="muted">${r.desc?esc(r.desc.text):''}</td>
+        <td><a class="mlink" data-ugo="shortcuts" data-uid="${esc(r.id)}">✎</a></td>
+        </tr>`).join('')}</table>`
+        : '<p class="muted">Nothing under once a week — either you use everything, or there is not much history yet.</p>'}
+    </details>`;
+  el.querySelectorAll('[data-ugo]').forEach(a =>
+    a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
 }
 
 window.showBackups=()=>{
@@ -7541,7 +7751,10 @@ function pfRenderStrip(stats){
   const s = stats || pfLastStats;
   if(!s){
     el.innerHTML = '<span class="muted">no benchmark yet</span>' +
-      ' <button data-pfa="run" class="txmini">▶ Benchmark</button>' +
+      /* 21.0: the Benchmark button is gone. It launched a detached job whose
+         failures were invisible, and bench_sched now runs on its own schedule
+         anyway -- a button that starts something you cannot watch is worse
+         than no button. */
       ' <button data-pfa="open" class="txmini" title="Preferences (⌘, / Ctrl+,)">⚙</button>';
     return;
   }
@@ -7839,10 +8052,13 @@ function pfSchedule(){
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt','log','tx'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log','tx','usage'])$('page-'+p).style.display=p===t?'':'none';
   if(t==='tx')txInit();
   if(t==='os')renderOsTab();
   if(t==='log')renderChangelog();
+  // 21.0: Usage fetches on first open, not on connect -- statistics are the
+  // least urgent thing on a 9 KB/s channel.
+  if(t==='usage'){ if(!usageData&&device)loadUsage(); renderUsage(); renderTraining(); }
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
@@ -7889,6 +8105,15 @@ document.body.appendChild($('editor'));   // 6.3: escape any transformed ancesto
     p.style.top=Math.max(0,Math.min(innerHeight-40,ev.clientY-dy))+'px';});
   window.addEventListener('pointerup',()=>drag=false);})();
 document.querySelectorAll('#toptabs .tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.t));
+// 21.0: Usage / Training are sub-tabs of one page, so Training can reuse the
+// data Usage already fetched instead of asking the Pi twice.
+document.querySelectorAll('#usagetabs .tab').forEach(t=>t.onclick=()=>{
+  usageTab=t.dataset.ut;
+  document.querySelectorAll('#usagetabs .tab').forEach(x=>
+    x.classList.toggle('on',x.dataset.ut===usageTab));
+  $('usagepane').style.display=usageTab==='usage'?'':'none';
+  $('trainpane').style.display=usageTab==='train'?'':'none';
+  if(usageTab==='train')renderTraining();});
 window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
 $('stage').onclick=e=>{if(e.target.id==='chordsvg'||e.target.id==='stage')clearChordSel();};
 </script></body></html>
