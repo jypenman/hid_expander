@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 21.0</title>
+<title>HID Config 21.0 BF1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1416,16 +1416,23 @@ function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wh
 'baseline','combos','mapping_groups','stepper_by_layer',
 'kbd_mappings_by_device','os_profiles','layer_keys'])if(!cfg[k])cfg[k]={};
 migrateDevices();migrateByDevice();repairGroupMembers();
-materialiseLayerDefaults();
-repairOrphanShadows();
-// 20.7.4 BF2: seed an "ios" profile from "mac". iPhone wants Cmd where Cmd
-// belongs -- exactly like macOS -- but the app switcher and other phone-only
-// behaviour need somewhere to live that is not your Mac's settings.
-if(cfg.os_profiles&&!cfg.os_profiles.ios){
-  const m=cfg.os_profiles.mac;
-  cfg.os_profiles.ios=m?JSON.parse(JSON.stringify(m)):{};
-  cfg.os_profiles.ios.unicode_method='mac_option_hex';}
-if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};}
+/* 21.0 BF1: THE UI NO LONGER EDITS YOUR CONFIG ON LOAD.
+   ------------------------------------------------------
+   Four things used to run right here, silently rewriting the config the
+   moment a page loaded: materialiseLayerDefaults(), repairOrphanShadows(),
+   seeding an "ios" OS profile, and defaulting dynamic_triggers. Every one
+   was defensible on its own and the combination was indefensible — opening a
+   page is not consent to change anything, and it made "I never saved" and
+   "my config changed" both true at once, which is the worst possible state
+   to debug from.
+
+   One-time fixes now live in `fix_config.py`, run deliberately on the Pi,
+   which prints what it would do and requires --apply to do it.
+
+   What remains here is READ-ONLY: ensure the object has the keys the
+   renderer indexes into, so drawing a page cannot throw. Nothing is
+   invented, nothing is repaired, nothing is seeded. */
+if(!cfg.dynamic_triggers)cfg.dynamic_triggers={};}
 /* 19.4 #1.4 repair: earlier imports filed combos and modifier shortcuts under
    "kbd:*,<key>" -- a wildcard matching that key on EVERY layer.  That is why
    unrelated rules (CapsLock+Right) turned up inside imported groups.  Drop
@@ -5824,8 +5831,13 @@ function normDynTriggers(){
               // the legacy companion table, read once and then retired
               space:!!((cfg.dynamic_space||{})[k]),
               name:DYN_KIND_NAME[k]||k};}}
-  writeDynTriggers(out);
-  delete cfg.dynamic_space;}
+  return out;}
+
+// 21.0 BF1: a READ-ONLY view for the renderer. normDynTriggers() used to call
+// writeDynTriggers() and delete cfg.dynamic_space -- i.e. merely LOOKING at
+// the Expansions tab rewrote your config. It returns the normalised shape now
+// and writes nothing; the write happens when you edit a row.
+function normDynView(){ return normDynTriggers(); }
 
 // Always write BOTH keys. This is the whole fix for "date triggers expand to
 // nothing": the browser was pushing dicts into dynamic_triggers, and an older
@@ -5855,11 +5867,11 @@ function strftimePreview(fmt){
     j:String(Math.floor((d-start)/86400000)).padStart(3,'0'),'%':'%'};
   return String(fmt||'').replace(/%(.)/g,(m,c)=>c in map?map[c]:m);}
 
-function renderDynTable(){
+function renderDynTable(view){
   const t=$('dyntable');if(!t)return;
   t.innerHTML='<tr><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
     +'<td><b>Produces</b></td><td><b>Trailing space</b></td><td></td></tr>';
-  for(const[trig,spec]of Object.entries(cfg.dynamic_formats||{})){
+  for(const[trig,spec]of Object.entries(view||cfg.dynamic_formats||{})){
     const tr=document.createElement('tr');
     tr.innerHTML=`<td><input type="text" class="dname" value="${esc(spec.name)}" style="width:9rem"></td>
       <td><input type="text" class="dtrig" value="${esc(trig)}" style="width:6rem"></td>
@@ -5899,15 +5911,11 @@ function renderDynTable(){
 
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
-  if(!cfg.dynamic_triggers)cfg.dynamic_triggers={"\\dt":"date","\\tm":"time","\\tdt":"datetime"};
-  // (cfg.dynamic_space is the retired 20.3 companion table; normDynTriggers
-  // folds it into each trigger's own `space` and deletes it.)
-  // 20.7.4 BF2: normalise to the dict form on the way in, so the rest of the
-  // UI has one shape to deal with. Old configs stored {trigger: kind} with
-  // three fixed kinds and the format hidden in the engine — which is why
-  // there was no way to add HH:MM or change what any of them produced.
-  normDynTriggers();
-  renderDynTable();
+  // 21.0 BF1: normalising READS the two shapes and hands the renderer one;
+  // it no longer writes the normalised form back into cfg. Opening the
+  // Expansions tab is not consent to rewrite your triggers. The write happens
+  // only when you actually edit a row.
+  renderDynTable(normDynView());
   const t=$('exptable');
   t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
   for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
