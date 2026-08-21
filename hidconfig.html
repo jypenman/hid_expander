@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 21.4</title>
+<title>HID Config 21.5</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -755,6 +755,28 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <b>⬆ Save to device</b> button at the top to apply.</p>
     <table style="width:100%" id="dyntable"></table>
     <button id="dynadd" style="margin-top:.35rem">＋ Add date/time trigger</button>
+    <div style="margin-top:.5rem;padding:.45rem .55rem;border:1px solid var(--line);border-radius:4px">
+      <b style="font-size:.82rem">Duration column</b>
+      <p class="muted" style="font-size:.76rem;margin:.25rem 0 0">
+      Works out how long something took and types it for you. The start time is read
+      back out of <i>what you have already typed</i> — <code>10:50</code>, <code>1440h</code>,
+      <code>930a</code>, <code>2:30pm</code> — so you can see and correct what is being measured.
+      A bare number like <code>1440</code> is ignored on purpose: it is usually a year or a
+      quantity, not a time.</p>
+      <table style="font-size:.76rem;margin-top:.3rem">
+        <tr><td style="padding-right:.6rem"><b>time + duration</b></td>
+            <td class="muted">types the time, then the gap. <code>10:50- tm </code> →
+            <code>10:50- 11:09 (19m)</code>. With nothing to read back it falls back to
+            when this trigger last fired.</td></tr>
+        <tr><td style="padding-right:.6rem"><b>duration only</b></td>
+            <td class="muted">types just the gap, for two times you typed yourself.
+            <code>1440h-1530h dur </code> → <code>1440h-1530h (50m)</code></td></tr>
+      </table>
+      <p class="muted" style="font-size:.74rem;margin:.35rem 0 0">
+      A <b>+</b> means the other end of the range is not on screen. Ranges that end before
+      they start are read as crossing midnight, so <code>2300h-0100h</code> is 2h.
+      Remember <b>⬆ Save to device</b>.</p>
+    </div>
     <details style="margin-top:.4rem">
       <summary class="muted" style="cursor:pointer;font-size:.78rem">Format tokens</summary>
       <p class="muted" style="font-size:.74rem">Standard <code>strftime</code>.
@@ -927,7 +949,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='21.4';
+const UI_ENGINE_EXPECT='21.5';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -5925,13 +5947,13 @@ function normDynTriggers(){
   for(const[t,v]of Object.entries(src)){
     if(v&&typeof v==='object'){
       out[t]={fmt:v.fmt||DYN_KIND_FMT.date,space:!!v.space,
-              elapsed:!!v.elapsed,name:v.name||t};
+              elapsed:!!v.elapsed,duronly:!!v.duronly,name:v.name||t};
     }else{
       const k=String(v);
       out[t]={fmt:DYN_KIND_FMT[k]||DYN_KIND_FMT.date,
               // the legacy companion table, read once and then retired
               space:!!((cfg.dynamic_space||{})[k]),
-              elapsed:false,
+              elapsed:false,duronly:false,
               name:DYN_KIND_NAME[k]||k};}}
   return out;}
 
@@ -5973,11 +5995,7 @@ function renderDynTable(view){
   const t=$('dyntable');if(!t)return;
   t.innerHTML='<tr><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
     +'<td><b>Produces</b></td><td><b>Trailing space</b></td>'
-    +'<td title="Also type how long since this same trigger last fired, then '
-    +'restart the clock. Use it on a time trigger to stamp the start and end '
-    +'of a task; leave it off for date+time triggers, which you reach for in '
-    +'too many unrelated places for the gap to mean anything."><b>Lap timer</b>'
-    +'</td><td></td></tr>';
+    +'<td><b>Duration</b></td><td></td></tr>';
   for(const[trig,spec]of Object.entries(view||cfg.dynamic_formats||{})){
     const tr=document.createElement('tr');
     tr.innerHTML=`<td><input type="text" class="dname" value="${esc(spec.name)}" style="width:9rem"></td>
@@ -5985,16 +6003,21 @@ function renderDynTable(view){
       <td><input type="text" class="dfmt" value="${esc(spec.fmt)}" style="width:11rem"></td>
       <td class="dprev muted" style="font-family:monospace"></td>
       <td style="text-align:center"><input type="checkbox" class="dspace" ${spec.space?'checked':''}></td>
-      <td style="text-align:center"><input type="checkbox" class="dlap" ${spec.elapsed?'checked':''}></td>
+      <td><select class="dlap">
+        <option value="" ${!spec.elapsed&&!spec.duronly?'selected':''}>— none</option>
+        <option value="append" ${spec.elapsed&&!spec.duronly?'selected':''}>time + duration</option>
+        <option value="only" ${spec.duronly?'selected':''}>duration only</option>
+      </select></td>
       <td><a class="mlink dkill" title="remove">✕</a></td>`;
     t.appendChild(tr);}
   const preview=()=>[...t.querySelectorAll('tr')].slice(1).forEach(tr=>{
     const f=tr.querySelector('.dfmt'),c=tr.querySelector('.dprev');
-    // The lap suffix is shown with a SAMPLE gap. There is no way to know the
-    // real one from here — it lives on the Pi — and showing "(+0s)" would
-    // read as a promise about the next expansion rather than an example.
-    if(f&&c)c.textContent=strftimePreview(f.value)
-      +(tr.querySelector('.dlap').checked?' (+2m 13s)':'')
+    // The duration is shown with a SAMPLE gap. There is no way to know the
+    // real one from here — it depends on what you have typed — and showing
+    // "(+0s)" would read as a promise rather than an example.
+    const dur=tr.querySelector('.dlap').value;
+    if(f&&c)c.textContent=(dur==='only'?'(50m)'
+      :strftimePreview(f.value)+(dur==='append'?' (+2m 13s)':''))
       +(tr.querySelector('.dspace').checked?'␣':'');});
   const rebind=()=>{
     // Trailing spaces in the TRIGGER are kept verbatim — a trigger like "dt "
@@ -6004,9 +6027,11 @@ function renderDynTable(view){
     for(const tr of [...t.querySelectorAll('tr')].slice(1)){
       const k=tr.querySelector('.dtrig').value;
       if(!k)continue;
+      const dur=tr.querySelector('.dlap').value;
       nt[k]={fmt:tr.querySelector('.dfmt').value||'%Y-%m-%d',
              space:tr.querySelector('.dspace').checked,
-             elapsed:tr.querySelector('.dlap').checked,
+             elapsed:dur==='append',
+             duronly:dur==='only',
              name:tr.querySelector('.dname').value||k};}
     writeDynTriggers(nt);preview();
     toast('date/time triggers changed — press ⬆ Save to device (top) to apply');};
@@ -6018,7 +6043,8 @@ function renderDynTable(view){
   if(add)add.onclick=()=>{
     let n=1;while((cfg.dynamic_formats||{})['\\new'+n])n++;
     const nt=Object.assign({},cfg.dynamic_formats);
-    nt['\\new'+n]={fmt:'%H:%M',space:false,elapsed:false,name:'New trigger'};
+    nt['\\new'+n]={fmt:'%H:%M',space:false,elapsed:false,duronly:false,
+                   name:'New trigger'};
     writeDynTriggers(nt);renderDynTable();
     toast('added — set its trigger and format, then ⬆ Save to device');};}
 
