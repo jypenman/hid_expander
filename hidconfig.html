@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 21.3</title>
+<title>HID Config 21.4</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -918,7 +918,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 /* ============ transport ============ */
 const RPT=32,CHUNK=RPT-4;
 const PING=0x20,GET=0x01,PUT_BEGIN=0x02,PUT_CHUNK=0x03,PUT_END=0x04,EVENTS_ON=0x10,EVENTS_OFF=0x11;
-const PONG=0xA0,CFG_BEGIN=0x81,CFG_CHUNK=0x82,CFG_END=0x83,EVENT=0x90,ACK=0xE0,ERR=0xE1;
+const PONG=0xA0,CFG_BEGIN=0x81,CFG_CHUNK=0x82,CFG_END=0x83,CFG_SAME=0x84,EVENT=0x90,ACK=0xE0,ERR=0xE1;
 const BT_CMD=0x30,BT_BEGIN=0xB0,BT_CHUNK=0xB1,BT_END=0xB2;
 const PROF_CMD=0x50,PF_BEGIN=0xC0,PF_CHUNK=0xC1,PF_END=0xC2;
 const CLOCK_CMD=0x60;
@@ -927,7 +927,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='21.3';
+const UI_ENGINE_EXPECT='21.4';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -993,8 +993,17 @@ function onReport(e){
     // A stall is "no chunk for a while", not "this is taking a while", so
     // the watchdog is now IDLE-based and every chunk resets it.
     _readPoke();}
+  else if(t===CFG_SAME){
+    // Nothing was transferred: what we hold is what the Pi has. Deliberately
+    // NOT re-rendering -- there is no new data, and a render would churn the
+    // DOM and drop the user's scroll position to say "nothing happened".
+    toast('✓ already up to date');
+    _readDone();}
   else if(t===CFG_END){
     try{
+      // The hash of what we just received, for the next read to quote back.
+      // Read before the length check so a short read cannot record one.
+      const digest=d.slice(1,9);
       const parts=Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
       const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
       for(const p of parts){buf.set(p,o);o+=p.length;}
@@ -1010,6 +1019,12 @@ function onReport(e){
         toast(`short read — ${missing} bytes missing. Reconnect and try again.`,true);return;}
       window._reReadTried=null;
       const obj=JSON.parse(new TextDecoder().decode(buf));
+      // Recorded only once the bytes are complete AND parse: a hash for a
+      // payload we could not read would make the next read skip a file we
+      // never actually got.
+      // Reports are zero-padded to 32 bytes, so a pre-21.4 engine's bare
+      // CFG_END arrives here as eight zeros. That is "no hash", not a hash.
+      if(digest&&digest.length===8&&digest.some(b=>b!==0))cfgHash[curFile]=digest;
       if(curFile===0){cfg=obj;
 normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
         $('svcwarn').style.display='none';}
@@ -1086,10 +1101,30 @@ let _readQ=[],_reading=false,_readTimer=null,_setsChannelOk=false;
 // What the pending ack belongs to, so the toast can tell the truth.
 let _lastOp=null;
 function getFile(fid){_readQ.push(fid);_drainReads();}
+// 21.4: the hash the Pi reported at the end of each successful read, per fid.
+// Offering it back lets the Pi answer "you already have this one" and send
+// nothing at all -- a reload of an unchanged config becomes instant instead of
+// ~4 s. Cleared on disconnect: a hash from another Pi means nothing here.
+let cfgHash={};
+function clearCfgHash(fid){if(fid===undefined)cfgHash={};else delete cfgHash[fid];}
+// Only offer the hash when what we HOLD is still what we were GIVEN. A read is
+// how you throw local edits away; if we claimed "unchanged" while the user had
+// unsaved changes in front of them, the Pi would send nothing and those edits
+// would survive a deliberate re-read. Silently keeping edits the user asked to
+// discard is a worse bug than a slow read.
+function _offerHash(fid){
+  const h=cfgHash[fid];
+  if(!h)return null;
+  if(fid===0){
+    let now=null;try{now=JSON.stringify(cfgForDiff());}catch(_){return null;}
+    if(_cfgSnap===null||now!==_cfgSnap)return null;   // edited since the read
+  }
+  return h;}
 async function _drainReads(){
   if(_reading||!_readQ.length||!device)return;
   _reading=true;curFile=_readQ.shift();rxGot={};
-  await send([GET,curFile]);
+  const h=_offerHash(curFile);
+  await send(h?[GET,curFile,h.length,...h]:[GET,curFile]);
   _readPoke();}
 // Idle watchdog: 4 s with NO traffic means the read is genuinely stuck. A
 // long transfer is not a stuck one, and conflating them is what produced the
@@ -1119,6 +1154,10 @@ $('connect').onclick=async()=>{
   if(!ds.length)return;
   device=ds.find(d=>d.collections.some(c=>c.usagePage===0xFF00))||ds[0];
   await device.open();device.addEventListener('inputreport',onReport);
+  // A hash identifies a payload on the Pi we were talking to. Connecting to
+  // the OTHER Pi with pi1's hashes in hand could skip a read of a genuinely
+  // different config, so they do not outlive a connection.
+  clearCfgHash();
   setConn(true);getFile(0);
   setTimeout(()=>getFile(1),500);       // expansions load automatically now too
   setTimeout(()=>getFile(2),700);       // device wireframe layouts
