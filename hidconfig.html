@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 21.7</title>
+<title>HID Config 21.8</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -795,6 +795,37 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     </details>
   </div>
   <div class="panel">
+    <h2 style="font-size:1rem">📝 Special Notes — save text without leaving the window</h2>
+    <p class="muted" style="font-size:.8rem">Wrap something in a note tag and the Pi appends it
+    to a <b>Copy / Paste</b> entry as a new line. Type it anywhere — an email, a terminal, a
+    dialog box — and it lands in the same place. The <b>closing</b> tag is what fires it.</p>
+    <table style="font-size:.8rem;margin:.4rem 0">
+      <tr><td style="padding:.15rem .6rem .15rem 0"><code>;;n;;</code>call Dana<code>;;/n;;</code></td>
+          <td class="muted">saves, and leaves what you typed plus a confirmation</td></tr>
+      <tr><td style="padding:.15rem .6rem .15rem 0"><code>;;!n;;</code>call Dana<code>;;/n;;</code></td>
+          <td class="muted">saves, then <b>erases the whole thing</b> — for jotting a note anywhere</td></tr>
+    </table>
+    <p class="muted" style="font-size:.76rem">The <code>!</code> goes at the <i>front</i> because
+    that is when you know whether the note should survive. Both use the same closing tag.
+    All of it happens on the Pi — this page does not need to be open.</p>
+    <table style="width:100%" id="notetable"></table>
+    <button id="noteadd" style="margin-top:.35rem">＋ Add a note tag</button>
+    <p class="muted" style="font-size:.76rem;margin-top:.4rem">
+    Removing a rule here does <b>not</b> delete what it saved — the Copy entry stays exactly
+    where it is and becomes an ordinary item, with its Delete button back. These save with the
+    top <b>⬆ Save to device</b>.</p>
+    <details style="margin-top:.4rem">
+      <summary class="muted" style="cursor:pointer;font-size:.78rem">Why <code>;;n;;</code> and not <code>\\</code> or <code>,,,</code></summary>
+      <p class="muted" style="font-size:.74rem">It has to survive being typed into code without
+      ever firing by accident. <code>,,,</code> is a C# multidimensional array
+      (<code>int[,,]</code>) and a JavaScript sparse array; <code>@@</code> is T-SQL;
+      <code>??</code> is C#; <code>%%</code> and <code>!!</code> are R; <code>::</code> is C++
+      and R; <code>\\</code> is a literal backslash in Python and R strings and the start of a
+      Windows UNC path. A semicolon-wrapped tag collides with none of them, and it reads as an
+      open/close pair, so another note type is just another letter.</p>
+    </details>
+  </div>
+  <div class="panel">
   <div class="bar"><button id="expread" disabled>⬇ Read expansions</button>
     <button id="expwrite" class="primary" disabled>⬆ Save expansions</button>
     <span class="muted">Expansions now also auto-load when you Connect.</span></div>
@@ -949,7 +980,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='21.7';
+const UI_ENGINE_EXPECT='21.8';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -3416,8 +3447,17 @@ function clipBytes(){
   try{return new TextEncoder().encode(JSON.stringify({clips})).length;}catch(_){return 0;}}
 function safeClipName(n){
   return String(n||'').replace(/[^A-Za-z0-9 ._'-]/g,'_').replace(/^[. ]+|[. ]+$/g,'').slice(0,60);}
+// 21.6: which Copy entries are the target of a Special Note rule. Those are
+// written by the ENGINE, so they get a Refresh and no Delete — deleting the
+// file the keyboard is appending to would just recreate it empty on the next
+// note, which looks like the delete silently failed. Removing the RULE (in
+// Expansions) is what hands the entry back as an ordinary clip.
+function noteClipNames(){
+  return new Set(((cfg&&cfg.note_rules)||[])
+    .map(r=>r&&r.clip).filter(Boolean));}
 function renderClips(){
   const host=$('cliplist');if(!host)return;
+  const _noteClips=noteClipNames();
   host.innerHTML='';
   const names=Object.keys(clips);
   if(!device&&!names.length){
@@ -3444,7 +3484,9 @@ function renderClips(){
     box.style.cssText='margin:.35rem 0;border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem';
     const sum=document.createElement('summary');
     sum.style.cssText='cursor:pointer;font-weight:600';
+    const isNote=_noteClips.has(c.name||key);
     sum.textContent=`${c.name||key} — ${(c.text||'').length.toLocaleString()} chars`
+      +(isNote?'  📝 notes target':'')
       +(c.error?'  ⚠ unreadable on the Pi':'');
     box.appendChild(sum);
     if(c.note){const nd=document.createElement('div');
@@ -3465,9 +3507,16 @@ function renderClips(){
     mk('⬇ Download',()=>{const a=document.createElement('a');
       a.href=URL.createObjectURL(new Blob([(clips[key]||{}).text||''],{type:'text/plain'}));
       a.download=(c.name||key)+'.txt';a.click();});
-    mk('🗑 Delete',()=>{
-      if(!confirm(`Delete "${c.name||key}"?`))return;
-      delete clips[key];delete _clipEdit[key];saveClips();});
+    if(isNote){
+      // The keyboard appends to this one while you are looking at it, so a
+      // stale view is the normal state rather than an error.
+      mk('↻ Refresh',()=>{
+        if(!device){toast('connect first',true);return;}
+        delete _clipEdit[key];getFile(6);toast('re-reading notes from the Pi…');});
+    }else{
+      mk('🗑 Delete',()=>{
+        if(!confirm(`Delete "${c.name||key}"?`))return;
+        delete clips[key];delete _clipEdit[key];saveClips();});}
     box.appendChild(bar);
     const ta=document.createElement('textarea');
     ta.rows=editing?16:8;
@@ -6048,8 +6097,76 @@ function renderDynTable(view){
     writeDynTriggers(nt);renderDynTable();
     toast('added — set its trigger and format, then ⬆ Save to device');};}
 
+/* ============ 21.6 Special Notes ============ */
+// Tags are stored in full rather than derived from a letter, because the whole
+// point of the panel is that the user can change them. Deriving them would
+// mean the UI silently rewriting a tag someone had deliberately customised —
+// the load-time-editing pattern §5 of CLAUDE.md exists to forbid.
+function noteTagsFor(tag){
+  return {open:';;'+tag+';;', wipe:';;!'+tag+';;', close:';;/'+tag+';;'};}
+function renderNoteTable(){
+  const t=$('notetable');if(!t)return;
+  const rules=(cfg&&cfg.note_rules)||[];
+  t.innerHTML='<tr><td><b>Saves into (Copy entry)</b></td><td><b>Start</b></td>'
+    +'<td><b>Start &amp; erase</b></td><td><b>End</b></td>'
+    +'<td><b>Types after it</b></td><td><b>On</b></td><td></td></tr>';
+  // The Add button is wired FIRST, before the empty-state return below. It
+  // used to be wired at the end, so with no rules yet the function returned
+  // early and the one button a new user needs was inert — dead in exactly the
+  // state everybody starts in.
+  const add=$('noteadd');
+  if(add)add.onclick=()=>{
+    const used=new Set(((cfg.note_rules)||[]).map(r=>r.open));
+    let tag='n';
+    // 'n' first, then the alphabet, skipping anything already taken
+    if(used.has(';;n;;')){
+      const abc='tqwrgpxyzbcdfhjkm';
+      tag=[...abc].find(ch=>!used.has(';;'+ch+';;'))||'n2';}
+    const tg=noteTagsFor(tag);
+    cfg.note_rules=(cfg.note_rules||[]).concat([{
+      clip:tag==='n'?'HID Notes':('HID Notes '+tag),
+      open:tg.open,wipe:tg.wipe,close:tg.close,
+      confirm:'[saved to HID Notes]',on:true}]);
+    renderNoteTable();renderClips();
+    toast('tag added — name its Copy entry, then ⬆ Save to device');};
+  if(!rules.length){
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td colspan="7" class="muted" style="font-size:.8rem">'
+      +'No note tags yet — press “＋ Add a note tag”.</td>';
+    t.appendChild(tr);return;}
+  rules.forEach((r,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><input type="text" class="nclip" value="${esc(r.clip||'')}" style="width:9rem"></td>
+      <td><input type="text" class="nopen" value="${esc(r.open||'')}" style="width:6rem"></td>
+      <td><input type="text" class="nwipe" value="${esc(r.wipe||'')}" style="width:6rem"></td>
+      <td><input type="text" class="nclose" value="${esc(r.close||'')}" style="width:6rem"></td>
+      <td><input type="text" class="nconf" value="${esc(r.confirm||'')}" style="width:12rem"></td>
+      <td style="text-align:center"><input type="checkbox" class="non" ${r.on!==false?'checked':''}></td>
+      <td><a class="mlink nkill" data-i="${i}" title="remove this tag (the saved text stays)">✕</a></td>`;
+    t.appendChild(tr);});
+  const rebind=()=>{
+    const out=[];
+    for(const tr of [...t.querySelectorAll('tr')].slice(1)){
+      const g=c=>{const el=tr.querySelector(c);return el?el.value.trim():'';};
+      const clip=g('.nclip'),open=g('.nopen'),close=g('.nclose');
+      if(!clip||!open||!close)continue;   // half-typed row: keep, don't save
+      out.push({clip,open,close,wipe:g('.nwipe'),confirm:g('.nconf'),
+                on:tr.querySelector('.non').checked});}
+    cfg.note_rules=out;
+    renderClips();                        // the 📝 badge follows the rules
+    toast('note tags changed — press ⬆ Save to device (top) to apply');};
+  t.oninput=rebind;t.onchange=rebind;
+  t.querySelectorAll('.nkill').forEach(a=>a.onclick=e=>{
+    const i=+e.target.dataset.i,r=(cfg.note_rules||[])[i]||{};
+    if(!confirm(`Remove the ${r.open||''} tag?\n\n`
+      +`"${r.clip||''}" in Copy / Paste is NOT deleted — it stays exactly as it is `
+      +`and becomes an ordinary item.`))return;
+    cfg.note_rules.splice(i,1);renderNoteTable();renderClips();
+    toast('tag removed — ⬆ Save to device to apply');});}
+
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
+  renderNoteTable();
   // 21.0 BF1: normalising READS the two shapes and hands the renderer one;
   // it no longer writes the normalised form back into cfg. Opening the
   // Expansions tab is not consent to rewrite your triggers. The write happens
