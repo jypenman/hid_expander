@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 21.0 BF1</title>
+<title>HID Config 21.3</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -40,6 +40,23 @@ background:var(--panel);color:inherit;font-size:.88rem}
 button.primary{background:var(--hi);border-color:var(--hi);color:#fff;font-weight:600}
 button:disabled{opacity:.4;cursor:default}
 .bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0}
+/* 20.2 #2: the top row follows you down the page. Connect, Read and Save are
+   the controls you reach for after scrolling to look at something, and having
+   to scroll back up to press them is the whole complaint.
+    rather than : fixed would take the row out of flow and
+   leave a gap the rest of the layout has to be told about, which breaks the
+   first time the row wraps on a narrow window. Sticky keeps it in flow and
+   costs nothing. */
+.topbar{position:sticky;top:0;z-index:60;
+  background:Canvas;border-bottom:1px solid var(--line);
+  margin:0 0 .5rem;padding:.45rem 0;
+  /* the panels below scroll UNDER it, so it needs to be opaque and to cover
+     the full width of the scroller, not just its content box */
+  box-shadow:0 2px 8px rgba(0,0,0,.18)}
+/* On a short window a sticky bar that wraps to three rows eats the screen.
+   Below this height it scrolls away like anything else -- better to lose the
+   convenience than the content. */
+@media (max-height:520px){.topbar{position:static;box-shadow:none}}
 .status{padding:.1rem .6rem;border-radius:999px;font-size:.8rem;border:1px solid var(--line)}
 .status.on{background:var(--ok);color:#fff}.status.off{background:var(--err);color:#fff}
 .tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin:.7rem 0;border-bottom:1px solid var(--line);padding-bottom:.5rem}
@@ -308,7 +325,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 #rightcol{flex:1 1 auto;position:static;max-height:none;width:100%}}
 </style></head><body>
 
-<div class="bar">
+<div class="bar topbar" id="topbar">
   <h1 style="margin:0;line-height:1.05">🔌 HID Config<br>
     <span id="uiver" style="font-size:.6rem;font-weight:400;opacity:.6"
       title="UI version (from the page title) · engine version once connected"></span></h1>
@@ -910,7 +927,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='21.0';
+const UI_ENGINE_EXPECT='21.3';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -959,8 +976,23 @@ function onReport(e){
     const txt=window._evbuf; window._evbuf='';
     if(txt.startsWith('OUT:')){const raw=txt.slice(4);log(annotate(raw),'tx','outlog');liveOut(raw);}
     else{log(annotate(txt),'ev','log');liveRaw(txt);}}
-  else if(t===CFG_BEGIN){rxTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);rxGot={};}
-  else if(t===CFG_CHUNK){rxGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
+  else if(t===CFG_BEGIN){rxTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);rxGot={};
+    _readPoke();}
+  else if(t===CFG_CHUNK){rxGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);
+    // 20.3: THE SHORT-READ BUG. The watchdog was a TOTAL timeout of 4 s, but
+    // the config is ~35 KB and the channel does ~9 KB/s -- so a perfectly
+    // healthy read took about 4 s and tripped its own timeout. _readDone()
+    // then started the NEXT read, which cleared rxGot while chunks from the
+    // first were still arriving; they landed in the new buffer under the old
+    // sequence numbers and CFG_END reported a length mismatch.
+    //
+    // That is why the missing-byte counts were all over the place (1680,
+    // 3528, 12264...): the transfer was being cut at an arbitrary point, not
+    // failing in a consistent way.
+    //
+    // A stall is "no chunk for a while", not "this is taking a while", so
+    // the watchdog is now IDLE-based and every chunk resets it.
+    _readPoke();}
   else if(t===CFG_END){
     try{
       const parts=Object.keys(rxGot).map(Number).sort((a,b)=>a-b).map(k=>rxGot[k]);
@@ -1041,18 +1073,38 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
     const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
     for(const p of parts){buf.set(p,o);o+=p.length;}
     btResult(new TextDecoder().decode(buf));}
-  else if(t===ACK)toast('✓ saved (hot-reloads ~2s)');
+  else if(t===ACK){
+    // 20.3: this said "saved" for EVERY ack, including the one that ends a
+    // READ -- which is why a short read was immediately followed by
+    // "Saved (hot-reloads in 2s)" and looked like the UI had written
+    // something. It reports what actually happened now.
+    toast(_lastOp==='put'?'✓ saved (hot-reloads ~2s)':'✓ done');
+    _lastOp=null;}
   else if(t===ERR){toast('✗ '+new TextDecoder().decode(d.slice(1)).replace(/\0+$/,''),true);_readDone();}
 }
 let _readQ=[],_reading=false,_readTimer=null,_setsChannelOk=false;
+// What the pending ack belongs to, so the toast can tell the truth.
+let _lastOp=null;
 function getFile(fid){_readQ.push(fid);_drainReads();}
 async function _drainReads(){
   if(_reading||!_readQ.length||!device)return;
   _reading=true;curFile=_readQ.shift();rxGot={};
   await send([GET,curFile]);
-  clearTimeout(_readTimer);_readTimer=setTimeout(_readDone,4000);}
+  _readPoke();}
+// Idle watchdog: 4 s with NO traffic means the read is genuinely stuck. A
+// long transfer is not a stuck one, and conflating them is what produced the
+// short reads.
+const READ_IDLE_MS=4000;
+function _readPoke(){
+  clearTimeout(_readTimer);
+  _readTimer=setTimeout(()=>{
+    if(_reading)toast('read stalled (no data for '+(READ_IDLE_MS/1000)
+      +'s) — retrying is safe',true);
+    _readDone();
+  },READ_IDLE_MS);}
 function _readDone(){clearTimeout(_readTimer);_reading=false;_drainReads();}
 async function putFile(fid,obj){
+  _lastOp='put';
   const data=new TextEncoder().encode(JSON.stringify(obj));
   await send([PUT_BEGIN,data.length&255,(data.length>>8)&255,(data.length>>16)&255,(data.length>>24)&255,fid]);
   let seq=0;
@@ -1311,7 +1363,10 @@ function startStatusPoll(){clearInterval(statTimer);
     // bytes, so batching MACs silently truncated the command ("status
     // 36:12:.. C9:8C") and the poll failed for every MAC after the first
     boundMacs().forEach((m,i)=>setTimeout(()=>btCmd('status '+m,true),i*400));
-    if(!editDev)getFile(3);          // keep engine ground-truth fresh
+    // 20.3: skip the poll while a read is in flight or queued. It is a
+    // background refresh, and adding it to a busy 9 KB/s pipe every 10 s is
+    // how a slow read becomes a stalled one.
+    if(!editDev&&!_reading&&!_readQ.length)getFile(3);
   },10000);}
 let lastEng=null;
 window.btConnectDev=mac=>{
@@ -1844,7 +1899,8 @@ function actShort(a){if(!a)return'';const k=a[0];
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
 if(k==='macro')return macroLabel(a[1]);if(k==='macro_up')return macroLabel(a[1])+'↑';
 if(k==='macro_both')return macroLabel(a[1])+'/'+macroLabel(a[2])+'↑';
-if(k==='suppress')return'∅';if(k==='dpi_cycle')return'DPI';return k;}
+if(k==='suppress')return'∅';if(k==='passthru')return'↷ as-is';
+if(k==='dpi_cycle')return'DPI';return k;}
 function actHTML(a){if(!a)return'';const k=a[0];
 const link=n=>`<a class="mlink" onclick="gotoMacro(${n})">${macroLabel(n).replace(/</g,'&lt;')}</a>`;
 if(k==='macro')return link(a[1]);
@@ -4760,10 +4816,14 @@ function renderModChordEd(ed){
     <p class="muted" style="font-size:.78rem">Fires whenever <b>${esc(modsName(sel.mods))}</b> is held and
     <b>${esc(KEYS[sel.canon]||'?')}</b> is pressed, on any layer and any device. The held modifier is
     <i>not</i> passed through — the action below replaces it entirely.
-    <b>Shift-click</b> another key to change the combination.</p>
+    <b>Shift-click</b> another key to change the combination.<br>
+    <b>Pass through unchanged</b> is the exception: it means “this exact combination is deliberately
+    <i>not</i> rewritten”. Use it to carve one Shift variant out of a rule — without it, a missing
+    Shift rule falls back to the no-Shift rule and sends that instead.</p>
     <div class="row"><div>
       <label>On press</label><select id="mcact">
         <option value="suppress" ${a[0]==='suppress'?'selected':''}>Nothing (swallow)</option>
+        <option value="passthru" ${a[0]==='passthru'?'selected':''}>Pass through unchanged</option>
         <option value="keymods" ${a[0]==='keymods'?'selected':''}>Key with modifiers…</option>
         <option value="key" ${a[0]==='key'?'selected':''}>Key (no modifiers)…</option>
         <option value="macro" ${a[0]==='macro'?'selected':''}>Macro…</option>
@@ -4799,6 +4859,7 @@ function renderModChordEd(ed){
     const k=$('mcact').value,el=$('mcarg'),v=el?el.value:null;
     let act;
     if(k==='suppress')act=['suppress'];
+    else if(k==='passthru')act=['passthru'];
     else if(k==='text')act=['text',v==null?'':v];
     else if(k==='macro')act=['macro',+v||1];
     else if(k==='key')act=['key',+v||0x28];
@@ -5824,12 +5885,14 @@ function normDynTriggers(){
     ?cfg.dynamic_formats:(cfg.dynamic_triggers||{});
   for(const[t,v]of Object.entries(src)){
     if(v&&typeof v==='object'){
-      out[t]={fmt:v.fmt||DYN_KIND_FMT.date,space:!!v.space,name:v.name||t};
+      out[t]={fmt:v.fmt||DYN_KIND_FMT.date,space:!!v.space,
+              elapsed:!!v.elapsed,name:v.name||t};
     }else{
       const k=String(v);
       out[t]={fmt:DYN_KIND_FMT[k]||DYN_KIND_FMT.date,
               // the legacy companion table, read once and then retired
               space:!!((cfg.dynamic_space||{})[k]),
+              elapsed:false,
               name:DYN_KIND_NAME[k]||k};}}
   return out;}
 
@@ -5870,7 +5933,12 @@ function strftimePreview(fmt){
 function renderDynTable(view){
   const t=$('dyntable');if(!t)return;
   t.innerHTML='<tr><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
-    +'<td><b>Produces</b></td><td><b>Trailing space</b></td><td></td></tr>';
+    +'<td><b>Produces</b></td><td><b>Trailing space</b></td>'
+    +'<td title="Also type how long since this same trigger last fired, then '
+    +'restart the clock. Use it on a time trigger to stamp the start and end '
+    +'of a task; leave it off for date+time triggers, which you reach for in '
+    +'too many unrelated places for the gap to mean anything."><b>Lap timer</b>'
+    +'</td><td></td></tr>';
   for(const[trig,spec]of Object.entries(view||cfg.dynamic_formats||{})){
     const tr=document.createElement('tr');
     tr.innerHTML=`<td><input type="text" class="dname" value="${esc(spec.name)}" style="width:9rem"></td>
@@ -5878,11 +5946,16 @@ function renderDynTable(view){
       <td><input type="text" class="dfmt" value="${esc(spec.fmt)}" style="width:11rem"></td>
       <td class="dprev muted" style="font-family:monospace"></td>
       <td style="text-align:center"><input type="checkbox" class="dspace" ${spec.space?'checked':''}></td>
+      <td style="text-align:center"><input type="checkbox" class="dlap" ${spec.elapsed?'checked':''}></td>
       <td><a class="mlink dkill" title="remove">✕</a></td>`;
     t.appendChild(tr);}
   const preview=()=>[...t.querySelectorAll('tr')].slice(1).forEach(tr=>{
     const f=tr.querySelector('.dfmt'),c=tr.querySelector('.dprev');
+    // The lap suffix is shown with a SAMPLE gap. There is no way to know the
+    // real one from here — it lives on the Pi — and showing "(+0s)" would
+    // read as a promise about the next expansion rather than an example.
     if(f&&c)c.textContent=strftimePreview(f.value)
+      +(tr.querySelector('.dlap').checked?' (+2m 13s)':'')
       +(tr.querySelector('.dspace').checked?'␣':'');});
   const rebind=()=>{
     // Trailing spaces in the TRIGGER are kept verbatim — a trigger like "dt "
@@ -5894,6 +5967,7 @@ function renderDynTable(view){
       if(!k)continue;
       nt[k]={fmt:tr.querySelector('.dfmt').value||'%Y-%m-%d',
              space:tr.querySelector('.dspace').checked,
+             elapsed:tr.querySelector('.dlap').checked,
              name:tr.querySelector('.dname').value||k};}
     writeDynTriggers(nt);preview();
     toast('date/time triggers changed — press ⬆ Save to device (top) to apply');};
@@ -5905,7 +5979,7 @@ function renderDynTable(view){
   if(add)add.onclick=()=>{
     let n=1;while((cfg.dynamic_formats||{})['\\new'+n])n++;
     const nt=Object.assign({},cfg.dynamic_formats);
-    nt['\\new'+n]={fmt:'%H:%M',space:false,name:'New trigger'};
+    nt['\\new'+n]={fmt:'%H:%M',space:false,elapsed:false,name:'New trigger'};
     writeDynTriggers(nt);renderDynTable();
     toast('added — set its trigger and format, then ⬆ Save to device');};}
 
@@ -6354,7 +6428,8 @@ function renderWinmode(){
   const eng=(lastEng&&lastEng.winmode)||null;
   const oses=osKnown();
   const wo=cfg.winmode_oses||(eng&&eng.oses)||['win'];
-  b.innerHTML=`<label>Trigger chord (hold these, then move the mouse)</label>
+  const armMs=cfg.winmode_arm_ms!==undefined?+cfg.winmode_arm_ms:700;
+  b.innerHTML=`<label>Trigger chord (hold these, then move the mouse <i>or</i> keep holding)</label>
     <div>${MOD_BITS.map(([bit,n])=>`<label style="display:inline-flex;align-items:center;gap:.25rem;margin-right:.7rem">
       <input type="checkbox" data-wmmod="${bit}" ${cur&bit?'checked':''}>${esc(n)}</label>`).join('')}</div>
     <div class="row" style="margin-top:.4rem">
@@ -6362,6 +6437,15 @@ function renderWinmode(){
       <div><label>Resize macro (chord + Shift)</label><select id="wmresize">${macOpts(cfg.winmode_resize_macro||2)}</select></div>
     </div>
     <div class="row" style="margin-top:.4rem">
+      <div><label>Hold delay before it engages (ms)</label>
+        <input type="number" id="wmarm" min="0" step="50" value="${armMs}">
+        <div class="muted" style="font-size:.72rem">Window mode used to wait
+        for mouse MOVEMENT, which never comes if you are using a trackpad or a
+        second mouse that does not go through the Pi. Holding the chord this
+        long now engages it too. <b>0 = movement only</b> (the old behaviour).
+        <br>Keep it long: anything under ~150&nbsp;ms starts swallowing
+        ordinary chord shortcuts like Alt+Cmd+F, and the engine clamps to 150
+        for that reason.</div></div>
       <div><label>Cursor bump X</label><input type="number" id="wmbx" value="${(cfg.winmode_cursor_bump||[-15,15])[0]}"></div>
       <div><label>Cursor bump Y</label><input type="number" id="wmby" value="${(cfg.winmode_cursor_bump||[-15,15])[1]}"></div>
     </div>
@@ -6375,6 +6459,7 @@ function renderWinmode(){
     cfg.winmode_move_macro=+$('wmmove').value||1;
     cfg.winmode_resize_macro=+$('wmresize').value||2;
     cfg.winmode_cursor_bump=[+$('wmbx').value||0,+$('wmby').value||0];
+    cfg.winmode_arm_ms=Math.max(0,+$('wmarm').value||0);
     const os=[];b.querySelectorAll('[data-wmos]:checked').forEach(x=>os.push(x.dataset.wmos));
     cfg.winmode_oses=os.length?os:['win'];
     toast('window mode updated — ⬆ Save to device');};
