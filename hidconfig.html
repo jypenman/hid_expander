@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 21.8</title>
+<title>HID Config 21.9</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -350,6 +350,14 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <button id="dl" disabled>💾 Download profile</button>
   <label style="margin:0"><input type="file" id="up" accept=".json" style="display:none">
     <button onclick="document.getElementById('up').click()">📂 Load profile file</button></label>
+  <span id="uisearchwrap" style="position:relative;display:inline-block">
+    <input type="search" id="uisearch" placeholder="🔎 Search this page…" autocomplete="off"
+      style="width:13rem" title="Find anything in the UI — settings, mappings, triggers, macro names. Enter jumps to the first match; Esc closes.">
+    <div id="uisearchdrop" style="display:none;position:absolute;top:100%;right:0;z-index:60;
+      min-width:26rem;max-width:34rem;max-height:60vh;overflow:auto;margin-top:.2rem;
+      background:var(--bg,#fff);border:1px solid var(--line);border-radius:8px;
+      box-shadow:0 8px 24px rgba(0,0,0,.28)"></div>
+  </span>
   <button id="ostoggle" title="Which OS profile the engine applies (per-OS macro/mapping overlays). Click to switch, then ⬆ Save to device to apply & persist.">🪟 Win</button>
   <span id="toast"></span>
 </div>
@@ -980,7 +988,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='21.8';
+const UI_ENGINE_EXPECT='21.9';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -988,7 +996,11 @@ function showVersions(engine){
   const el=document.getElementById('uiver');if(!el)return;
   el.textContent='v'+UI_VERSION+(engine?'  ·  engine '+engine:'');
   el.style.color=(engine&&engine!==UI_ENGINE_EXPECT)?'var(--warn,#b45309)':'';}
-document.addEventListener('DOMContentLoaded',()=>showVersions(null));
+document.addEventListener('DOMContentLoaded',()=>{
+  showVersions(null);
+  // Wired here rather than at the definition: the input must exist, and the
+  // page works fully disconnected, so search has to come up without a device.
+  try{initUiSearch();}catch(e){console.warn('search init failed',e);}});
 let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
@@ -6097,6 +6109,152 @@ function renderDynTable(view){
     writeDynTriggers(nt);renderDynTable();
     toast('added — set its trigger and format, then ⬆ Save to device');};}
 
+/* ============ 21.9 UI search ============ */
+// The page is one long scroll of collapsible sections, so "where is that
+// setting?" is a real problem: the thing you want may be inside a <details>
+// that is shut, which no amount of scrolling reveals.
+//
+// Searches BOTH text and form values. Most of this UI's content is in
+// <input value="…"> and <select> — trigger text, macro names, mappings — so a
+// text-only search would miss exactly the things worth looking up.
+const _SEARCH_SKIP=new Set(['SCRIPT','STYLE','NOSCRIPT','OPTION']);
+const SEARCH_MAX=40;
+let _searchHits=[],_searchTimer=null;
+
+// Where a hit lives, for the "which part of the UI" label. Nearest enclosing
+// <details> summaries and panel headings, outermost first.
+function _searchPath(el){
+  const parts=[];
+  for(let n=el;n&&n!==document.body;n=n.parentElement){
+    if(n.tagName==='DETAILS'){
+      const s=n.querySelector(':scope > summary');
+      if(s)parts.unshift(s.textContent.trim().replace(/\s+/g,' ').slice(0,44));
+    }else if(n.classList&&n.classList.contains('panel')){
+      const h=n.querySelector(':scope > h2, :scope > h3');
+      if(h)parts.unshift(h.textContent.trim().replace(/\s+/g,' ').slice(0,44));}}
+  return parts.slice(-2).join(' › ')||'page';}
+
+function _searchVisible(el){
+  // display:none panels are still findable — that is the point — but an
+  // element with no box at all cannot be scrolled to, so remember which.
+  return !!(el.offsetParent||el.getClientRects().length);}
+
+// Most panels are built lazily, when their section is first opened. Anything
+// not yet built is not in the DOM and therefore cannot be found — which makes
+// search useless for exactly the settings you cannot locate by eye. So build
+// them first.
+//
+// This is rendering, not editing: none of these write to cfg on render (that
+// happens in their input handlers), so it does not run foul of §5 — and it is
+// user-initiated, not something a page load does behind your back.
+function _searchMaterialise(){
+  if(typeof cfg==='undefined'||!cfg)return;
+  for(const fn of ['render','renderExp','renderSets','renderClips',
+                   'renderNoteTable','renderWinmode','renderOsTab',
+                   'renderMapTable','renderDevices']){
+    try{if(typeof window[fn]==='function')window[fn]();}catch(_){}}
+  try{if(typeof renderDynTable==='function')renderDynTable(normDynView());}
+  catch(_){}}
+
+function uiSearchRun(q){
+  const hits=[];
+  q=q.trim();
+  if(q.length<2)return hits;
+  _searchMaterialise();
+  const needle=q.toLowerCase();
+  const push=(el,hay,label)=>{
+    const i=hay.toLowerCase().indexOf(needle);
+    if(i<0)return;
+    const from=Math.max(0,i-38),to=Math.min(hay.length,i+needle.length+46);
+    hits.push({el,
+      pre:(from?'…':'')+hay.slice(from,i),
+      hit:hay.slice(i,i+needle.length),
+      post:hay.slice(i+needle.length,to)+(to<hay.length?'…':''),
+      path:_searchPath(el),kind:label});};
+  const all=document.querySelectorAll('body *');
+  for(const el of all){
+    if(hits.length>=SEARCH_MAX)break;
+    if(_SEARCH_SKIP.has(el.tagName))continue;
+    if(el.closest('#uisearchwrap'))continue;      // never search the box itself
+    if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'){
+      if(el.type==='password')continue;
+      push(el,el.value||'','value');
+      if(el.placeholder)push(el,el.placeholder,'placeholder');
+      continue;}
+    if(el.tagName==='SELECT'){
+      const o=el.options[el.selectedIndex];
+      if(o)push(el,o.textContent||'','selected');
+      continue;}
+    // Only this element's OWN text, so a match is not reported again for
+    // every ancestor all the way up to <body>.
+    let own='';
+    for(const n of el.childNodes)
+      if(n.nodeType===3)own+=n.nodeValue;
+    own=own.replace(/\s+/g,' ').trim();
+    if(own)push(el,own,'text');}
+  return hits;}
+
+function uiSearchRender(hits,q){
+  const d=$('uisearchdrop');if(!d)return;
+  if(!q.trim()){d.style.display='none';d.innerHTML='';return;}
+  if(!hits.length){
+    d.style.display='';
+    d.innerHTML='<div class="muted" style="padding:.5rem .6rem;font-size:.82rem">'
+      +`No match for “${esc(q)}”.</div>`;return;}
+  d.style.display='';
+  d.innerHTML=hits.map((h,i)=>
+    `<div class="uisearchhit" data-i="${i}" style="padding:.4rem .6rem;cursor:pointer;
+       border-bottom:1px solid var(--line);font-size:.82rem">
+       <div class="muted" style="font-size:.7rem">${esc(h.path)}${h.kind!=='text'?' · '+esc(h.kind):''}</div>
+       <div>${esc(h.pre)}<mark>${esc(h.hit)}</mark>${esc(h.post)}</div>
+     </div>`).join('')
+    +(hits.length>=SEARCH_MAX?'<div class="muted" style="padding:.35rem .6rem;font-size:.72rem">'
+      +`first ${SEARCH_MAX} matches — narrow the search to see more</div>`:'');
+  d.querySelectorAll('.uisearchhit').forEach(row=>{
+    row.onmouseenter=()=>row.style.background='var(--pick-soft)';
+    row.onmouseleave=()=>row.style.background='';
+    row.onclick=()=>uiSearchGo(+row.dataset.i);});}
+
+function uiSearchGo(i){
+  const h=_searchHits[i];if(!h||!h.el)return;
+  // Open every collapsed ancestor first — the usual reason you could not find
+  // this yourself is that one of them was shut.
+  for(let n=h.el;n&&n!==document.body;n=n.parentElement){
+    if(n.tagName==='DETAILS'&&!n.open)n.open=true;
+    if(n.style&&n.style.display==='none')n.style.display='';}
+  $('uisearchdrop').style.display='none';
+  const el=h.el;
+  if(!_searchVisible(el)){
+    toast('that match is in a section that is not on screen right now',true);
+    return;}
+  el.scrollIntoView({block:'center',behavior:'smooth'});
+  // Flash rather than leave a permanent mark: this is "look here", not a
+  // selection, and a highlight that stays gets stale the moment you edit.
+  const prevOutline=el.style.outline,prevOffset=el.style.outlineOffset;
+  el.style.outline='2px solid var(--pick,#d97706)';
+  el.style.outlineOffset='2px';
+  setTimeout(()=>{el.style.outline=prevOutline;
+                  el.style.outlineOffset=prevOffset;},2200);
+  if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')
+    try{el.focus({preventScroll:true});}catch(_){el.focus();}}
+
+function initUiSearch(){
+  const box=$('uisearch');if(!box)return;
+  const run=()=>{_searchHits=uiSearchRun(box.value);
+                 uiSearchRender(_searchHits,box.value);};
+  // Debounced: the scan walks every element, and re-running it on each
+  // keystroke of a long word is wasted work on a slow machine.
+  box.oninput=()=>{clearTimeout(_searchTimer);_searchTimer=setTimeout(run,140);};
+  box.onfocus=()=>{if(box.value.trim())run();};
+  box.onkeydown=e=>{
+    if(e.key==='Escape'){box.value='';uiSearchRender([],'');box.blur();}
+    else if(e.key==='Enter'){e.preventDefault();
+      clearTimeout(_searchTimer);run();
+      if(_searchHits.length)uiSearchGo(0);}};
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('#uisearchwrap'))
+      {const d=$('uisearchdrop');if(d)d.style.display='none';}});}
+
 /* ============ 21.6 Special Notes ============ */
 // Tags are stored in full rather than derived from a letter, because the whole
 // point of the panel is that the user can change them. Deriving them would
@@ -6615,8 +6773,27 @@ function renderWinmode(){
     <div>${MOD_BITS.map(([bit,n])=>`<label style="display:inline-flex;align-items:center;gap:.25rem;margin-right:.7rem">
       <input type="checkbox" data-wmmod="${bit}" ${cur&bit?'checked':''}>${esc(n)}</label>`).join('')}</div>
     <div class="row" style="margin-top:.4rem">
-      <div><label>Move macro</label><select id="wmmove">${macOpts(cfg.winmode_move_macro||1)}</select></div>
-      <div><label>Resize macro (chord + Shift)</label><select id="wmresize">${macOpts(cfg.winmode_resize_macro||2)}</select></div>
+      <div><label>Resize macro (chord alone)</label><select id="wmresize">${macOpts(cfg.winmode_resize_macro||2)}</select></div>
+      <div><label>Move macro (chord + Shift)</label><select id="wmmove">${macOpts(cfg.winmode_move_macro||1)}</select></div>
+    </div>
+    <div class="row" style="margin-top:.4rem">
+      <div><label>Click before the macro runs</label>
+        <select id="wmclick">
+          <option value="auto" ${cfg.winmode_click_first===undefined||cfg.winmode_click_first===null||cfg.winmode_click_first==='auto'?'selected':''}>Auto — only when the mouse brought it in (recommended)</option>
+          <option value="1" ${cfg.winmode_click_first===true?'selected':''}>Always click first</option>
+          <option value="0" ${cfg.winmode_click_first===false?'selected':''}>Never click first</option>
+        </select>
+        <div class="muted" style="font-size:.72rem">The window macros start by
+        pressing the left mouse button. That is right when window mode was
+        entered <b>by moving the mouse</b> — you are already dragging, and the
+        click starts the drag.
+        <br>It is wrong when you entered by <b>holding</b> the chord: the
+        pointer has not moved, so the click lands on whatever is under it,
+        which can move focus to another window — and Windows closes a system
+        menu on a mouse-down anyway. <code>Alt+Space</code>, <code>S</code> and
+        the arrows then go nowhere, which looks exactly like "it fires but the
+        resize never starts". <b>Auto</b> decides per entry and is what you
+        want.</div></div>
     </div>
     <div class="row" style="margin-top:.4rem">
       <div><label>Hold delay before it engages (ms)</label>
@@ -6634,7 +6811,7 @@ function renderWinmode(){
     <label style="margin-top:.4rem">Active on</label>
     <div>${oses.map(o=>`<label style="display:inline-flex;align-items:center;gap:.25rem;margin-right:.7rem">
       <input type="checkbox" data-wmos="${esc(o)}" ${wo.includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>
-    <p class="muted" style="font-size:.75rem;margin-top:.3rem">Engine currently: chord <b>${eng?modsName(eng.mods):'?'}</b>${eng?` · move M${eng.move_macro} · resize M${eng.resize_macro} · on ${eng.oses.join(', ')}`:' (connect to read)'}</p>`;
+    <p class="muted" style="font-size:.75rem;margin-top:.3rem">Engine currently: chord <b>${eng?modsName(eng.mods):'?'}</b>${eng?` · resize M${eng.resize_macro} · move M${eng.move_macro} · click ${eng.click_first===null||eng.click_first===undefined?'auto':(eng.click_first?'always':'never')} · on ${eng.oses.join(', ')}`:' (connect to read)'}</p>`;
   const commit=()=>{
     let m=0;b.querySelectorAll('[data-wmmod]:checked').forEach(x=>m|=+x.dataset.wmmod);
     cfg.winmode_mods=m;
@@ -6642,6 +6819,11 @@ function renderWinmode(){
     cfg.winmode_resize_macro=+$('wmresize').value||2;
     cfg.winmode_cursor_bump=[+$('wmbx').value||0,+$('wmby').value||0];
     cfg.winmode_arm_ms=Math.max(0,+$('wmarm').value||0);
+    // 'auto' is stored as null, not omitted: an absent key and an explicit
+    // "let the engine decide" look identical otherwise, and the difference
+    // matters the next time someone reads this config.
+    const cf=$('wmclick').value;
+    cfg.winmode_click_first=cf==='auto'?null:(cf==='1');
     const os=[];b.querySelectorAll('[data-wmos]:checked').forEach(x=>os.push(x.dataset.wmos));
     cfg.winmode_oses=os.length?os:['win'];
     toast('window mode updated — ⬆ Save to device');};
