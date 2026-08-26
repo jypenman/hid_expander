@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 21.9</title>
+<title>HID Config 22.0 BF1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -988,7 +988,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='21.9';
+const UI_ENGINE_EXPECT='22.0 BF1';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -2164,6 +2164,29 @@ function remapModUsage(u){
   const right=u>=0xe4;                      // keep the side (RCtrl -> RWin)
   const base=BIT2MODUSAGE[to];
   return base===undefined?u:(right?base+4:base);}
+
+/* 22.0 #4a: mod-chords are matched against the modifiers the engine SEES,
+   which is AFTER mod_remap. The wireframe was handing them the modifiers you
+   physically PRESS, which is before it. With the Cmd<->Ctrl swap on Windows
+   those two disagree about every chord involving either key.
+
+   The symptom was exact: clicking the key labelled LCtrl produced a chord that
+   never fired, and to get one that did you had to click the key whose centre
+   said LWin -- i.e. you had to do the swap in your head, in the one place the
+   UI was already drawing it on screen.
+   physBit -> engineBit is the direction the engine goes; engineBit -> physBit
+   is what a label has to say, because a label names the key you hold. */
+function modBitToEngine(bit){
+  const tbl=activeModRemap();
+  return tbl[bit]!==undefined?+tbl[bit]:bit;}
+function modBitToPhysical(bit){
+  const tbl=activeModRemap();
+  for(const k of Object.keys(tbl))if(+tbl[k]===bit)return +k;
+  return bit;}
+function modsToEngine(mods){
+  let out=0;
+  for(const b of [0x01,0x02,0x04,0x08])if(mods&b)out|=modBitToEngine(b);
+  return out;}
 // modifier shortcuts (mod-chords) that fire from this canonical key
 /* 20.1 BF1: gesture (port2_kbd) binding for a canonical key on the ACTIVE
    layer, plus a readable glyph for the arrows/space the E9 sends. */
@@ -2921,7 +2944,20 @@ const MOD_BIT={0xe0:0x01,0xe1:0x02,0xe2:0x04,0xe3:0x08,
 function isModUsage(u){return u>=0xe0&&u<=0xe7;}
 function splitMods(keys){
   let mods=0;const plain=[];
-  for(const u of keys){if(isModUsage(u))mods|=MOD_BIT[u];else plain.push(u);}
+  // 22.0 #4a: the bit is converted into the ENGINE's space here, because that
+  // is what a stored chord gets compared against.
+  //
+  // Known limit, stated rather than hidden: a modifier baselined to ANOTHER
+  // modifier bypasses mod_remap in the engine (s6 handle_key takes the
+  // `usage_is_mod(canon)` branch and shifts the bit directly). By the time a
+  // usage reaches here it has already been through baselineOf(), so it cannot
+  // be told apart from the same modifier pressed directly. No config does that
+  // today -- the only baselined modifier in play maps LGui to '5', a normal
+  // key -- so this is exact for every real setup and approximate only for one
+  // that does not exist yet.
+  for(const u of keys){
+    if(isModUsage(u))mods|=modBitToEngine(MOD_BIT[u]);
+    else plain.push(u);}
   return{mods,plain};}
 function mcKey(mods,canon,L){return `${L===undefined?-1:L},${mods},${canon}`;}
 function mcTable(os){return scopeTable(os||'','mod_chords');}
@@ -3471,7 +3507,20 @@ function renderClips(){
   const host=$('cliplist');if(!host)return;
   const _noteClips=noteClipNames();
   host.innerHTML='';
-  const names=Object.keys(clips);
+  // 22.0 #5: note targets pinned to the top. The keyboard writes to these
+  // from anywhere, so they are the entries you come to this section to read;
+  // leaving them in whatever order the Pi listed the files buried them among
+  // clips you last touched weeks ago. Sorted among themselves in rule order,
+  // so adding a second note tag does not reshuffle the first.
+  const _noteOrder=((cfg&&cfg.note_rules)||[]).map(r=>r&&r.clip);
+  // Parameters named x/y, not a/b: `b` is already a const further down this
+  // same function, and shadowing it reads badly and trips the TDZ scanner.
+  const _nm=k=>(clips[k]||{}).name||k;
+  const names=Object.keys(clips).sort((x,y)=>{
+    const xn=_noteClips.has(_nm(x)),yn=_noteClips.has(_nm(y));
+    if(xn!==yn)return xn?-1:1;                 // notes first
+    if(xn&&yn)return _noteOrder.indexOf(_nm(x))-_noteOrder.indexOf(_nm(y));
+    return 0;});                               // everything else keeps its order
   if(!device&&!names.length){
     const p=document.createElement('p');p.className='muted';
     p.textContent='Connect to load your saved text.';host.appendChild(p);return;}
@@ -4775,8 +4824,19 @@ function diffConfig(a,b){
       out.push(`~ Unicode method [${os}]: ${pa.unicode_method||'default'} → ${pb.unicode_method||'default'}`);}
   if((a.active_os||'')!==(b.active_os||''))out.push(`~ Active OS: ${a.active_os||'?'} → ${b.active_os||'?'}`);
   return out;}
-function modsName(m){const p=[];
-  if(m&0x01)p.push('Ctrl');if(m&0x02)p.push('Shift');if(m&0x04)p.push('Alt');if(m&0x08)p.push('Cmd/Win');
+// 22.0 #4a: a chord's mods are stored in the ENGINE's space (post mod_remap),
+// but a label has to name the key you physically HOLD, so it reads back through
+// the swap. Without this, Josh's resize chords showed as "Cmd+Alt" while only
+// physical Ctrl+Alt would fire them.
+const _MODNAME={0x01:'Ctrl',0x02:'Shift',0x04:'Alt',0x08:'Cmd/Win'};
+function modsName(m){
+  // Translate to physical bits FIRST, then emit in the conventional order.
+  // Emitting as we translate follows the engine's bit order instead and reads
+  // as "Alt+Ctrl".
+  const phys=new Set();
+  for(const b of [0x01,0x02,0x04,0x08])if(m&b)phys.add(modBitToPhysical(b));
+  const p=[];
+  for(const b of [0x01,0x02,0x04,0x08])if(phys.has(b))p.push(_MODNAME[b]);
   return p.join('+')||'(none)';}
 function recordChanges(){
   if(!cfg)return;
@@ -4962,6 +5022,10 @@ function renderModChordEd(ed){
     </div><div>
       <button id="mcdel" style="margin-top:.2rem">🗑 Delete shortcut</button>
     </div></div>`;
+  // These boxes choose the modifiers SENT TO THE HOST, so they are plain HID
+  // bits and are deliberately NOT read through mod_remap — unlike the chord's
+  // trigger modifiers above, which name keys you HOLD. Two different questions
+  // living in two different spaces; conflating them is bug 22.0 #4a.
   const modBoxes=m=>[[0x01,'Ctrl'],[0x02,'Shift'],[0x04,'Alt/Opt'],[0x08,'Cmd/Win']]
     .map(([b,n])=>`<label style="display:inline-flex;align-items:center;gap:.2rem;margin-right:.5rem">
       <input type="checkbox" data-mcmod="${b}" ${m&b?'checked':''}>${n}</label>`).join('');
