@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 22.0 BF1</title>
+<title>HID Config 22.6</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -988,7 +988,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='22.0 BF1';
+const UI_ENGINE_EXPECT='22.6';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -2732,6 +2732,14 @@ function bindEditKey(el,d,idx){
     // scope here -- so grabbing a multi-selected key threw a ReferenceError on
     // pointerdown and the drag never started. Find the container from the
     // element itself instead.
+    // 22.6: where the layout STARTED. The normalize on pointerup shifts every
+    // key when anything sits at a negative coordinate, and a wireframe's F-row
+    // legitimately lives at y=-1 -- so it fired on every drag and moved the
+    // whole board, including keys nobody selected. Remembering the minimum
+    // beforehand lets it shift only by how much FURTHER negative this drag
+    // went, which is what "dragged above pushes the rest down" always meant.
+    const mnx0=Math.min(0,...lay.keys.map(q=>q.x));
+    const mny0=Math.min(0,...lay.keys.map(q=>q.y));
     const cont=el.closest('.kabs')||el.parentNode;
     const groupEls=(editMulti.has(idx)&&cont)
       ? [...editMulti].map(i2=>({i:i2,el:cont.querySelector(`[data-eidx="${i2}"]`)}))
@@ -2761,9 +2769,14 @@ function bindEditKey(el,d,idx){
         if(idxs.length>1){idxs.forEach(i2=>{const q=lay.keys[i2];if(!q)return;
           q.x=Math.round((q.x+ddx)*4)/4;q.y=Math.round((q.y+ddy)*4)/4;});}
         else{k.x=Math.round((ox+dx)*4)/4;k.y=Math.round((oy+dy)*4)/4;}
-        const mnx=Math.min(...lay.keys.map(q=>q.x));   // 6.2: dragged-above
-        const mny=Math.min(...lay.keys.map(q=>q.y));   // pushes the rest down/right
-        if(mnx<0||mny<0)lay.keys.forEach(q=>{q.x-=Math.min(0,mnx);q.y-=Math.min(0,mny);});
+        // 6.2: dragging a key ABOVE the top pushes the rest down/right.
+        // 22.6: by the DELTA, not to zero. A layout whose F-row is already at
+        // y=-1 is not "dragged above" -- it is a keyboard. Shifting to zero
+        // moved every key on every drag, which is the reported regression.
+        const shx=Math.min(0,...lay.keys.map(q=>q.x))-mnx0;
+        const shy=Math.min(0,...lay.keys.map(q=>q.y))-mny0;
+        if(shx<0||shy<0)lay.keys.forEach(q=>{
+          q.x-=Math.min(0,shx);q.y-=Math.min(0,shy);});
       }else{
         if(ev.shiftKey||ev.metaKey||ev.ctrlKey){       // shift-click extends the selection
           if(editMulti.has(idx))editMulti.delete(idx);else editMulti.add(idx);
@@ -8228,8 +8241,13 @@ const PF_LS = 'hidcfg.prefs.v1';
    sources: lat (latency ms), apm (actions/min), link (transport RTT)
    fields : mean sd n min max p50 p95 band
    Terms are shown left to right, so the recipe IS the order. */
+// 22.4: `max` added. The engine's own service_ms is a running tally with no
+// sample reservoir, so it can offer mean/sd/min/max but NOT a percentile --
+// and a mean dressed up as a p95 would be a lie the strip cannot caveat.
+// Terms that resolve to nothing are skipped, so p95 stays here harmlessly for
+// probes that DO keep samples.
 const PF_DEFAULT_RECIPE =
-  'lat.mean|Lat ; lat.p95|p95 ; lat.sd|± ; lat.n|n ; apm.mean|APM ; apm.band|';
+  'lat.mean|Lat ; lat.p95|p95 ; lat.max|max ; lat.sd|± ; lat.n|n ; apm.mean|APM ; apm.band|';
 
 let PREFS = {
   bench: {
