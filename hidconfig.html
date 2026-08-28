@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 22.8</title>
+<title>HID Config 22.9</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -989,6 +989,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 const RPT=32,CHUNK=RPT-4;
 const PING=0x20,GET=0x01,PUT_BEGIN=0x02,PUT_CHUNK=0x03,PUT_END=0x04,EVENTS_ON=0x10,EVENTS_OFF=0x11;
 const PONG=0xA0,CFG_BEGIN=0x81,CFG_CHUNK=0x82,CFG_END=0x83,CFG_SAME=0x84,EVENT=0x90,ACK=0xE0,ERR=0xE1;
+// 22.9: continuation framing for long commands -- see sendCmd().
+const PROF_CMD_X=0x51, BT_CMD_X=0x31;
 const BT_CMD=0x30,BT_BEGIN=0xB0,BT_CHUNK=0xB1,BT_END=0xB2;
 const PROF_CMD=0x50,PF_BEGIN=0xC0,PF_CHUNK=0xC1,PF_END=0xC2;
 const CLOCK_CMD=0x60;
@@ -997,7 +999,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='22.8';
+const UI_ENGINE_EXPECT='22.9';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1351,9 +1353,21 @@ $('showkeys').onclick=()=>{
 $('evoff').onclick=e=>{send([EVENTS_OFF]);$('evon').classList.remove('rec');
   $('evon').textContent='▶ Events';clickFx(e.target);};
 $('clear').onclick=e=>{$('log').innerHTML='';$('outlog').innerHTML='';clickFx(e.target);};
-async function pfCmd(c){
-  const b=new TextEncoder().encode(c);
-  await send([PROF_CMD,b.length,...b]);}
+/* 22.9: send a command that may not fit in one report.
+   rpt[1] is a length byte that can say 42, but a report is 32 bytes -- so a
+   longer command lost everything past byte 30, silently, while still claiming
+   the full length. "restore bridge_config.json.<stamp>" is 42 bytes, arrived
+   as 30, and the Pi reported a missing file it had never been asked for.
+   Short commands still go the old single-report way so an un-updated Pi keeps
+   working for everything that already fitted. */
+async function sendCmd(type,xtype,text){
+  const b=new TextEncoder().encode(text);
+  if(b.length<=30){await send([type,b.length,...b]);return;}
+  const MAX=29;                       // [xtype, len, more] + 29 = 32
+  for(let i=0;i<b.length;i+=MAX){
+    const part=b.slice(i,i+MAX);
+    await send([xtype,part.length,(i+MAX<b.length)?1:0,...part]);}}
+async function pfCmd(c){ await sendCmd(PROF_CMD,PROF_CMD_X,c); }
 function fmtWhen(iso){try{const d=new Date(iso);return d.toLocaleString([], {dateStyle:'medium',timeStyle:'short'});}catch(e){return iso;}}
 function updateCurProf(){
   const el=$('curprof');if(!el||!cfg)return;
@@ -1424,8 +1438,7 @@ function btLog(t){for(const id of['btout','btout2']){const el=$(id);
   if(el){el.textContent+=t;el.scrollTop=el.scrollHeight;}}}
 async function btCmd(c,quiet){
   if(!quiet)btLog('\n$ '+c+'\n');
-  const b=new TextEncoder().encode(c);
-  await send([BT_CMD,b.length,...b]);}
+  await sendCmd(BT_CMD,BT_CMD_X,c);}
 function btResult(text){
   const slines=text.split('\n').filter(l=>l.trim());
   if(slines.length&&slines.every(l=>/^STATUS /.test(l))){
