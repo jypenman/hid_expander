@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 22.6</title>
+<title>HID Config 22.7</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -838,7 +838,16 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <button id="expwrite" class="primary" disabled>⬆ Save expansions</button>
     <span class="muted">Expansions now also auto-load when you Connect.</span></div>
   <table style="width:100%" id="exptable"></table>
-  <button onclick="addExpRow('','')">+ row</button>
+  <div class="bar" style="margin-top:.4rem">
+    <button onclick="addExpRow('','')">+ row</button>
+    <!-- 22.7: the same Save as the top bar. The list is long enough now that
+         saving meant scrolling all the way back up, which is how an edit gets
+         lost. Deliberately the same id-driven action, not a copy of the
+         logic -- two save paths that could drift apart would be worse than
+         the scrolling. -->
+    <button id="expwrite2" class="primary" disabled>⬆ Save expansions</button>
+    <span class="muted" style="font-size:.78rem">same as the button at the top</span>
+  </div>
   <p class="muted">Triggers like <code>\sig</code>; values may embed chords: <code>{{ctrl+c}}</code>.
   Date/time trigger text is set above, not hardcoded to <code>\dt \tm \tdt</code> anymore.</p>
   </div>
@@ -988,7 +997,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='22.6';
+const UI_ENGINE_EXPECT='22.7';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1025,7 +1034,7 @@ function toast(m,bad){const t=$('toast');t.textContent=m;t.style.color=bad?'var(
 clearTimeout(toast._t);toast._t=setTimeout(()=>t.textContent='',3500);}
 function setConn(on){$('conn').textContent=on?'connected':'disconnected';
 $('conn').className='status '+(on?'on':'off');
-['read','write','dl','evon','evoff','clear','expread','expwrite','btscan','btlist','profload','profsave','engstat','setsave'].forEach(i=>$(i).disabled=!on);}
+['read','write','dl','evon','evoff','clear','expread','expwrite','expwrite2','btscan','btlist','profload','profsave','engstat','setsave'].forEach(i=>{const el=$(i);if(el)el.disabled=!on;});}
 function pad(a){const u=new Uint8Array(RPT);u.set(a.slice(0,RPT));return u;}
 async function send(a,q=true){if(!device)return;await device.sendReport(0,pad(a));
 if(!q)log('→ 0x'+a[0].toString(16),'tx');}
@@ -1569,7 +1578,11 @@ function renderEngineStatus(st){
         out+=`⚠ ${d.name}: Bluetooth-connected but the engine claimed no nodes for it — check its Pin ("${d.pin}") against the node names above\n`;}}
   p.textContent=out;}
 $('expread').onclick=()=>getFile(1);
-$('expwrite').onclick=()=>{collectExp();putFile(1,exps);};
+// 22.7: one handler, both buttons. The second lives at the END of the list;
+// binding the same function rather than duplicating it means they cannot drift.
+{const saveExp=()=>{collectExp();putFile(1,exps);};
+ $('expwrite').onclick=saveExp;
+ const w2=$('expwrite2');if(w2)w2.onclick=saveExp;}
 function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wheel_by_layer',
 'port2_kbd','tap_hold','button_inputs','button_labels',
 'baseline','combos','mapping_groups','stepper_by_layer',
@@ -4234,7 +4247,16 @@ function openInputPicker(anchorEl,r){
   $('ipmcgo').onclick=()=>{
     let m=0;box.querySelectorAll('[data-ipmod]:checked').forEach(x=>m|=+x.dataset.ipmod);
     if(!m){toast('pick at least one modifier',true);return;}
-    close();asgRetype(r,{kind:'mc',mods:m,canon:+$('ipmckey').value});};
+    // 22.7: read the key BEFORE close(). It used to close first, which removes
+    // the box from the document -- so $('ipmckey') was null by the time it was
+    // read, `.value` threw, and asgRetype was never reached. Modifier shortcuts
+    // could not be added from this picker at all: the box vanished, nothing was
+    // created, and the placeholder row you had just been given stayed on screen
+    // looking like the button had invented a mapping for "A".
+    // The combo button below always read its values first, which is why combos
+    // worked and this did not.
+    const canon=+$('ipmckey').value;
+    close();asgRetype(r,{kind:'mc',mods:m,canon});};
   $('ipcgo').onclick=()=>{
     const a=+$('ipc1').value,b=+$('ipc2').value;
     if(a===b){toast('pick two different keys',true);return;}
@@ -4243,9 +4265,12 @@ function openInputPicker(anchorEl,r){
     if(!box.contains(ev.target)&&ev.target!==anchorEl){close();document.removeEventListener('click',h);}}),80);}
 /* Convert a row to a different input kind, carrying its action and note. */
 function asgRetype(r,to){
-  const act=r.out,note=getNote(rowNoteKey(r));
+  const act=r.out,note=r.isNew?'':getNote(rowNoteKey(r));
   const layers=r.layers&&r.layers.size?[...r.layers]:[layer];
-  asgDeleteRow(r);                                   // remove the old shape
+  // 22.7: a brand-new row has no old shape to remove. asgDeleteRow is a no-op
+  // for it anyway (out is undefined), but saying so is clearer than relying on
+  // that, and it keeps rowNoteKey away from a row with no real identity.
+  if(!r.isNew)asgDeleteRow(r);                       // remove the old shape
   if(r.pending&&r.__p)window._asgPending=(window._asgPending||[]).filter(x=>x!==r.__p);
   let newRow=null;
   if(to.kind==='mc'){
@@ -4432,14 +4457,22 @@ function renderAssignTable(){
     e.preventDefault();e.stopPropagation();exportAddition(b.dataset.asgexp,buckets[b.dataset.asgexp].map(i=>rows[i]));});
   const add=$('asgnewadd');
   if(add)add.onclick=()=>{
-    // 19.4 #1.1: no modal quiz -- drop a blank row into the "New" section and
-    // let the user click its Input to choose whatever kind they want.
-    window._asgPending=window._asgPending||[];
-    window._asgPending.push({type:'key',id:0x04});
-    render();
-    setTimeout(()=>{const rows=document.querySelectorAll('[data-asgpick]');
-      const el=rows[rows.length-1];
-      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.click();}},60);};
+    // 19.4 #1.1: no modal quiz -- ask for the input, then make the row.
+    //
+    // 22.7: it used to do the opposite. A placeholder row {type:'key', id:4}
+    // was pushed into _asgPending FIRST and the picker auto-opened on it, so
+    // the list gained a mapping for "A" -- a key you never chose -- the instant
+    // you pressed the button. Complete the pick and it was replaced; dismiss
+    // the picker, miss the 60 ms auto-click, or press the button twice because
+    // nothing seemed to happen, and the stray "A" stayed for the rest of the
+    // session. That is the reported bug.
+    //
+    // Nothing is created now until a pick actually happens, so there is no
+    // stray to clean up and no window in which one can exist. The row handed
+    // to the picker is synthetic: isNew keeps asgRetype from trying to delete
+    // a row that was never there.
+    openInputPicker(add,{type:'key',id:0,out:undefined,
+                         layers:new Set([layer]),pending:true,isNew:true});};
   uiRestoreOpen(host);
   renderStageAddition();
   const imp=$('asgimport'),impf=$('asgimportfile');
