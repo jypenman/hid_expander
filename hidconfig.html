@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 22.7</title>
+<title>HID Config 22.8</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -997,7 +997,7 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   send([CLOCK_CMD,b.length,...b]);}
 // The engine build this page needs. Compared against engine_version in the
 // config the Pi returns.
-const UI_ENGINE_EXPECT='22.7';
+const UI_ENGINE_EXPECT='22.8';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1825,6 +1825,14 @@ function harvestSlot(slot,scope){
     if(bl&&(slot.usage in bl)){b.base=bl[slot.usage];delete bl[slot.usage];}
     else b.base=null;                       // null = "was itself"
   }
+  // 22.8: a BUTTON has a baseline identity too -- which physical input claims
+  // it, held as btn:<code> or p2btn:<usage>. This branch did not exist, so
+  // "Swap · Baseline, this device" between two buttons harvested two empty
+  // bags and wrote nothing: it silently did nothing at all. What travels is
+  // the OWNER, so afterwards the other physical input answers to this button.
+  if(scope==='baseline'&&slot.kind==='btn'){
+    b.owner=btnOwner(slot.dev,slot.id)||null;
+  }
   // A BUTTON's layer role is now per-device (tap_hold_by_device), so it can
   // travel in either scope. A KEY's layer role still has no device dimension
   // (layer_keys is global), so it only travels on "all devices".
@@ -1869,6 +1877,13 @@ function writeSlot(slot,b,notes,scope){
     bl[slot.dev]=bl[slot.dev]||{};
     if(b.base===null||b.base===undefined)delete bl[slot.dev][slot.usage];
     else bl[slot.dev][slot.usage]=b.base;}
+  // 22.8: the other half of the button-baseline swap. `owner` is the physical
+  // input that came from the OTHER slot, so pointing it at this button is what
+  // makes the trade. setIdent (not moveButtonIdentity) deliberately: swap
+  // writes both sides in one go, and a collision check partway through would
+  // fire on the half-written state.
+  if(scope==='baseline'&&slot.kind==='btn'&&b.owner!==undefined){
+    if(b.owner)setIdent(slot.dev,b.owner,slot.id);}
   if(b.layer!=null){
     if(slot.kind==='btn'){
       let tap=b.tapAct;
@@ -2001,6 +2016,89 @@ function btnOwner(dev,n){
   const c=BTN_EVDEV[n];
   if(c&&bl['btn:'+c]===undefined)return{kind:'btn',code:c};
   return null;}
+
+/* ===== 22.8: moving an identity, and what follows it ======================
+   Josh's model, and it is the right one:
+
+       physical input -> Baseline -> [ all the other mappings ]
+
+   Change what a physical input IS, and everything attached to that identity
+   should come with it. That already works for anything keyed on the identity
+   -- mouse_mappings, tap_hold, groups, labels are all keyed on the logical
+   button, so re-pointing carries them for free.
+
+   What does NOT follow is anything keyed on the input's RAW CODE. The E9's
+   thumb digits report keyboard codes, so a digit can be either
+     "logical Button 4"  -> mouse_mappings / tap_hold      (keyed by button)
+     "the Down arrow"    -> kbd_mappings_by_device / port2_kbd (keyed by code)
+   and handle_key checks the button branch FIRST and returns. So the moment a
+   digit becomes a button, its key-side bindings are still in the config and
+   can never fire again. Two of them are dead in Josh's config right now
+   (digit '1' -> Up, digit '2' -> Left) and nothing ever said so.
+
+   Neither of these is silently resolved, by explicit choice:
+     * a COLLISION (the identity is already claimed) asks Vacate/Swap/Cancel.
+       CLAUDE.md 2 rejected letting two inputs share one identity -- they then
+       read the same table row, so editing one edits the other -- so the one
+       thing this will not do is leave both claiming it.
+     * STRANDED key-side bindings are named and offered for deletion.
+   ------------------------------------------------------------------------ */
+function strandedKeySide(dev,usage){
+  const out=[];
+  const dd=(cfg.kbd_mappings_by_device||{})[dev]||{};
+  for(const k of Object.keys(dd)){
+    const [L,u]=k.split(',').map(Number);
+    if(u===usage)out.push({tbl:'kbd_mappings_by_device',key:k,L,
+                           what:asgActLabel?asgActLabel(dd[k]):String(dd[k])});}
+  for(const k of Object.keys(cfg.port2_kbd||{})){
+    const [L,u]=k.split(',').map(Number);
+    if(u===usage)out.push({tbl:'port2_kbd',key:k,L,
+                           what:'gesture macro '+macroLabel(cfg.port2_kbd[k])});}
+  return out;}
+
+function clearStranded(dev,list){
+  for(const s of list){
+    if(s.tbl==='port2_kbd')delete (cfg.port2_kbd||{})[s.key];
+    else delete ((cfg.kbd_mappings_by_device||{})[dev]||{})[s.key];}}
+
+/* Give physical input `ref` the identity of logical button `n`, safely.
+   Returns false when the user cancelled. */
+function moveButtonIdentity(dev,ref,n){
+  const owner=n==null?null:btnOwner(dev,n);
+  const same=owner&&((owner.kind==='p2'&&ref.kind==='p2'&&owner.usage===ref.usage)
+                  ||(owner.kind==='btn'&&ref.kind==='btn'&&owner.code===ref.code));
+  if(owner&&!same){
+    const who=owner.kind==='p2'
+      ? `the key that sends ${KEYS[owner.usage]||('code '+owner.usage)}`
+      : `mouse button ${(cfg.button_inputs||{})['btn:'+owner.code]||owner.code}`;
+    const ans=(prompt(
+      `Button ${n} is already claimed by ${who}.\n\n`
+      +`Two inputs must not claim one identity — they would share the same\n`
+      +`mappings, so editing one would edit the other.\n\n`
+      +`  vacate  — this input takes Button ${n}; ${who} is left with nothing\n`
+      +`  swap    — they trade identities\n`
+      +`  cancel  — change nothing\n\n`
+      +`Type vacate, swap or cancel (v / s / c):`,'vacate')||'').trim().toLowerCase();
+    // First letter is enough. Demanding the whole word of someone who is
+    // mid-rearrange is how a good choice becomes an annoying one; anything
+    // unrecognised still means cancel, so a typo can never silently pick.
+    const choice=ans.startsWith('v')?'vacate':ans.startsWith('s')?'swap':'cancel';
+    if(choice==='cancel'){toast('identity unchanged');return false;}
+    const ansv=choice;
+    const mine=ref.kind==='p2'?p2BtnIdent(dev,ref.usage)
+                              :(cfg.baseline[dev]||{})['btn:'+ref.code];
+    setIdent(dev,owner,ansv==='swap'?(mine==null?null:mine):null);
+  }
+  setIdent(dev,ref,n);
+  // Now say what has gone dead, and offer to remove it.
+  if(n!=null&&ref.kind==='p2'){
+    const dead=strandedKeySide(dev,ref.usage);
+    if(dead.length){
+      const lines=dead.map(d=>`   layer ${d.L}: ${d.what}`).join('\n');
+      if(confirm(`This input is now Button ${n}, so these can no longer fire:\n\n`
+        +lines+`\n\nDelete them?  (Cancel keeps them in the config, inactive.)`))
+        clearStranded(dev,dead);}}
+  return true;}
 
 // Write one identity entry, deleting it when it would only restate the
 // default. A Baseline littered with no-op entries is a Baseline nobody reads.
@@ -5484,7 +5582,12 @@ function renderEditor(){
       // shadow a key remap the UI was still showing.
       if(v.indexOf('btn')===0){
         delete cfg.baseline[selDev][sel.id];
-        cfg.baseline[selDev][bkey]=+v.slice(3);
+        // 22.8: through moveButtonIdentity, so a collision is surfaced and
+        // anything this strands is named. Writing the entry directly is what
+        // let two inputs quietly claim one button and left dead key-side
+        // mappings behind with nothing to say so.
+        if(!moveButtonIdentity(selDev,{kind:'p2',usage:sel.id},+v.slice(3))){
+          render();return;}
       }else{
         delete cfg.baseline[selDev][bkey];
         if(v==='')delete cfg.baseline[selDev][sel.id];
