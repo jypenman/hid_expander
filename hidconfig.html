@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 23.0</title>
+<title>HID Config 23.5</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -59,7 +59,40 @@ button:disabled{opacity:.4;cursor:default}
 @media (max-height:520px){.topbar{position:static;box-shadow:none}}
 .status{padding:.1rem .6rem;border-radius:999px;font-size:.8rem;border:1px solid var(--line)}
 .status.on{background:var(--ok);color:#fff}.status.off{background:var(--err);color:#fff}
+/* 23.5: the third state. "connected" was set once on connect and never
+   revisited, so after a long idle the badge still read green while the link
+   was dead and nothing worked until you reconnected. Green now means "we
+   heard from the Pi recently", amber means "we have not, and you probably
+   need to reconnect" -- a distinct colour because it is a distinct fact, not
+   a worse version of connected. */
+.status.stale{background:var(--warn);color:#111}
+/* 23.5: an OPEN copy/paste item keeps its title on screen while you scroll
+   through it. Only while open -- a page of collapsed summaries all trying to
+   stick would pile up and eat the viewport, which is why this is keyed on
+   [open] rather than applied to every summary. The Copy/Paste section heading
+   itself deliberately does NOT stick: it is the container, and pinning it
+   would cost a line without telling you which item you are looking at.
+   Offsets come from the two bands above (measured in syncTopbarHeight), so
+   this lands under them rather than behind them. */
+#cliplist details[open]>summary,
+#debugmon[open]>summary{position:sticky;
+  top:calc(var(--topbar-h,0px) + var(--tabs-h,0px));
+  z-index:40;background:Canvas;
+  /* it overlays the item's own body as that scrolls under it */
+  padding:.3rem 0;margin:0 -.6rem;padding-left:.6rem;padding-right:.6rem;
+  border-bottom:1px solid var(--line)}
+/* Same reasoning as .topbar: on a short window stacked sticky bands eat the
+   screen, so everything above gives up and scrolls. */
+@media (max-height:520px){#cliplist details[open]>summary,
+  #debugmon[open]>summary{position:static;border-bottom:none}}
 .tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin:.7rem 0;border-bottom:1px solid var(--line);padding-bottom:.5rem}
+/* 23.5: the main tab strip follows you down the page. Only #toptabs -- the
+   Usage sub-tabs use the same class and must NOT stick, or you get two
+   competing sticky rows. Opaque background is required: panels scroll under
+   it, and Canvas matches .topbar so the two read as one header. */
+#toptabs{position:sticky;top:var(--topbar-h,2.9rem);z-index:55;background:Canvas;
+  margin-top:0;padding-top:.45rem}
+@media (max-height:520px){#toptabs{position:static}}
 .tab{padding:.4rem 1rem;border:1px solid var(--line);border-radius:8px 8px 0 0;cursor:pointer;font-weight:600}
 .tab.on{background:var(--hi);color:#fff;border-color:var(--hi)}
 .pills{display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0}
@@ -144,6 +177,15 @@ label.inl input{margin:0}
 .bcell .blab{opacity:.6;font-size:.72rem}
 .bcell b{font-variant-numeric:tabular-nums}
 .benchstrip .bage{font-size:.72rem}
+/* 23.5: a measured leg and a BOUND must not look alike. A bound is a floor
+   derived from a descriptor, not a round trip -- rendering it in the same
+   style would be a claim the strip cannot caveat. Dashed, muted, and prefixed
+   with the >= that says what it is. */
+.benchstrip .leg{font-size:.72rem;padding:.08rem .4rem;border-radius:999px;
+  border:1px solid var(--line);white-space:nowrap}
+.benchstrip .leg.bound{border-style:dashed;opacity:.72}
+.benchstrip .leg.live{border-color:var(--ok)}
+.benchstrip .leg b{font-weight:600}
 .pfrow{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;margin:.5rem 0}
 .pfrow label{margin:0;display:inline-flex;align-items:center;gap:.3rem}
 .pfwide{flex:1 1 22rem;min-width:14rem;font-family:ui-monospace,monospace;font-size:.8rem}
@@ -228,7 +270,15 @@ label.inl input{margin:0}
   .txbtn .txlab{display:none}
   .txrail{width:2.4rem}}
 @media (max-width:480px){.txpop{position:fixed;left:.5rem;right:.5rem;max-width:none;top:auto}}}
-select,input[type=text],input[type=number],textarea{width:100%;padding:.35rem;border-radius:6px;
+/* 23.5: input[type=search] was NOT in this list, so the UI search box got no
+   background and no colour and fell through to the browser default — white
+   text on white, unreadable, which made the whole search feature unusable.
+   Field/FieldText are system colours that follow the OS light/dark setting,
+   which is why they are used here rather than a hardcoded pair. The search
+   box sets its own width inline (13rem), and inline wins over the 100% here,
+   so adding it to this selector does not stretch it. */
+select,input[type=text],input[type=number],input[type=search],
+textarea{width:100%;padding:.35rem;border-radius:6px;
 border:1px solid var(--line);background:Field;color:FieldText}
 select option{background:Field;color:FieldText}
 button.rec{background:var(--err);border-color:var(--err);color:#fff;font-weight:600}
@@ -385,6 +435,25 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <button id="oswarndismiss" style="margin-left:.3rem">Not now</button>
   <div class="muted" style="font-size:.78rem;margin-top:.3rem">OS-scoped rules (imported shortcut sets, per-OS remaps, mac/win-only expansions) only fire when the engine's active OS matches. Until then they are silently inactive.</div>
 </div>
+<!-- 23.5: the tabs sit ABOVE the profile bar and stick to the top.
+     They are the primary navigation, and having them below "Load
+     selected" meant scrolling past a row you rarely touch to reach
+     the one you always do. Sticky at 0 would collide with .topbar,
+     which is itself sticky at top:0 -- so this sits just under it,
+     and both drop to static on a short window for the same reason
+     .topbar already does: two stacked sticky rows on a 520px-high
+     window eat the screen. -->
+<div class="tabs" id="toptabs">
+  <div class="tab on" data-t="map">Mapping</div>
+  <div class="tab" data-t="macros">Macros</div>
+  <div class="tab" data-t="exp">Expansions</div>
+  <div class="tab" data-t="os">OS</div>
+  <div class="tab" data-t="bt">Bluetooth</div>
+  <div class="tab" data-t="tx">Text Transform</div>
+  <div class="tab" data-t="log">Changes</div>
+  <div class="tab" data-t="usage">Usage</div>
+</div>
+
 <div class="bar" id="profbar">
   <span class="muted"><b>On-device profiles:</b></span>
   <span id="curprof" class="status" title="the profile this config was last saved as / loaded from">working config (unsaved)</span>
@@ -399,17 +468,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <span style="flex:1"></span>
   <label style="margin:0;display:inline">🕓 <select id="tzsel" style="width:auto"></select></label>
   <label style="margin:0;display:inline" title="How an expansion removes the trigger text. Shift+Left selects (safer outside text fields); Backspace deletes.">⌫ <select id="erasesel" style="width:auto"><option value="backspace">Backspace</option><option value="shift_left">Shift+Left select</option></select></label>
-</div>
-
-<div class="tabs" id="toptabs">
-  <div class="tab on" data-t="map">Mapping</div>
-  <div class="tab" data-t="macros">Macros</div>
-  <div class="tab" data-t="exp">Expansions</div>
-  <div class="tab" data-t="os">OS</div>
-  <div class="tab" data-t="bt">Bluetooth</div>
-  <div class="tab" data-t="tx">Text Transform</div>
-  <div class="tab" data-t="log">Changes</div>
-  <div class="tab" data-t="usage">Usage</div>
 </div>
 
 <details class="dbg" id="debugmon" data-uikey="debug"><summary>🐞 Debug monitors</summary>
@@ -519,7 +577,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <b>Modifier swaps live in Baseline:</b> to make a keyboard's <b>LAlt</b> act as <b>LWin</b> (Option/Command feel), click that key and set Baseline · LAlt → LWin. It then shows red LAlt → grey LWin. Nothing is swapped by default.
     </div>
   </details>
-  <details class="dbg" id="remappanel" data-uikey="remap" open><summary>📋 All Custom Remappings</summary>
+  <details class="dbg" id="remappanel" data-uikey="remap" open><summary>📋 All custom remappings</summary>
     <div style="padding:0 1rem 1rem">
       <details id="ovpanel" data-uikey="overview" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Overview</summary>
         <div id="mtlayers" class="muted" style="margin:.3rem 0"></div>
@@ -1003,15 +1061,106 @@ const UI_ENGINE_EXPECT='22.9';
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
+// 23.5: what changed, per version, with a way to go and look at it.
+//
+// `k` is a data-uikey or an element id. Deep-linking rides on the uikey
+// attributes that already exist for the UI-state memory rather than inventing
+// an anchor scheme -- and it gives the "no longer exists" case for free: if
+// nothing in the DOM answers to the key, that part of the UI is gone, and the
+// entry greys out instead of scrolling you nowhere.
+//
+// This list is maintained BY HAND alongside docs/CHANGELOG.md and is
+// deliberately short. It is a second copy of a subset of the changelog, which
+// is a real cost -- but the changelog is prose with no anchors, and prose
+// cannot be linked to a widget. Keep it to entries worth jumping to.
+const VERSION_HISTORY=[
+ {v:'23.5',items:[
+   {t:'Search box readable (was white on white)',k:'uisearch'},
+   {t:'Tabs moved above Load selected, and stick',k:'toptabs'},
+   {t:'Open copy/paste items stay on screen',k:'clipdock'},
+   {t:'Live character count while editing',k:'clipdock'},
+   {t:'Cancel button in the wireframe layout editor',k:'wireframes'},
+   {t:'Connection badge goes amber when the link is quiet',k:'conn'},
+   {t:'Every macro lists what fires it',k:'macrolist'},
+   {t:'Benchmark strip names every leg',k:'benchstrip'},
+   {t:'Devices show which Pi they arrive through',k:'devices'}]},
+ {v:'23.4',items:[
+   {t:'Pi2→C6 measured the keepalive, not the link',k:'benchstrip'}]},
+ {v:'23.3',items:[
+   {t:'BT latency recorded per device, on connect',k:'benchstrip'}]},
+ {v:'23.2',items:[
+   {t:'One registry of leg names; bounds stated as bounds',k:'benchstrip'}]},
+ {v:'23.0',items:[
+   {t:'Pi2 runs both stacks at once, split by device route',k:'devices'}]},
+ {v:'22.9',items:[
+   {t:'Restoring a backup could never have worked',k:'profbackups'}]},
+ {v:'22.8',items:[
+   {t:'Baseline moves the mappings with it',k:'remap'}]},
+];
+const VH_SHOWN=3;        // versions shown before "show more"
+
+function vhTarget(k){
+  return document.querySelector('[data-uikey="'+CSS.escape(k)+'"]')
+      || document.getElementById(k);}
+
+function vhGo(k){
+  const el=vhTarget(k);
+  if(!el){toast('that part of the UI no longer exists',true);return;}
+  for(let n=el;n&&n!==document.body;n=n.parentElement){
+    if(n.tagName==='DETAILS'&&!n.open)n.open=true;
+    if(n.style&&n.style.display==='none')n.style.display='';}
+  $('popover').style.display='none';
+  el.scrollIntoView({block:'center',behavior:'smooth'});
+  const o=el.style.outline;
+  el.style.outline='2px solid var(--pick,#d97706)';
+  setTimeout(()=>{el.style.outline=o;},2000);}
+
+function vhHTML(all){
+  const vs=all?VERSION_HISTORY:VERSION_HISTORY.slice(0,VH_SHOWN);
+  let h='<b>What changed</b>';
+  for(const rel of vs){
+    h+=`<div style="margin-top:.4rem"><b style="font-size:.8rem">${esc(rel.v)}</b>`;
+    for(const it of rel.items){
+      const gone=!vhTarget(it.k);
+      h+=`<div style="font-size:.76rem;margin:.1rem 0 .1rem .5rem">`
+        +(gone
+          ? `<span class="muted" style="opacity:.45" title="this part of the UI no longer exists">${esc(it.t)}</span>`
+          : `<a class="mlink" data-vhk="${esc(it.k)}" style="cursor:pointer">${esc(it.t)}</a>`)
+        +`</div>`;}
+    h+='</div>';}
+  if(!all&&VERSION_HISTORY.length>VH_SHOWN)
+    h+=`<div style="margin-top:.45rem"><a class="mlink" data-vhmore="1"
+        style="cursor:pointer;font-size:.75rem">show more…</a></div>`;
+  return h;}
+
+function vhOpen(all){
+  const p=$('popover'),b=document.getElementById('uiver');
+  if(!p||!b)return;
+  p.innerHTML=vhHTML(!!all);
+  p.style.maxWidth='24rem';
+  placePopover(p,b.getBoundingClientRect());
+  p.querySelectorAll('[data-vhk]').forEach(a=>a.onclick=()=>vhGo(a.dataset.vhk));
+  const more=p.querySelector('[data-vhmore]');
+  if(more)more.onclick=()=>vhOpen(true);}
+
 function showVersions(engine){
   const el=document.getElementById('uiver');if(!el)return;
   el.textContent='v'+UI_VERSION+(engine?'  ·  engine '+engine:'');
-  el.style.color=(engine&&engine!==UI_ENGINE_EXPECT)?'var(--warn,#b45309)':'';}
+  el.style.color=(engine&&engine!==UI_ENGINE_EXPECT)?'var(--warn,#b45309)':'';
+  // the badge is the affordance: it already names the version, so it is where
+  // you would look for what that version changed
+  el.style.cursor='pointer';
+  el.title='UI version (from the page title) · engine version once connected'
+    +' — click for what changed';
+  el.onclick=()=>vhOpen(false);}
 document.addEventListener('DOMContentLoaded',()=>{
   showVersions(null);
   // Wired here rather than at the definition: the input must exist, and the
   // page works fully disconnected, so search has to come up without a device.
-  try{initUiSearch();}catch(e){console.warn('search init failed',e);}});
+  try{initUiSearch();}catch(e){console.warn('search init failed',e);}
+  // Its own try: a failure here must not take the search box down with
+  // it, and vice versa. Worst case the tabs stick at the wrong offset.
+  try{initTopbarSync();}catch(e){console.warn('topbar sync failed',e);}});
 let btTotal=0,btGot={},pfGot={};
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
@@ -1034,13 +1183,47 @@ el.appendChild(l);el.scrollTop=el.scrollHeight;
 while(el.childNodes.length>500)el.removeChild(el.firstChild);}
 function toast(m,bad){const t=$('toast');t.textContent=m;t.style.color=bad?'var(--err)':'var(--ok)';
 clearTimeout(toast._t);toast._t=setTimeout(()=>t.textContent='',3500);}
+// 23.5 liveness. PING (0x20) was defined but never sent, so nothing in the UI
+// could tell a live link from a dead one -- the only signal was a command
+// failing when you finally tried it.
+let _lastRx=0,_liveTimer=null;
+const LIVE_PING_MS=6000;     // how often we poke the Pi while idle
+const LIVE_STALE_MS=15000;   // silence beyond this is reported as stale
+
+function markAlive(){
+  _lastRx=Date.now();
+  const el=$('conn');
+  if(el&&el.classList.contains('stale')){
+    el.className='status on';el.textContent='connected';}}
+
+function checkLive(){
+  if(!device)return;
+  const el=$('conn');if(!el)return;
+  if(Date.now()-_lastRx>LIVE_STALE_MS){
+    el.className='status stale';
+    el.textContent='not responding — reconnect';
+    el.title='No reply from the Pi for '
+      +Math.round((Date.now()-_lastRx)/1000)+'s. The USB link may have gone '
+      +'away; press Connect again.';
+  }else{
+    // A PING is one report and the Pi answers PONG; cheap enough to run while
+    // idle, and it is the only thing that can distinguish "quiet" from "gone".
+    try{send([PING],true);}catch(_){}}}
+
 function setConn(on){$('conn').textContent=on?'connected':'disconnected';
 $('conn').className='status '+(on?'on':'off');
+if(on){markAlive();
+  if(!_liveTimer)_liveTimer=setInterval(checkLive,LIVE_PING_MS);}
+else{if(_liveTimer){clearInterval(_liveTimer);_liveTimer=null;}
+  $('conn').title='';}
 ['read','write','dl','evon','evoff','clear','expread','expwrite','expwrite2','btscan','btlist','profload','profsave','engstat','setsave'].forEach(i=>{const el=$(i);if(el)el.disabled=!on;});}
 function pad(a){const u=new Uint8Array(RPT);u.set(a.slice(0,RPT));return u;}
 async function send(a,q=true){if(!device)return;await device.sendReport(0,pad(a));
 if(!q)log('→ 0x'+a[0].toString(16),'tx');}
 function onReport(e){
+  // ANY inbound report proves the Pi is there -- not just PONG. Keying this
+  // on PONG alone would have reported a busy link as stale.
+  markAlive();
   const d=new Uint8Array(e.data.buffer),t=d[0];
   if(t===PONG)log('← PONG','rx');
   else if(t===EVENT){
@@ -1230,6 +1413,13 @@ $('connect').onclick=async()=>{
   if(!ds.length)return;
   device=ds.find(d=>d.collections.some(c=>c.usagePage===0xFF00))||ds[0];
   await device.open();device.addEventListener('inputreport',onReport);
+  // Unplugging is knowable at once; waiting LIVE_STALE_MS to notice something
+  // the browser already told us is just a slower wrong answer.
+  if(!window._hidDiscHooked){
+    window._hidDiscHooked=true;
+    navigator.hid.addEventListener('disconnect',ev=>{
+      if(device&&ev.device===device){device=null;setConn(false);
+        toast('the Pi disconnected',true);}});}
   // A hash identifies a payload on the Pi we were talking to. Connecting to
   // the OTHER Pi with pi1's hashes in hand could skip a read of a genuinely
   // different config, so they do not outlive a connection.
@@ -2471,6 +2661,7 @@ function renderStage(){
         <option value="e9" ${d.wireframe==='e9'?'selected':''}>E9 mouse</option>
       </select>
       ${canEdit?`<button class="editbtn" data-ed="${d.id}" title="edit the wireframe drawing only (key positions), not mappings">${editing?'💾 Save layout':'✎ Layout'}</button>`:''}
+      ${canEdit&&editing?`<button class="cancelbtn" title="discard the layout changes you have made since pressing Layout, and leave the editor">✕ Cancel</button>`:''}
       ${(()=>{const hasPtr=lastEng&&lastEng.nodes&&lastEng.nodes.some(n=>n.device===d.id&&n.role==='pointer');
         const hasPad=d.wireframe!=='e9'&&layoutFor(d).keys.some(k=>k.pad||k.btn||k.wheel);
         return hasPtr&&d.wireframe!=='e9'&&!hasPad?`<button onclick="addTrackpadTo('${d.id}')"
@@ -2507,6 +2698,7 @@ function renderStage(){
   window._supSet=suppressedMembers();
   renderGroupsCard(c);
   c.querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>toggleEdit(b.dataset.ed));
+  c.querySelectorAll('.cancelbtn').forEach(b=>b.onclick=()=>cancelEdit());
   c.querySelectorAll('.wfpick').forEach(s=>s.onchange=()=>{
     const d=(cfg.devices||[]).find(x=>x.id===s.dataset.wf);if(!d)return;
     const old=d.wireframe||'ansi';
@@ -2910,16 +3102,37 @@ function bindEditKey(el,d,idx){
       render();};
     window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',up);};}
+// 23.5: what the layout looked like when you pressed ✎ Layout. Editing drags
+// keys around in `layouts` directly, so without this there was no way back --
+// the only exit was 💾 Save layout, which committed whatever you had done,
+// including a drag you were part-way through undoing by hand.
+let _wfSnap=null;
+
 function toggleEdit(id){
   editMulti.clear();
   if(editDev===id){
-    editDev=null;editSel=null;
+    editDev=null;editSel=null;_wfSnap=null;
     if(device)putFile(2,layouts||{});
     else toast('layout kept locally — connect to save on the Pi',true);
     render();return;}
   const d=allDevices().find(x=>x.id===id);if(!d)return;
-  editableLayout(d);
+  editableLayout(d);                       // materialise it before snapshotting
+  // Deep copy via JSON: the layout is plain data, and a shallow copy would
+  // share the keys array, so every drag would edit the "snapshot" too and
+  // Cancel would restore the edited state.
+  _wfSnap=JSON.stringify(layouts[id]);
   editDev=id;editSel=null;render();}
+
+function cancelEdit(){
+  if(!editDev)return;
+  if(_wfSnap!=null){
+    try{layouts[editDev]=JSON.parse(_wfSnap);}
+    catch(_){}}                            // a corrupt snapshot must not trap you in the editor
+  editMulti.clear();
+  editDev=null;editSel=null;_wfSnap=null;
+  // Nothing is sent to the Pi: Cancel means the device never hears about it.
+  render();
+  toast('layout changes discarded');}
 function renderPalette(){
   const p=$('palette');if(!p)return;
   if(!editDev||!cfg){p.style.display='none';return;}
@@ -3726,10 +3939,32 @@ function renderClips(){
         ?'background:#000;color:#eee;border:1px solid var(--hi)'
         :'background:#3a3f47;color:#f2f2f2;border:1px solid var(--line)');
     ta.value=c.text||'';                     // .value: never parsed as markup
+    box.appendChild(ta);
+    // 23.5: live character count while editing. The limit was only ever
+    // announced by truncating you at it, which is the worst moment to find
+    // out -- the text is already gone from the box. Editing only: on a
+    // read-only clip the number is noise, and the section header already
+    // carries the total size.
+    let cnt=null;
+    if(editing){
+      cnt=document.createElement('div');
+      cnt.className='muted';
+      cnt.style.cssText='font-size:.72rem;text-align:right;margin-top:.15rem';
+      box.appendChild(cnt);}
+    const _count=()=>{
+      if(!cnt)return;
+      const n=ta.value.length,left=CLIP_MAX-n;
+      cnt.textContent=`${n.toLocaleString()} / ${CLIP_MAX.toLocaleString()} characters`
+        +(left<=0?' — at the limit':left<500?` — ${left} left`:'');
+      // Warn while there is still room to do something about it, rather than
+      // going red only once it is too late.
+      cnt.style.color=left<=0?'var(--bad,#dc2626)'
+                     :left<500?'var(--pick,#d97706)':'';};
     if(editing)ta.oninput=()=>{
       if(ta.value.length>CLIP_MAX){ta.value=ta.value.slice(0,CLIP_MAX);
-        toast(`truncated to ${CLIP_MAX.toLocaleString()} characters`,true);}};
-    box.appendChild(ta);
+        toast(`truncated to ${CLIP_MAX.toLocaleString()} characters`,true);}
+      _count();};
+    _count();
     host.appendChild(box);}
   const b=clipBytes();
   $('clipinfo').textContent=`${names.length} item(s) · ${(b/1024).toFixed(1)} KB of ${(CLIP_TOTAL_MAX/1024)|0} KB`;}
@@ -4778,14 +5013,37 @@ function moveChordTarget(cur,inp){
   if(inp.type==='btn')cfg.mouse_mappings[`${L},${inp.id}`]=act[0]==='key'&&cur.tgt.type==='key'?['key',act[1]]:act;
   else cfg.kbd_mappings[`${L},${inp.id}`]=act[0]==='key'?act[1]:0x28;
   chordSel={layer:L,tgt:inp};render();toast('chord updated — Save to device to apply');}
+// 23.5: place a popover next to its trigger, but never off the screen.
+// It used to be positioned at the trigger's own coordinates with no clamping,
+// so a trigger near the right edge opened a panel running off the page --
+// with the part you needed to click on the invisible side. Flips above the
+// trigger when there is no room below, which is the same problem vertically.
+function placePopover(p,r,gap){
+  gap=gap||4;
+  p.style.display='block';              // must be laid out before it measures
+  p.style.left='0px';p.style.top='0px'; // measure unconstrained by a stale spot
+  const pw=p.offsetWidth,ph=p.offsetHeight,M=8;
+  const vw=document.documentElement.clientWidth;
+  const vh=document.documentElement.clientHeight;
+  let left=r.left;
+  if(left+pw>vw-M)left=vw-pw-M;         // pull back from the right edge
+  if(left<M)left=M;                     // ...but never past the left one
+  // Prefer below. If it would not fit and there is more room above, flip.
+  let top=r.bottom+gap;
+  if(top+ph>vh-M&&r.top-gap-ph>=M)top=r.top-gap-ph;
+  if(top+ph>vh-M)top=Math.max(M,vh-ph-M);
+  p.style.left=(left+window.scrollX)+'px';
+  p.style.top=(top+window.scrollY)+'px';}
+
 $('chordopts').onclick=e=>{
   const p=$('popover');const r=e.target.getBoundingClientRect();
-  p.style.left=(r.left+window.scrollX)+'px';p.style.top=(r.bottom+window.scrollY+4)+'px';
   p.innerHTML=`<b>Chord behavior</b><br>
   <label><input type="radio" checked> Hold-first layer chord (current engine model)</label>
   <label style="opacity:.5"><input type="radio" disabled> Simultaneous, order-free
   <span class="muted">(engine models chords as hold-layers; L+R=Enter is right-hold→layer 2)</span></label>`;
-  p.style.display='block';
+  // after innerHTML: an empty box measures 0 and would be placed as though it
+  // fitted anywhere
+  placePopover(p,r);
   setTimeout(()=>document.addEventListener('click',function h(ev){
     if(!p.contains(ev.target)){p.style.display='none';document.removeEventListener('click',h);}}),50);
 };
@@ -5043,6 +5301,10 @@ function macroSlots(){const out=[];const m=macroMax();for(let n=1;n<=m;n++)out.p
 function nextFreeMacro(){let n=1;while((cfg.macros&&cfg.macros[n]&&cfg.macros[n].length))n++;return n;}
 function macOpts(v){let h='';for(const n of macroSlots()){const nm=(cfg.macro_names||{})[n];
   h+=`<option value="${n}" ${n===+v?'selected':''}>${nm?nm+' (M'+n+')':'Macro '+n}</option>`;}return h;}
+// 23.5: rendered BEFORE capBoxHTML in every quick-assign block. Searching by
+// name is what you reach for when you know what you want ("copy", "M4");
+// capturing a keypress is the fallback for when you do not. The common case
+// belongs first, and it was second.
 function searchBoxHTML(){return `<label>Search actions</label>
 <input type="text" id="actsearch" placeholder="type: copy, M4, Enter, dpi…">
 <div id="searchres" class="muted"></div>`;}
@@ -5170,7 +5432,7 @@ function renderModChordEd(ed){
       </select><div id="mcargwrap"></div>
       <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
-        ${capBoxHTML()}${searchBoxHTML()}
+        ${searchBoxHTML()}${capBoxHTML()}
         <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
       </div>
       ${osScopeHTML('mcos',os)}
@@ -5259,7 +5521,7 @@ function renderComboEd(ed){
       </select><div id="cargwrap"></div>
       <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
-        ${capBoxHTML()}${searchBoxHTML()}
+        ${searchBoxHTML()}${capBoxHTML()}
         <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
       </div>
       <label style="margin-top:.5rem">Window (ms)</label><input type="number" id="cwin" value="${c.window_ms||60}" min="20" max="500">
@@ -5655,7 +5917,7 @@ function renderEditor(){
     </select><div id="pressArg"></div>
     <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
       <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
-      ${capBoxHTML()}${searchBoxHTML()}
+      ${searchBoxHTML()}${capBoxHTML()}
       <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
     </div>
     <label style="margin-top:.5rem">On release</label><select id="release">
@@ -5864,15 +6126,77 @@ else if(NAME2MOD[tok]!==undefined)us.push(0x00070000+NAME2MOD[tok]);
 else if(NAME2KEY[tok]!==undefined)us.push(0x00070000+NAME2KEY[tok]);
 else if(tok.startsWith('0x'))us.push(parseInt(tok,16));}
 steps.push(us);}return steps;}
+// 23.5: which bindings fire a given macro.
+//
+// Built on asgRows(), NOT on a fresh walk of the config. asgRows already knows
+// every surface a macro can be reached from -- key and button mappings,
+// combos, modifier chords including the per-OS overlays, and addition packs --
+// and a second walker would drift from it the first time a surface was added.
+// The cost is that this is O(rows) per macro; the whole table is a few hundred
+// rows, and it is built once per render.
+function macroUsers(){
+  const by={};
+  let rows=[];
+  try{rows=asgRows();}catch(_){return by;}
+  for(const r of rows){
+    const a=r.out;
+    if(!Array.isArray(a)||a[0]!=='macro')continue;
+    const n=String(a[1]);
+    const L=[...(r.layers||[])].sort((x,y)=>x-y);
+    (by[n]=by[n]||[]).push({
+      label:asgInputLabel(r),
+      // A binding on every layer is the normal case and saying so on each row
+      // is noise; only a restricted set is worth naming.
+      layers:(L.length&&L.length<LAYER_NAMES.length)
+        ?L.map(i=>LAYER_NAMES[i]||('layer'+i)).join(', '):'',
+      os:r.os||'',
+      pack:r.fromAdd||'',
+      off:!!r.addOff});}
+  // Window mode reaches its macros through config keys, not through a
+  // mapping, so asgRows cannot see them. Without these two a macro would
+  // read "not bound to anything" while window mode was firing it.
+  for(const[k,what]of[['winmode_move_macro','window move'],
+                      ['winmode_resize_macro','window resize']]){
+    const n=cfg&&cfg[k];
+    if(n===undefined||n===null||n==='')continue;
+    (by[String(n)]=by[String(n)]||[]).push({label:what,layers:'',os:'',
+      pack:'',off:false,viaSetting:k});}
+  return by;}
+
+function macroUsersHTML(list){
+  if(!list||!list.length)
+    return '<span class="muted" style="font-size:.75rem">not bound to anything</span>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:.25rem;margin:.15rem 0">'
+    +list.map(u=>{
+      const bits=[u.layers?'on '+u.layers:'',u.os?u.os:'',
+                  u.pack?'from '+u.pack:''].filter(Boolean).join(' · ');
+      return `<span title="${esc(bits||'fires this macro')}" style="`
+        +'font-size:.72rem;padding:.1rem .4rem;border:1px solid var(--line);'
+        +'border-radius:999px;'
+        +(u.off?'opacity:.45;text-decoration:line-through;':'')
+        +(u.viaSetting?'border-style:dashed;':'')
+        +`">${esc(u.label)}${bits?' <span class="muted">'+esc(bits)+'</span>':''}</span>`;})
+    .join('')+'</div>';}
+
 function renderMacros(){
   const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)</h2>';
   if(!cfg.macro_names)cfg.macro_names={};
+  const users=macroUsers();
   for(const n of macroSlots()){const s=(cfg.macros&&cfg.macros[n])||[];
   const nm=cfg.macro_names[n]||'';
   h+=`<details class="macro" id="macro-${n}"><summary><b>${nm?nm+' (M'+n+')':'Macro '+n}</b> — ${s.length?
   macroToText(s).split('\n').filter(l=>l!=='.').slice(0,3).join(' · '):'<span class="muted">empty</span>'}</summary>
   <label>Name (optional)</label><input type="text" data-mn="${n}" value="${nm.replace(/"/g,'&quot;')}" placeholder="e.g. Copy">
-  <label>Steps</label><textarea data-m="${n}" rows="${Math.max(3,s.length)}">${macroToText(s)}</textarea></details>`;}
+  <div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-start">
+    <div style="flex:1 1 18rem;min-width:14rem">
+      <label>Steps</label>
+      <textarea data-m="${n}" rows="${Math.max(3,s.length)}">${macroToText(s)}</textarea>
+    </div>
+    <div style="flex:1 1 12rem;min-width:11rem">
+      <label title="Every key, button, combo and modifier chord that runs this macro. Dashed = reached through a setting rather than a mapping; struck through = switched off in its addition pack.">Fired by</label>
+      ${macroUsersHTML(users[n])}
+    </div>
+  </div></details>`;}
   h+=`<div class="bar" style="margin-top:.5rem"><button id="macroadd">＋ Add macro</button>
     <span class="muted">${macroMax()} slots · the engine has no fixed limit</span></div>`;
   el.innerHTML=h;
@@ -5950,6 +6274,37 @@ function groupNodes(nodes){
     if(!by[gid]){by[gid]={gid,nodes:[]};groups.push(by[gid]);}
     by[gid].nodes.push(n);});
   return groups;}
+// 23.5: which Pi a device's input reaches us through, and the measured cost
+// of that hop.
+//
+// The Pi is derived from which engine leg the payload carries (pi1_engine vs
+// pi2_engine) rather than from a new status field: the engine already says
+// which one it is by what it can measure, and a second field would be one
+// more thing that can disagree with reality.
+// `legs` is injectable so the matching can be exercised without a connected
+// device; it defaults to whatever the engine last sent.
+function benchHost(legs){
+  legs=legs||((lastEng||{}).bench||{}).legs||[];
+  for(const l of legs){
+    if(l.id==='pi1_engine')return 'Pi1';
+    if(l.id==='pi2_engine')return 'Pi2';}
+  return '';}
+
+// Only the MEASURED hop for that device is shown -- never an end-to-end sum.
+// A total would have to add bounds to measurements, and the result would look
+// like a measurement while being partly derived; the strip keeps the two
+// kinds apart and this must not quietly rejoin them.
+function devLatency(d,legs){
+  legs=legs||((lastEng||{}).bench||{}).legs||[];
+  const cand=[d&&d.name,d&&d.pin,d&&d.id].filter(Boolean)
+    .map(x=>String(x).toLowerCase());
+  for(const l of legs){
+    if(l.kind!=='real'||!/^bt_to_pi[12]:/.test(l.id||''))continue;
+    const alias=l.id.split(':')[1].toLowerCase();
+    if(cand.some(c=>c===alias||c.indexOf(alias)>=0||alias.indexOf(c)>=0))
+      return l;}
+  return null;}
+
 function renderDevAttached(){
   const host=$('devattached');if(!host)return;
   const devs=(cfg&&cfg.devices)||[];
@@ -5961,7 +6316,15 @@ function renderDevAttached(){
     const cnt=claimed.length;
     const icon=d.kind==='mouse'?'🖱':'⌨';
     const tag=cnt>1?` <span class="muted">${cnt} nodes</span>`:(cnt===1?'':' <span style="color:var(--warn)">⚠ no input</span>');
-    h+=`<span class="grouppill" style="cursor:default">${icon} ${esc(d.name||d.id)}${tag}
+    // where its input arrives, and what that hop costs
+    const host=benchHost();
+    const lat=devLatency(d);
+    const via=host?` <span class="muted" title="${esc(
+      lat?('measured link-layer round trip, '+lat.label+' — n='+lat.n
+           +' sd='+lat.sd+'. This hop only; not an end-to-end total.')
+         :('reaches you through '+host+'; no link measurement for this device yet'))
+      }">· ${host}${lat?' '+lat.mean+'ms':''}</span>`:'';
+    h+=`<span class="grouppill" style="cursor:default">${icon} ${esc(d.name||d.id)}${tag}${via}
       <a class="mlink" data-devrm="${i}" title="remove this device">✕</a></span>`;});
   h+='</div>';
   host.innerHTML=h;
@@ -6463,6 +6826,38 @@ function uiSearchGo(i){
                   el.style.outlineOffset=prevOffset;},2200);
   if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')
     try{el.focus({preventScroll:true});}catch(_){el.focus();}}
+
+// 23.5: the sticky tab strip has to sit exactly below .topbar, and .topbar's
+// height is NOT a constant -- it is a flex row that wraps to two or three
+// lines on a narrow window. The first attempt used a hardcoded 2.9rem and the
+// tabs stuck UNDERNEATH the bar (measured: bar 102px tall, tabs stuck at
+// 46.4px). So measure it and publish it as a variable the CSS reads.
+function syncTopbarHeight(){
+  const bar=document.querySelector('.topbar');
+  if(!bar)return;
+  // getBoundingClientRect, not offsetHeight: the bar is sticky and may be
+  // fractionally scaled, and a rounded value leaves a 1px seam the panels
+  // show through as they scroll under.
+  const h=bar.getBoundingClientRect().height;
+  document.documentElement.style.setProperty('--topbar-h',h+'px');
+  // The tab strip is the second sticky band; anything that sticks below it
+  // needs both heights, and the tabs wrap on a narrow window just as the bar
+  // does. Measured only while it is actually sticky -- below 520px of window
+  // height it scrolls away, and reserving space for it would leave a gap.
+  const tabs=document.getElementById('toptabs');
+  const th=(tabs&&getComputedStyle(tabs).position==='sticky')
+    ?tabs.getBoundingClientRect().height:0;
+  document.documentElement.style.setProperty('--tabs-h',th+'px');}
+
+function initTopbarSync(){
+  syncTopbarHeight();
+  addEventListener('resize',syncTopbarHeight);
+  // The bar wraps when its own contents change (a device name appearing, a
+  // button enabling), not only when the window resizes -- so watch the box
+  // itself where the browser supports it.
+  if(window.ResizeObserver){
+    const bar=document.querySelector('.topbar');
+    if(bar)new ResizeObserver(syncTopbarHeight).observe(bar);}}
 
 function initUiSearch(){
   const box=$('uisearch');if(!box)return;
@@ -8430,6 +8825,24 @@ function pfSave(){
 }
 
 /* ---------- the strip under the title ---------- */
+// 23.5: one cell per measured leg or stated bound.
+function pfLegsHTML(legs){
+  if(!Array.isArray(legs)||!legs.length)return '';
+  return legs.map(l=>{
+    if(l.kind==='bound'){
+      const hi=l.bound_ms_max;
+      const v=hi?`${l.bound_ms}–${hi}`:l.bound_ms;
+      // The tooltip carries the derivation. A floor with no stated basis is
+      // indistinguishable from a number somebody made up.
+      return `<span class="leg bound" title="${esc('a BOUND, not a measurement — '+(l.basis||''))}">`
+        +`${esc(l.label)} <b>≥${v}ms</b></span>`;}
+    const bits=[`n=${l.n}`,`sd=${l.sd}`];
+    if(l.p95!==undefined)bits.push('p95='+l.p95);
+    return `<span class="leg${l.live?' live':''}" title="${esc(
+        (l.live?'measured by this engine, now — ':'from the stored profile — ')
+        +bits.join('  '))}">`
+      +`${esc(l.label)} <b>${l.mean}ms</b></span>`;}).join('');}
+
 function pfRenderStrip(stats){
   const el = $('benchstrip');
   if(!el) return;
@@ -8446,9 +8859,14 @@ function pfRenderStrip(stats){
       ' <button data-pfa="open" class="txmini" title="Preferences (⌘, / Ctrl+,)">⚙</button>';
     return;
   }
+  // 23.5: per-leg rows, named by the engine from bench_names.py. Rendered
+  // ahead of the recipe cells because they say WHERE the time goes, which is
+  // the question the strip exists to answer; the recipe stays for the derived
+  // figures it was built for.
+  const legHTML = pfLegsHTML(s.legs);
   const terms = String(PREFS.bench.recipe || PF_DEFAULT_RECIPE)
     .split(';').map(t => t.trim()).filter(Boolean);
-  const cells = [];
+  const cells = legHTML ? [legHTML] : [];
   for(const t of terms){
     const [expr, rawLabel] = t.split('|');
     const [src, field] = (expr || '').trim().split('.');
