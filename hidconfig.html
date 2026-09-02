@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 23.5</title>
+<title>HID Config 23.8</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -185,6 +185,8 @@ label.inl input{margin:0}
   border:1px solid var(--line);white-space:nowrap}
 .benchstrip .leg.bound{border-style:dashed;opacity:.72}
 .benchstrip .leg.live{border-color:var(--ok)}
+/* the headline total reads as a heading, not as one more leg */
+.benchstrip .leg.total{border-color:var(--hi);font-size:.78rem}
 .benchstrip .leg b{font-weight:600}
 .pfrow{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;margin:.5rem 0}
 .pfrow label{margin:0;display:inline-flex;align-items:center;gap:.3rem}
@@ -501,6 +503,11 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <button id="clipsave" disabled>⬆ Save all to device</button>
       <button id="clipreload">↻ Reload from device</button>
       <span class="muted" id="clipinfo" style="font-size:.78rem"></span>
+    <!-- 23.8: shown only when the engine has written notes since this list was
+         read. A stale Copy/Paste panel is the normal state, not an error, and
+         with no sign of it a successful save reads as a failed one. -->
+    <button id="clipstale" style="display:none;font-size:.74rem;
+      border-color:var(--warn);color:var(--warn)">⚠ new notes on the Pi — ↻ re-read</button>
     </div>
     <div id="cliplist" style="margin-top:.5rem"></div>
     <p class="muted" style="font-size:.76rem;margin-top:.5rem">
@@ -1055,9 +1062,25 @@ const CLOCK_CMD=0x60;
 function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
   const b=new TextEncoder().encode(t);
   send([CLOCK_CMD,b.length,...b]);}
-// The engine build this page needs. Compared against engine_version in the
-// config the Pi returns.
-const UI_ENGINE_EXPECT='22.9';
+// The engine build this page needs, compared against engine_version from the
+// Pi.
+//
+// 23.7: this was a hardcoded '22.9' and had not been touched since, so every
+// correctly-matched pair from 23.0 onward was reported as a MISMATCH:
+//   "Pi engine is 23.5, this UI expects 22.9 — re-deploy the .py files"
+// on a Pi that had just been deployed. A warning that cries wolf is worse
+// than no warning, because the real one is then indistinguishable.
+//
+// The irony is three lines below: "a second hard-coded string would drift
+// from it the first time one of us forgot". This WAS that second string, and
+// it drifted. So it is now derived from the same <title> the badge uses, and
+// there is nothing left to forget. Convention (CLAUDE.md §4) is that the UI
+// and engine versions are bumped together, so equality is the right test.
+//
+// Compared on the numeric part only: a UI shipped as "23.6 BF1" still expects
+// engine 23.6, and treating a bugfix suffix as a mismatch would put the false
+// warning straight back.
+const _verNum=v=>String(v||'').match(/^[\d.]+/)?.[0]||String(v||'');
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1146,7 +1169,7 @@ function vhOpen(all){
 function showVersions(engine){
   const el=document.getElementById('uiver');if(!el)return;
   el.textContent='v'+UI_VERSION+(engine?'  ·  engine '+engine:'');
-  el.style.color=(engine&&engine!==UI_ENGINE_EXPECT)?'var(--warn,#b45309)':'';
+  el.style.color=(engine&&_verNum(engine)!==_verNum(UI_VERSION))?'var(--warn,#b45309)':'';
   // the badge is the affordance: it already names the version, so it is where
   // you would look for what that version changed
   el.style.cursor='pointer';
@@ -1299,8 +1322,8 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
         try{
           const ev=obj.engine_version||null;
           showVersions(ev||'(pre-20.8.1)');
-          if(ev&&ev!==UI_ENGINE_EXPECT)
-            toast(`⚠ Pi engine is ${ev}, this UI expects ${UI_ENGINE_EXPECT}`
+          if(ev&&_verNum(ev)!==_verNum(UI_VERSION))
+            toast(`⚠ Pi engine is ${ev}, this UI expects ${_verNum(UI_VERSION)}`
                   +` — re-deploy the .py files`,true);
         }catch(e){}
         if(typeof pfAdoptStats==='function')pfAdoptStats(obj);
@@ -1320,6 +1343,10 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
       }
       else if(curFile===6){
         clips=(obj&&obj.clips&&typeof obj.clips==='object')?obj.clips:{};
+      // 23.8: this copy is current AS OF NOW. Record the engine's note-write
+      // count at this moment; anything beyond it means the keyboard has
+      // written since, and what is on screen is behind.
+      if(typeof markClipsRead==='function')markClipsRead();
         _clipsChannelOk=!!(obj&&'clips'in obj);
         renderClips();}
       else if(curFile===5){
@@ -1603,6 +1630,9 @@ $('setsaveone').onclick=()=>saveOneSet();
 $('clipnew').onclick=()=>addClip();
 $('clipsave').onclick=()=>saveClips();
 $('clipreload').onclick=()=>{if(device)getFile(6);else toast('connect first',true);};
+// 23.8: the stale badge does the same thing as Reload -- it exists to tell you
+// that you need to, not to do something different.
+$('clipstale').onclick=()=>{if(device)getFile(6);else toast('connect first',true);};
 $('profbackups').onclick=()=>showBackups();
 // 20.8 #1.4: local backup/restore. Bound unconditionally and NOT gated on a
 // connection -- the whole point is that it still works when the Pi does not.
@@ -2112,10 +2142,18 @@ function swapBehaviour(devA,elA,devB,elB,scope){
   // field to trade. Reporting that after the fact -- which is what it used to
   // do -- reads as a bug even though the fact is real.
   if(scope==='baseline'&&A.kind!==B.kind){
-    toast('Baseline swaps an identity, and a mouse button has no key identity '
-      +'to trade — there is no field to exchange. Use “Custom” to swap a key '
-      +'with a button, or set each side’s identity separately in Baseline.',
-      true);
+    // 23.6: name WHICH side is which. The old wording asserted "a mouse button
+    // has no key identity", which reads as false when you have just clicked
+    // two buttons -- and that is a real case: a button carrying a key identity
+    // (baseline "btnkey:…") renders as a KEY, so button-to-button can arrive
+    // here with kinds that genuinely differ. Blaming "a mouse button" then
+    // describes the wrong side and reads as a bug rather than a rule.
+    const side=x=>x.kind==='btn'?'a button':'a key';
+    toast('Baseline swaps an IDENTITY, and these two do not have the same '
+      +'kind of identity to trade: the first is '+side(A)+' and the second is '
+      +side(B)+'. (A button given a key identity counts as a key here.) '
+      +'Use “Custom” to map one onto the other, or set each side separately '
+      +'in Baseline.', true);
     render();return;}
   if(A.kind===B.kind&&((A.kind==='btn'&&A.id===B.id)
                     ||(A.kind==='key'&&A.dev===B.dev&&A.canon===B.canon))){
@@ -3853,6 +3891,19 @@ function safeClipName(n){
 function noteClipNames(){
   return new Set(((cfg&&cfg.note_rules)||[])
     .map(r=>r&&r.clip).filter(Boolean));}
+// 23.8: the clips on screen are whatever was last READ from the device, and
+// the engine appends to note clips while you are looking at them. That made a
+// successful save look like a failed one -- it cost one whole investigation.
+// The engine publishes notes_writes; we remember its value at the moment we
+// read, and anything above that means our copy is behind.
+let _clipsReadAt = 0;
+function clipsStale(){
+  const now=((lastEng||{}).notes_writes)||0;
+  return now > _clipsReadAt;}
+function markClipsRead(){
+  _clipsReadAt=((lastEng||{}).notes_writes)||0;
+  const b=$('clipstale');if(b)b.style.display='none';}
+
 function renderClips(){
   const host=$('cliplist');if(!host)return;
   const _noteClips=noteClipNames();
@@ -3967,7 +4018,16 @@ function renderClips(){
     _count();
     host.appendChild(box);}
   const b=clipBytes();
-  $('clipinfo').textContent=`${names.length} item(s) · ${(b/1024).toFixed(1)} KB of ${(CLIP_TOTAL_MAX/1024)|0} KB`;}
+  $('clipinfo').textContent=`${names.length} item(s) · ${(b/1024).toFixed(1)} KB of ${(CLIP_TOTAL_MAX/1024)|0} KB`;
+  // ...and say so when the keyboard has written since this was read.
+  const st=$('clipstale');
+  if(st){
+    const behind=clipsStale();
+    st.style.display=behind?'':'none';
+    if(behind)st.title='The keyboard has saved '
+      +((((lastEng||{}).notes_writes)||0)-_clipsReadAt)
+      +' note(s) since this list was read from the Pi. What you see here is '
+      +'the older copy — press to re-read.';}}
 window.addClip=()=>{
   const nm=prompt('Name this item (letters, numbers, spaces):','snippet '+(Object.keys(clips).length+1));
   if(nm===null)return;
@@ -5581,7 +5641,18 @@ function scopeTabsHTML(selDev,active){
     baseline:'This device&#39;s initial state: define what each physical key <i>is</i>, once.'}[active];
   return `<div class="pills" style="margin:.2rem 0 .1rem">
     <div class="pill ${active==='custom'?'on':''}" onclick="setScope('custom')">Custom · all devices</div>
-    <div class="pill ${active==='devcustom'?'on':''}" onclick="setScope('devcustom')">Custom · ${esc(devName(selDev))} only</div>
+    ${selDev
+      ? `<div class="pill ${active==='devcustom'?'on':''}" onclick="setScope('devcustom')">Custom · ${esc(devName(selDev))} only</div>`
+      /* 23.6: without a device there is nothing to scope TO. This pill used to
+         render anyway -- as "Custom ·  only", with a blank name -- and
+         clicking it set scope='devcustom' while devScoped stayed false,
+         because devScoped requires selDev. The write then went to the SHARED
+         table, which is exactly the reported bug: "if I change it on
+         'custom - E9…' it changes on 'Custom · all devices' as well".
+         A row reached from the assignments table carries no device, because
+         it was read out of the shared table in the first place. */
+      : `<div class="pill" style="opacity:.4;cursor:not-allowed"
+           title="This mapping was reached from the shared table, so there is no device to scope it to. Click the key or button on a device's wireframe first, then choose this.">Custom · one device only</div>`}
     <div class="pill ${active==='baseline'?'on':''}" onclick="setScope('baseline')">Baseline · ${esc(devName(selDev))}</div></div>
   <p class="muted" style="margin:.1rem 0 .5rem;font-size:.76rem">${blurb}</p>`;}
 function editorKey(){
@@ -5873,6 +5944,13 @@ function renderEditor(){
   // ---- Custom scope: keyed on the CANONICAL key. Port-scoped custom
   // writes kbd_mappings_by_device[device]; shared writes kbd_mappings. ----
   const key=`${layer},${canon}`;
+  // 23.6: a devcustom scope with no device used to fall through to the shared
+  // table silently. CLAUDE.md is explicit that unrecognised state must fail
+  // loudly and non-destructively -- writing a DIFFERENT table than the one
+  // the user picked is about as destructive as a silent path gets, because
+  // the edit lands on every device instead of one.
+  if(scope==='devcustom'&&!selDev)
+    console.warn('devcustom scope with no device — refusing to write shared');
   const devScoped=scope==='devcustom'&&!!selDev;
   const kmap=!devScoped?(isBtn?cfg.mouse_mappings:cfg.kbd_mappings)
     :isBtn
@@ -5935,6 +6013,18 @@ function renderEditor(){
     if(isBtn){const th=cfg.tap_hold[sel.id]||[['btn',sel.id],L];th[1]=L;cfg.tap_hold[sel.id]=th;}
     else{cfg.layer_keys=cfg.layer_keys||{};cfg.layer_keys[canon]=L;}}
   const apply=a=>{
+    // 23.6: belt-and-braces for the silent-shared-write bug. The pill that
+    // could set this state is now disabled without a device, but if the state
+    // is reached any other way, REFUSE. Writing the shared table when the
+    // user asked for one device is worse than doing nothing: it changes every
+    // device, and nothing on screen says so.
+    //
+    // NOTE `scope` below is the OS scope and shadows the outer mapping scope.
+    // devScoped was captured from the outer one, which is what governs here.
+    if(sel.scope==='devcustom'&&!devScoped){
+      toast('no device to scope this to — click the key or button on a '
+            +'device wireframe first',true);
+      return;}
     // 19.2R #3: honour the OS-scope picker -- "All OSes" writes the shared
     // table, "<os> only" writes os_profiles[os].* and clears the other homes
     // so the mapping can't exist in two scopes at once.
@@ -6902,10 +6992,22 @@ function renderNoteTable(){
       const abc='tqwrgpxyzbcdfhjkm';
       tag=[...abc].find(ch=>!used.has(';;'+ch+';;'))||'n2';}
     const tg=noteTagsFor(tag);
+    const clipName=tag==='n'?'HID Notes':('HID Notes '+tag);
     cfg.note_rules=(cfg.note_rules||[]).concat([{
-      clip:tag==='n'?'HID Notes':('HID Notes '+tag),
+      clip:clipName,
       open:tg.open,wipe:tg.wipe,close:tg.close,
       confirm:'[saved to HID Notes]',on:true}]);
+    // 23.8: create the Copy entry too, or the rule points at a clip that does
+    // not exist yet and Copy/Paste shows nothing until the KEYBOARD writes to
+    // it. Josh: "A new Special Note is not created on save right away -- have
+    // to actually add something to it before it will show up." The rule and
+    // its destination are one thing to a user; making only half of it is what
+    // made the other half look broken.
+    //
+    // This is not the load-time editing CLAUDE.md §5 forbids: the user just
+    // pressed Add, and creating the destination is what that press MEANS.
+    const key=(typeof safeClipName==='function')?safeClipName(clipName):clipName;
+    if(key&&!clips[key])clips[key]={name:clipName,text:'',note:''};
     renderNoteTable();renderClips();
     toast('tag added — name its Copy entry, then ⬆ Save to device');};
   if(!rules.length){
@@ -6952,22 +7054,59 @@ function renderExp(){
   // only when you actually edit a row.
   renderDynTable(normDynView());
   const t=$('exptable');
-  t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td></tr>';
-  for(const[k,v]of Object.entries(exps||{}))addExpRow(k,v);}
+  // 23.8 (Josh, 2026-09-01): a Group column, to the right of "Expands to",
+  // so custom expansions can be organised without each one becoming its own
+  // expansion SET. Sets are files on the Pi with their own lifecycle; a group
+  // is just a label, and needing the former to get the latter was the
+  // complaint.
+  t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td>'
+    +'<td><b>Expands to</b></td>'
+    +'<td title="A free-text label for organising your own expansions. '
+    +'Unlike an expansion SET it is not a file on the Pi -- it groups rows in '
+    +'this table and nothing else."><b>Group</b></td></tr>';
+  // Rows sorted by group so the column does something the moment you use it;
+  // ungrouped rows stay last, in their existing order, so nothing moves for
+  // anyone who never touches this.
+  const groups=(cfg&&cfg.exp_groups)||{};
+  const rows=Object.entries(exps||{});
+  rows.sort((a,b)=>{
+    const ga=(groups[a[0]]||'').toLowerCase(),gb=(groups[b[0]]||'').toLowerCase();
+    if(ga===gb)return 0;
+    if(!ga)return 1;                       // ungrouped last
+    if(!gb)return -1;
+    return ga<gb?-1:1;});
+  for(const[k,v]of rows)addExpRow(k,v);
+  // Existing group names offered as suggestions, so the second row in a group
+  // is picked from a list rather than retyped -- a typo would silently create
+  // a new group of one, which is the obvious way for this to become useless.
+  let dl=$('expgrouplist');
+  if(!dl){dl=document.createElement('datalist');dl.id='expgrouplist';
+    document.body.appendChild(dl);}
+  const seen=[...new Set(Object.values(groups).filter(Boolean))].sort();
+  dl.innerHTML=seen.map(g=>`<option value="${esc(g)}"></option>`).join('');}
 function addExpRow(k,v){
   const t=$('exptable'),tr=document.createElement('tr');
   const lbl=(cfg&&cfg.exp_names&&cfg.exp_names[k])||'';
   tr.innerHTML=`<td><input type="text" class="elabel" value="${lbl.replace(/"/g,'&quot;')}" placeholder="e.g. Signature"></td>
   <td><input type="text" class="etrig" value="${k.replace(/"/g,'&quot;')}"></td>
-  <td><input type="text" class="eval" value="${(v||'').replace(/"/g,'&quot;').replace(/\n/g,'\\n')}"></td>`;
+  <td><input type="text" class="eval" value="${(v||'').replace(/"/g,'&quot;').replace(/\n/g,'\\n')}"></td>
+  <td><input type="text" class="egroup" list="expgrouplist" style="min-width:6rem"
+    value="${(((cfg&&cfg.exp_groups)||{})[k]||'').replace(/"/g,'&quot;')}"
+    placeholder="—" title="Optional. Groups rows in this table; not an expansion set."></td>`;
   t.appendChild(tr);}
 function collectExp(){exps={};if(!cfg.exp_names)cfg.exp_names={};
-  const newNames={};
+  const newNames={},newGroups={};
   document.querySelectorAll('#exptable tr').forEach(tr=>{
     const k=tr.querySelector('.etrig'),v=tr.querySelector('.eval'),l=tr.querySelector('.elabel');
+    const g=tr.querySelector('.egroup');
     if(k&&k.value.trim()){exps[k.value.trim()]=v.value.replace(/\\n/g,'\n');
-      if(l&&l.value.trim())newNames[k.value.trim()]=l.value.trim();}});
-  cfg.exp_names=newNames;}
+      if(l&&l.value.trim())newNames[k.value.trim()]=l.value.trim();
+      // Only non-empty groups are stored: an empty box means "ungrouped", and
+      // writing "" for every untouched row would bloat the config with
+      // nothing and show as a change in the history diff.
+      if(g&&g.value.trim())newGroups[k.value.trim()]=g.value.trim();}});
+  cfg.exp_names=newNames;
+  cfg.exp_groups=newGroups;}
 window.addExpRow=addExpRow;
 
 /* ============ live highlighting ============ */
@@ -8825,6 +8964,29 @@ function pfSave(){
 }
 
 /* ---------- the strip under the title ---------- */
+// 23.7: the headline total, first in the strip and clickable.
+//
+// Only legs that pass the sanity rule are summed, and the excluded ones are
+// named in the tooltip with WHY -- a total that quietly dropped a 150ms
+// keyboard would be as misleading as one that included it. Bounds are shown
+// as a separate "+ ≥Nms floor" rather than added in: 23.5 kept measurements
+// and derived floors apart, and a single number would look measured while
+// being partly invented.
+function pfTotalHTML(t){
+  if(!t||!t.n_measured)return '';
+  const ex=(t.excluded||[]);
+  const tip=['sum of '+t.n_measured+' measured leg(s)']
+    .concat(t.floor?['plus a floor of at least '+t.floor+'ms that cannot be '
+                     +'measured (see the dashed cells)']:[])
+    .concat(ex.length?['','excluded:'].concat(ex.map(e=>'• '+e.label+' — '+e.why)):[])
+    .join('\n');
+  return `<span class="leg total" title="${esc(tip)}"
+      onclick="document.getElementById('benchstrip').scrollIntoView({block:'center'});"
+      style="cursor:pointer"><b>${t.measured}ms</b>`
+    +(t.floor?` <span class="muted">+ ≥${t.floor}ms</span>`:'')
+    +(ex.length?` <span class="muted" title="excluded">(${ex.length} excluded)</span>`:'')
+    +`</span>`;}
+
 // 23.5: one cell per measured leg or stated bound.
 function pfLegsHTML(legs){
   if(!Array.isArray(legs)||!legs.length)return '';
@@ -8863,7 +9025,7 @@ function pfRenderStrip(stats){
   // ahead of the recipe cells because they say WHERE the time goes, which is
   // the question the strip exists to answer; the recipe stays for the derived
   // figures it was built for.
-  const legHTML = pfLegsHTML(s.legs);
+  const legHTML = pfTotalHTML(s.total) + pfLegsHTML(s.legs);
   const terms = String(PREFS.bench.recipe || PF_DEFAULT_RECIPE)
     .split(';').map(t => t.trim()).filter(Boolean);
   const cells = legHTML ? [legHTML] : [];
