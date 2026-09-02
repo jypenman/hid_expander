@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 23.8</title>
+<title>HID Config 23.9</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -913,6 +913,24 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <button id="expwrite2" class="primary" disabled>⬆ Save expansions</button>
     <span class="muted" style="font-size:.78rem">same as the button at the top</span>
   </div>
+  <!-- 23.8: hyperlink expansions. Their own table, because the value is a
+       PAIR (text + url) and the expansions table's value column is a single
+       string every consumer treats as text. -->
+  <details class="asggrp" id="linkpanel" data-uikey="links" style="margin:.6rem 0">
+    <summary style="cursor:pointer;font-weight:600">🔗 Hyperlink expansions
+      <span class="muted" style="font-weight:400;font-size:.78rem">
+        · types the text, selects it, and wraps it in a link</span></summary>
+    <p class="muted" style="font-size:.8rem">
+      Typing the trigger types the <b>link text</b>, selects it, presses the
+      insert-link shortcut (Ctrl+K, or Cmd+K on mac/iOS — it follows the OS
+      profile), then types the URL and presses Enter. Works wherever that
+      shortcut opens a link dialog: Word, Outlook, Google Docs, most editors.
+    </p>
+    <table id="linktable" style="width:100%"></table>
+    <div class="bar" style="margin-top:.4rem">
+      <button onclick="addLinkRow('','','')">+ row</button>
+    </div>
+  </details>
   <p class="muted">Triggers like <code>\sig</code>; values may embed chords: <code>{{ctrl+c}}</code>.
   Date/time trigger text is set above, not hardcoded to <code>\dt \tm \tdt</code> anymore.</p>
   </div>
@@ -6972,12 +6990,45 @@ function initUiSearch(){
 // mean the UI silently rewriting a tag someone had deliberately customised —
 // the load-time-editing pattern §5 of CLAUDE.md exists to forbid.
 function noteTagsFor(tag){
-  return {open:';;'+tag+';;', wipe:';;!'+tag+';;', close:';;/'+tag+';;'};}
+  // 23.8: the erase tag is ";;;x;;", not ";;!x;;". Josh changed his by hand
+  // and asked for new rules to be generated the same way, so the set a new
+  // rule gets matches the ones he already has. Both forms are still ACCEPTED
+  // when reading a config -- noteTagLetter parses either — because his older
+  // rules and anyone else's still use "!".
+  return {open:';;'+tag+';;', wipe:';;;'+tag+';;', close:';;/'+tag+';;'};}
+
+// 23.6.2: the three tags of a rule are generated as a matched SET but edited
+// as independent fields, so they drift -- and a mismatched set can never fire.
+// Josh hit exactly this: Add picked the letter 't', he changed Start to
+// ";;r;;", and End stayed ";;/t;;". The rule loaded, showed correctly in the
+// table and in the engine's startup log, and simply never matched anything.
+//
+// Returns the letter a tag encodes, or null.
+//   ";;r;;" -> "r"    ";;/r;;" -> "r"    ";;!r;;" -> "r"    ";;;r;;" -> "r"
+//
+// The last form matters: the erase tag was ";;!x;;" when this was written and
+// Josh has since changed his to ";;;x;;". A regex that only knew the "!" form
+// read ";;;n;;" as the letter ";n" and reported his CORRECT config as broken
+// -- a warning that fires on a working setup is worse than no warning, which
+// is the same lesson as UI_ENGINE_EXPECT crying wolf.
+function noteTagLetter(tag){
+  const t=String(tag||'');
+  const m=/^;;(?:[!/;])?(.+?);;$/.exec(t);
+  return m?m[1]:null;}
+
+function noteTagMismatch(r){
+  const o=noteTagLetter(r.open),c=noteTagLetter(r.close);
+  if(!o||!c)return 'Start and End must both look like ;;x;; / ;;/x;;';
+  if(o!==c)return `Start is ";;${o};;" but End is ";;/${c};;" — this rule can `
+    +`never fire. Set End to ";;/${o};;".`;
+  const w=r.wipe?noteTagLetter(r.wipe):null;
+  if(r.wipe&&w!==o)return `Start & erase is for ";;${w};;", not ";;${o};;".`;
+  return '';}
 function renderNoteTable(){
   const t=$('notetable');if(!t)return;
   const rules=(cfg&&cfg.note_rules)||[];
   t.innerHTML='<tr><td><b>Saves into (Copy entry)</b></td><td><b>Start</b></td>'
-    +'<td><b>Start &amp; erase</b></td><td><b>End</b></td>'
+    +'<td><b>Start &amp; erase</b></td><td><b>End</b></td><td></td>'
     +'<td><b>Types after it</b></td><td><b>On</b></td><td></td></tr>';
   // The Add button is wired FIRST, before the empty-state return below. It
   // used to be wired at the end, so with no rules yet the function returned
@@ -7021,9 +7072,36 @@ function renderNoteTable(){
       <td><input type="text" class="nopen" value="${esc(r.open||'')}" style="width:6rem"></td>
       <td><input type="text" class="nwipe" value="${esc(r.wipe||'')}" style="width:6rem"></td>
       <td><input type="text" class="nclose" value="${esc(r.close||'')}" style="width:6rem"></td>
+      <td class="ntagwarn" style="font-size:.72rem;color:var(--warn)"></td>
       <td><input type="text" class="nconf" value="${esc(r.confirm||'')}" style="width:12rem"></td>
       <td style="text-align:center"><input type="checkbox" class="non" ${r.on!==false?'checked':''}></td>
       <td><a class="mlink nkill" data-i="${i}" title="remove this tag (the saved text stays)">✕</a></td>`;
+    // 23.6.2: show a mismatched tag set, and offer to fix it. Silence here is
+    // what let ";;r;;" with End ";;/t;;" sit in the table looking correct.
+    const warn=tr.querySelector('.ntagwarn');
+    const paint=()=>{
+      const cur={open:tr.querySelector('.nopen').value,
+                 wipe:tr.querySelector('.nwipe').value,
+                 close:tr.querySelector('.nclose').value};
+      const msg=noteTagMismatch(cur);
+      if(!msg){warn.textContent='';return;}
+      const L=noteTagLetter(cur.open);
+      warn.innerHTML='⚠ '+esc(msg)
+        +(L?' <a class="mlink nfix" style="cursor:pointer">fix</a>':'');
+      const fx=warn.querySelector('.nfix');
+      if(fx)fx.onclick=()=>{
+        const tg=noteTagsFor(L);
+        tr.querySelector('.nclose').value=tg.close;
+        // Only rewrite the erase tag if it is set; an empty one means the
+        // rule has no erase variant, which is a choice, not a mismatch.
+        if(tr.querySelector('.nwipe').value.trim())
+          tr.querySelector('.nwipe').value=';;;'+L+';;';
+        paint();
+        toast('End tag set to '+tg.close+' — Save to device to apply');};};
+    ['.nopen','.nwipe','.nclose'].forEach(sel=>{
+      const el=tr.querySelector(sel);
+      if(el)el.addEventListener('input',paint);});
+    paint();
     t.appendChild(tr);});
   const rebind=()=>{
     const out=[];
@@ -7053,14 +7131,23 @@ function renderExp(){
   // Expansions tab is not consent to rewrite your triggers. The write happens
   // only when you actually edit a row.
   renderDynTable(normDynView());
+  renderLinks();
   const t=$('exptable');
   // 23.8 (Josh, 2026-09-01): a Group column, to the right of "Expands to",
   // so custom expansions can be organised without each one becoming its own
   // expansion SET. Sets are files on the Pi with their own lifecycle; a group
   // is just a label, and needing the former to get the latter was the
   // complaint.
+  const tstats=(cfg&&cfg.exp_typing)||{};
+  const totalN=Object.values(tstats).reduce((a,v)=>a+((v&&v.n)||0),0);
   t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td>'
     +'<td><b>Expands to</b></td>'
+    +'<td title="Type the text out by hand here and press ✓. Timed from your '
+    +'first keystroke to your last."><b>Type it yourself</b></td>'
+    +'<td title="Mean time saved per use, over every sample you have saved.'
+    +' Hover a cell for SD, min and max."><b>Avg saved</b>'
+    +(totalN?` <span class="muted" style="font-weight:400;font-size:.72rem">`
+      +`n=${totalN}</span>`:'')+'</td>'
     +'<td title="A free-text label for organising your own expansions. '
     +'Unlike an expansion SET it is not a file on the Pi -- it groups rows in '
     +'this table and nothing else."><b>Group</b></td></tr>';
@@ -7090,10 +7177,134 @@ function addExpRow(k,v){
   tr.innerHTML=`<td><input type="text" class="elabel" value="${lbl.replace(/"/g,'&quot;')}" placeholder="e.g. Signature"></td>
   <td><input type="text" class="etrig" value="${k.replace(/"/g,'&quot;')}"></td>
   <td><input type="text" class="eval" value="${(v||'').replace(/"/g,'&quot;').replace(/\n/g,'\\n')}"></td>
+  <td><input type="text" class="etype" data-trig="${k.replace(/"/g,'&quot;')}"
+    placeholder="type it here…" style="min-width:8rem"
+    title="Type the expansion out by hand, then press ✓. Timed from your first keystroke to your last."><button class="etypesave" data-trig="${k.replace(/"/g,'&quot;')}" style="font-size:.72rem;margin-left:.2rem" title="Save this sample">✓</button></td>
+  <td class="esaved" data-trig="${k.replace(/"/g,'&quot;')}"></td>
   <td><input type="text" class="egroup" list="expgrouplist" style="min-width:6rem"
     value="${(((cfg&&cfg.exp_groups)||{})[k]||'').replace(/"/g,'&quot;')}"
     placeholder="—" title="Optional. Groups rows in this table; not an expansion set."></td>`;
-  t.appendChild(tr);}
+  t.appendChild(tr);
+  // 23.9: time the manual typing, first keystroke to last.
+  const inp=tr.querySelector('.etype'), btn=tr.querySelector('.etypesave');
+  let t0=null, t1=null;
+  if(inp){
+    inp.addEventListener('input',()=>{
+      const now=(performance&&performance.now)?performance.now():Date.now();
+      // First keystroke starts the clock; every one after it moves the end.
+      // Measuring from first to LAST, not to the Save press, so a pause
+      // before reaching for the button is not counted as typing.
+      if(t0===null)t0=now;
+      t1=now;});
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
+      if(btn)btn.click();}});}
+  if(btn)btn.onclick=()=>{
+    const text=(exps||{})[k]||'';
+    if(!inp||!inp.value.trim()){toast('type the text out first',true);return;}
+    if(t0===null||t1===null||t1<=t0){
+      toast('nothing timed — type it in the box rather than pasting',true);
+      return;}
+    const sample=t1-t0;
+    const saved=savedMs(sample,k,text);
+    cfg.exp_typing=cfg.exp_typing||{};
+    cfg.exp_typing[k]=accAdd(cfg.exp_typing[k]||{},saved);
+    inp.value='';t0=t1=null;
+    renderExpSaved();
+    toast(`saved ${fmtMs(sample)} → ${fmtMs(saved)} saved per use`);};
+  renderExpSavedCell(tr.querySelector('.esaved'),k);}
+
+// Paint one "Avg saved" cell from the stored accumulator.
+function renderExpSavedCell(td,trig){
+  if(!td)return;
+  const a=((cfg&&cfg.exp_typing)||{})[trig];
+  if(!a||!a.n){td.innerHTML='<span class="muted">—</span>';return;}
+  const sd=accSd(a);
+  td.textContent=fmtMs(a.mean);
+  td.title=`${a.n} sample${a.n>1?'s':''}`
+    +`\nSD  ${fmtMs(sd)}`
+    +`\nmin ${fmtMs(a.min)}`
+    +`\nmax ${fmtMs(a.max)}`
+    + (a.n<2?'\n\n(SD needs at least two samples)':'');}
+
+function renderExpSaved(){
+  document.querySelectorAll('#exptable .esaved').forEach(td=>
+    renderExpSavedCell(td,td.dataset.trig));}
+// 23.9: "average time saved" per expansion.
+//
+// Josh: "next to each have a little field where the user can type in what it
+// would take to write that out themselves - and time how long it takes between
+// first and last character; have a 'save' button ... show an 'average time
+// saved' in the next column ... keep adding them to the average (and in the
+// title of the Average column, indicate the number of samples taken; if I
+// hover over, show the SD, Min, and Max in a tooltip)".
+//
+// MERGED WITH M2, NOT BY AVERAGING SDs. CLAUDE.md §3 lists averaging standard
+// deviations as a REJECTED idea -- it was 57.7% wrong on test data. This is
+// Welford: keep n, mean and M2, and the SD falls out exactly however many
+// samples arrive and in whatever order.
+function accAdd(a, x){
+  const n=(a.n||0)+1;
+  const mean=(a.mean||0)+(x-(a.mean||0))/n;
+  const m2=(a.m2||0)+(x-(a.mean||0))*(x-mean);
+  return {n, mean, m2,
+          min: a.n?Math.min(a.min,x):x,
+          max: a.n?Math.max(a.max,x):x};}
+
+function accSd(a){
+  return (a && a.n>1) ? Math.sqrt(a.m2/(a.n-1)) : 0;}
+
+// What a sample is worth. The measurement is how long HE takes to type the
+// text by hand; the saving is that minus what typing the TRIGGER costs him.
+// Estimated at his own measured rate rather than a constant, because the
+// point of the number is to describe his typing, not a generic typist.
+function savedMs(sample, trigger, text){
+  const t=(text||'').length, k=(trigger||'').length;
+  if(!t) return 0;
+  return Math.max(0, sample*(1-Math.min(1, k/t)));}
+
+function fmtMs(ms){
+  if(ms==null) return '—';
+  return ms>=10000 ? (ms/1000).toFixed(1)+'s'
+       : ms>=1000  ? (ms/1000).toFixed(2)+'s'
+       : Math.round(ms)+'ms';}
+
+// 23.8: hyperlink expansions -- trigger, link text, URL.
+function renderLinks(){
+  const t=$('linktable');if(!t)return;
+  t.innerHTML='<tr><td><b>Trigger</b></td><td><b>Link text</b></td>'
+    +'<td><b>URL</b></td><td></td></tr>';
+  const h=(cfg&&cfg.hyperlinks)||{};
+  for(const [trig,v] of Object.entries(h))
+    addLinkRow(trig,(v&&v.text)||'',(v&&v.url)||'');
+  if(!Object.keys(h).length)addLinkRow('','','');}
+
+window.addLinkRow=(trig,text,url)=>{
+  const t=$('linktable');if(!t)return;
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input type="text" class="ltrig" value="${esc(trig||'')}"
+      placeholder="\\acme" style="width:7rem"></td>
+    <td><input type="text" class="ltext" value="${esc(text||'')}"
+      placeholder="Acme Corp"></td>
+    <td><input type="text" class="lurl" value="${esc(url||'')}"
+      placeholder="https://acme.com"></td>
+    <td><a class="mlink lkill" title="remove">✕</a></td>`;
+  tr.querySelector('.lkill').onclick=()=>{tr.remove();};
+  t.appendChild(tr);};
+
+function collectLinks(){
+  const out={};
+  document.querySelectorAll('#linktable tr').forEach(tr=>{
+    const k=tr.querySelector('.ltrig'),x=tr.querySelector('.ltext'),
+          u=tr.querySelector('.lurl');
+    if(!k||!u)return;
+    const trig=k.value.trim(),url=u.value.trim();
+    // A row with a trigger but no URL cannot work, and saving it would put a
+    // rule on the Pi that the engine then refuses at load. Drop it here so
+    // the config never carries something known-dead.
+    if(!trig||!url)return;
+    out[trig]={text:(x&&x.value.trim())||trig,url:url};});
+  cfg.hyperlinks=out;}
+
 function collectExp(){exps={};if(!cfg.exp_names)cfg.exp_names={};
   const newNames={},newGroups={};
   document.querySelectorAll('#exptable tr').forEach(tr=>{
@@ -7106,7 +7317,8 @@ function collectExp(){exps={};if(!cfg.exp_names)cfg.exp_names={};
       // nothing and show as a change in the history diff.
       if(g&&g.value.trim())newGroups[k.value.trim()]=g.value.trim();}});
   cfg.exp_names=newNames;
-  cfg.exp_groups=newGroups;}
+  cfg.exp_groups=newGroups;
+  collectLinks();}
 window.addExpRow=addExpRow;
 
 /* ============ live highlighting ============ */
@@ -7453,7 +7665,12 @@ function renderOsTab(){
         which is why one axis flew and the other crawled. This puts both on the
         same curve. Each axis keeps its own speed accumulator, so a fast
         vertical flick does not fling the next horizontal nudge.</div></span>
-    </label></td></tr>`;
+    </label>
+    <!-- 23.8: the acceleration curve, per device. It was six constants in
+         s6 under a comment saying "tune to taste", with nothing that could
+         tune them -- and they applied to every device at once, so the X9 and
+         the E9 could not both feel right. -->
+    <div id="accelwrap" style="margin-top:.6rem"></div></td></tr>`;
   $('osscroll').innerHTML=sh;
   if($('panaccel'))$('panaccel').onchange=e=>{
     cfg.scroll=cfg.scroll||{};
@@ -7625,6 +7842,56 @@ window.osMapSet=(o,type,id,L,act,hasVal)=>{
   const p=osProf(o);const key=type==='key'?'kbd_mappings':'mouse_mappings';
   if(p[key]&&!Object.keys(p[key]).length)delete p[key];
   renderOsTab();toast('⬆ Save to device to apply');};
+// 23.8: per-device scroll acceleration.
+//
+// slow1/slow2 are listed FIRST and labelled as the first-click knobs, because
+// that is the thing Josh is actually trying to dial in ("one click, one
+// line"). The rest govern how a sustained scroll builds.
+const ACCEL_FIELDS=[
+  ['slow1','First-click damping','Below this output, halve it. Raise to make a single detent smaller.'],
+  ['slow2','Second damping','Below this, halve again. The two together shape the very first click.'],
+  ['decay','Velocity decay','Per millisecond. Lower forgets a fast scroll sooner.'],
+  ['cubic_gain','Acceleration gain','How hard fast scrolling ramps up.'],
+  ['cubic_scale','Acceleration scale','Input scaling before the cubic term.'],
+  ['clamp','Ceiling','Hard limit on one emission, whatever the curve says.'],
+];
+
+function renderAccel(){
+  const host=$('accelwrap');if(!host)return;
+  const eff=((lastEng||{}).scroll_accel)||{};
+  const defs=((lastEng||{}).scroll_accel_defaults)||{};
+  const devs=(cfg&&cfg.devices)||[];
+  const mice=devs.filter(d=>d.kind==='mouse');
+  if(!mice.length){host.innerHTML='';return;}
+  let h='<div style="font-weight:600;font-size:.85rem">Scroll acceleration'
+    +' <span class="muted" style="font-weight:400;font-size:.75rem">'
+    +'· per device · blank = default</span></div>';
+  for(const d of mice){
+    const cur=((cfg.scroll_accel||{})[d.id])||{};
+    const live=eff[d.id]||{};
+    h+=`<div style="margin:.3rem 0 .5rem"><b style="font-size:.8rem">${esc(d.name||d.id)}</b>`
+      +'<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.2rem">';
+    for(const [k,label,tip] of ACCEL_FIELDS){
+      const d0=defs[k];
+      h+=`<label class="inl" style="font-size:.74rem;flex-direction:column;align-items:flex-start"
+            title="${esc(tip)}">${esc(label)}
+        <input type="number" step="any" data-accel="${esc(d.id)}" data-ak="${k}"
+          value="${cur[k]!==undefined?esc(String(cur[k])):''}"
+          placeholder="${d0!==undefined?esc(String(d0)):''}" style="width:6rem">
+        <span class="muted" style="font-size:.68rem">in force: ${
+          live[k]!==undefined?esc(String(live[k])):'—'}</span></label>`;}
+    h+='</div></div>';}
+  host.innerHTML=h;
+  host.querySelectorAll('[data-accel]').forEach(inp=>inp.onchange=()=>{
+    const dev=inp.dataset.accel,k=inp.dataset.ak,v=inp.value.trim();
+    cfg.scroll_accel=cfg.scroll_accel||{};
+    const t=cfg.scroll_accel[dev]=cfg.scroll_accel[dev]||{};
+    // Blank means "use the default", which is DELETING the key rather than
+    // writing 0 -- storing 0 would be a very different curve.
+    if(v==='')delete t[k]; else t[k]=parseFloat(v);
+    if(!Object.keys(t).length)delete cfg.scroll_accel[dev];
+    toast('scroll acceleration changed — Save to device to apply');});}
+
 window.osScrollSet=(o,dev,on)=>{const p=osProf(o);p.scroll_invert=p.scroll_invert||{};
   if(on)p.scroll_invert[dev]=true;else delete p.scroll_invert[dev];
   toast('⬆ Save to device to apply');};
