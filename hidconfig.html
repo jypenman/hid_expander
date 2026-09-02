@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 24.0</title>
+<title>HID Config 24.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -4499,6 +4499,15 @@ function renderUsage(){
   $('usagereload').onclick = () => loadUsage();
   el.querySelectorAll('[data-ugo]').forEach(a =>
     a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
+  // 24.1: INSIDE renderTraining, where `el` exists. This was appended after
+  // the function in 24.0 and ran at top level, where `el` is undefined -- a
+  // ReferenceError that killed every statement after it in the script,
+  // including the tab wiring at the very end of the file. That is what made
+  // the tabs unclickable and left `clips` in its temporal dead zone.
+  el.querySelectorAll('[data-untrain]').forEach(a => a.onclick = () => {
+    setTrained(a.dataset.untrain, false);
+    renderTraining();
+    if (typeof renderTrack === 'function') renderTrack();});
 }
 
 function usageSetsHTML(){
@@ -4689,10 +4698,6 @@ window.showBackups=()=>{
   $('bktable').innerHTML='<tr><td class="muted">loading…</td></tr>';
   pfCmd('backups');
   $('bkpane').scrollIntoView({behavior:'smooth',block:'nearest'});};
-  el.querySelectorAll('[data-untrain]').forEach(a => a.onclick = () => {
-    setTrained(a.dataset.untrain, false);
-    renderTraining();
-    if (typeof renderTrack === 'function') renderTrack();});
 function renderBackups(lines){
   _bkList=[];
   const t=$('bktable');if(!t)return;
