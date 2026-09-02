@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 23.9</title>
+<title>HID Config 24.0</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -769,6 +769,18 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       everything else so the mapping data is never held up behind statistics.</p>
     <div id="usagebody"></div>
   </div>
+  <!-- 24.0: choose what to track, and what to practise. Josh: "select whole
+       sets they want tracked (and select/deselect individual keyboard
+       shortcuts within each set) to determine what gets tracked ... It will
+       also have a checkbox for 'add to training'". -->
+  <details class="panel" id="trackpane" data-uikey="usage-track">
+    <summary style="cursor:pointer;font-weight:600">🎯 What to track</summary>
+    <p class="muted" style="font-size:.8rem">A set you switch on is tracked
+      whole; untick individual shortcuts inside it to leave those out.
+      <b>Train</b> adds one to the Training list below, which is about what you
+      want to <i>learn</i> rather than what you happen to press.</p>
+    <div id="trackbody"></div>
+  </details>
   <div class="panel" id="trainpane" style="display:none">
     <h2 style="font-size:1rem">Training</h2>
     <div id="trainbody"></div>
@@ -1614,7 +1626,7 @@ function pfResult(text){
   if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
   if(text.startsWith('USAGE')){
     try{ usageData=JSON.parse(text.slice(text.indexOf('\n')+1));
-         renderUsage(); renderTraining(); toast('usage statistics loaded'); }
+         renderUsage(); renderTrack(); renderTraining(); toast('usage statistics loaded'); }
     catch(e){ toast('usage payload unreadable: '+e.message,true); }
     return;}
   if(text.startsWith('HISTCFG ')){
@@ -4521,6 +4533,85 @@ function loadUsage(weeks){
    It is the opposite end: things you SET UP and never reach for, which are
    either worth learning or worth deleting. Both are useful answers, and the
    page says so rather than nagging. */
+// 24.0: the tracking picker.
+//
+// State lives in the config so it travels with the profile:
+//   cfg.kbd_track = {"<file>": {"on": true, "off": ["Cmd+X", …]}}
+//   cfg.kbd_train = ["Cmd+C", …]
+// A set records only its EXCEPTIONS rather than every chord, so switching a
+// set on and leaving it alone costs one boolean -- and a shortcut added to
+// the corpus later is tracked automatically instead of silently missing
+// because it was not in a list written months ago.
+function trackState(){
+  cfg.kbd_track = cfg.kbd_track || {};
+  cfg.kbd_train = cfg.kbd_train || [];
+  return cfg.kbd_track;}
+
+function isTracked(file, chord){
+  const t = trackState()[file];
+  if(!t || !t.on) return false;
+  return !(t.off || []).includes(chord);}
+
+function isTrained(chord){
+  return (cfg.kbd_train || []).includes(chord);}
+
+function setTracked(file, chord, on){
+  const t = trackState();
+  const e = t[file] = t[file] || {on: true, off: []};
+  e.off = e.off || [];
+  const i = e.off.indexOf(chord);
+  if(on && i >= 0) e.off.splice(i, 1);
+  if(!on && i < 0) e.off.push(chord);}
+
+function setTrained(chord, on){
+  trackState();
+  const i = cfg.kbd_train.indexOf(chord);
+  if(on && i < 0) cfg.kbd_train.push(chord);
+  if(!on && i >= 0) cfg.kbd_train.splice(i, 1);}
+
+function renderTrack(){
+  const el = $('trackbody'); if(!el) return;
+  const corpus = (usageData && usageData.corpus) || [];
+  if(!corpus.length){
+    el.innerHTML = '<p class="muted">No shortcut corpus on the Pi yet — '
+      + 'deploy kbd_shortcuts/ and read Usage again.</p>';
+    return;}
+  trackState();
+  el.innerHTML = corpus.map(c => {
+    const t = cfg.kbd_track[c.file] || {on:false, off:[]};
+    const chords = Object.entries(c.shortcuts || {});
+    const nOn = chords.filter(([k]) => isTracked(c.file, k)).length;
+    const warn = (c.warnings || []).length
+      ? ` <span class="muted" style="color:var(--warn)" title="${esc((c.warnings||[]).join('; '))}">⚠</span>` : '';
+    return `<details style="margin:.25rem 0;border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem">
+      <summary style="cursor:pointer">
+        <label class="inl" style="font-weight:600" onclick="event.stopPropagation()">
+          <input type="checkbox" data-trackset="${esc(c.file)}" ${t.on?'checked':''}>
+          ${esc(c.app || c.name || c.file)}</label>
+        <span class="muted" style="font-size:.78rem">· ${esc(c.os||'')} · ${nOn}/${chords.length} tracked</span>${warn}
+      </summary>
+      <table style="width:100%;font-size:.8rem">
+        <tr><td><b>Track</b></td><td><b>Train</b></td><td><b>Shortcut</b></td><td><b>Does what</b></td></tr>
+        ${chords.map(([k, does]) => `<tr>
+          <td><input type="checkbox" data-trackone="${esc(c.file)}" data-chord="${esc(k)}"
+                ${isTracked(c.file,k)?'checked':''} ${t.on?'':'disabled'}></td>
+          <td><input type="checkbox" data-train="${esc(k)}" ${isTrained(k)?'checked':''}></td>
+          <td style="font-family:ui-monospace,monospace">${esc(k)}</td>
+          <td class="muted">${esc(does)}</td></tr>`).join('')}
+      </table></details>`;}).join('');
+
+  el.querySelectorAll('[data-trackset]').forEach(cb => cb.onchange = () => {
+    const f = cb.dataset.trackset;
+    const e = cfg.kbd_track[f] = cfg.kbd_track[f] || {on:false, off:[]};
+    e.on = cb.checked;
+    renderTrack();
+    toast(cb.checked ? 'tracking ' + f : 'no longer tracking ' + f);});
+  el.querySelectorAll('[data-trackone]').forEach(cb => cb.onchange = () =>
+    setTracked(cb.dataset.trackone, cb.dataset.chord, cb.checked));
+  el.querySelectorAll('[data-train]').forEach(cb => cb.onchange = () => {
+    setTrained(cb.dataset.train, cb.checked);
+    renderTraining();});}
+
 function renderTraining(){
   const el = $('trainbody'); if(!el) return;
   if(!usageData){ el.innerHTML = '<p class="muted">Load the Usage tab first.</p>';
@@ -4530,7 +4621,44 @@ function renderTraining(){
   const top = rows.slice().sort((a,b)=>b.per_week-a.per_week).slice(0,10);
   const rare = rows.filter(r => r.per_week < 1)
     .sort((a,b)=>a.per_week-b.per_week).slice(0,20);
-  el.innerHTML = `
+  // 24.0: what Josh has CHOSEN to practise, first -- "The Training portion of
+  // the Usage tab will identify the shortcuts that I've chosen to focus on
+  // (and what they do), and give me a UI for seeing how often I've used them
+  // in the past week". Above the two automatic lists, because a deliberate
+  // choice outranks a statistic.
+  const chosen = (cfg && cfg.kbd_train) || [];
+  const byId = {};
+  rows.forEach(r => { byId[r.id] = r; });
+  const desc = (usageData.describe || {});
+  const chosenHTML = !chosen.length ? '' : `
+    <details open style="margin-bottom:.5rem"><summary style="cursor:pointer">
+      <b>Chosen to practise</b>
+      <span class="muted">· ${chosen.length}</span></summary>
+      <table style="width:100%">
+        <tr><td><b>Shortcut</b></td><td><b>Does what</b></td>
+            <td><b>This week</b></td><td><b>Per week</b></td><td></td></tr>
+        ${chosen.map(id => {
+          const r = byId[id];
+          const d = desc[id];
+          // A chosen shortcut with no usage row has been used ZERO times --
+          // which is the single most useful thing this list can tell you, so
+          // it says so rather than being left out for want of a number.
+          const week = r ? r.count : 0;
+          const per = r ? r.per_week : 0;
+          return `<tr>
+            <td style="font-family:ui-monospace,monospace">${esc(id)}</td>
+            <td class="muted">${d ? esc(d.text) : '<i>not in any set</i>'}</td>
+            <td${week ? '' : ' style="color:var(--warn)"'}>${week}</td>
+            <td>${per}</td>
+            <td><a class="mlink" data-untrain="${esc(id)}"
+                   title="stop practising this">✕</a></td></tr>`;}).join('')}
+      </table>
+      <p class="muted" style="font-size:.75rem">A zero in <b>This week</b> is
+        the point of the list: it is a shortcut you decided to learn and have
+        not reached for.</p>
+    </details>`;
+
+  el.innerHTML = chosenHTML + `
     <p class="muted" style="font-size:.8rem">Two lists, because "use it more"
     and "delete it" are both good outcomes for something you configured and
     never press.</p>
@@ -4561,6 +4689,10 @@ window.showBackups=()=>{
   $('bktable').innerHTML='<tr><td class="muted">loading…</td></tr>';
   pfCmd('backups');
   $('bkpane').scrollIntoView({behavior:'smooth',block:'nearest'});};
+  el.querySelectorAll('[data-untrain]').forEach(a => a.onclick = () => {
+    setTrained(a.dataset.untrain, false);
+    renderTraining();
+    if (typeof renderTrack === 'function') renderTrack();});
 function renderBackups(lines){
   _bkList=[];
   const t=$('bktable');if(!t)return;
@@ -9593,7 +9725,7 @@ function switchTab(t){
   if(t==='log')renderChangelog();
   // 21.0: Usage fetches on first open, not on connect -- statistics are the
   // least urgent thing on a 9 KB/s channel.
-  if(t==='usage'){ if(!usageData&&device)loadUsage(); renderUsage(); renderTraining(); }
+  if(t==='usage'){ if(!usageData&&device)loadUsage(); renderUsage(); renderTrack(); renderTraining(); }
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
