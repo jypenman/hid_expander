@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 24.1</title>
+<title>HID Config 24.2.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1127,6 +1127,24 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // is a real cost -- but the changelog is prose with no anchors, and prose
 // cannot be linked to a widget. Keep it to entries worth jumping to.
 const VERSION_HISTORY=[
+ {v:'24.2',items:[
+   {t:'Usage ✎ button threw instead of jumping',k:'usage'},
+   {t:'This panel would not close',k:'uiver'}]},
+ {v:'24.1',items:[
+   {t:'One misplaced line had killed the tabs and Copy/Paste',k:'toptabs'}]},
+ {v:'24.0',items:[
+   {t:'kbd_shortcuts corpus, tracking and training',k:'usage-track'},
+   {t:'Shortcut names and "Does what" in Usage',k:'usage'}]},
+ {v:'23.9',items:[
+   {t:'Time saved per expansion',k:'exptable'}]},
+ {v:'23.8',items:[
+   {t:'Group column on expansions',k:'exptable'},
+   {t:'Notes stamp themselves',k:'clipdock'}]},
+ {v:'23.7',items:[
+   {t:'Arrow keys no longer destroy a note',k:'clipdock'},
+   {t:'The engine-version warning stopped crying wolf',k:'uiver'}]},
+ {v:'23.6',items:[
+   {t:'Device-scoped edits stopped writing the shared table',k:'remap'}]},
  {v:'23.5',items:[
    {t:'Search box readable (was white on white)',k:'uisearch'},
    {t:'Tabs moved above Load selected, and stick',k:'toptabs'},
@@ -1194,7 +1212,28 @@ function vhOpen(all){
   placePopover(p,b.getBoundingClientRect());
   p.querySelectorAll('[data-vhk]').forEach(a=>a.onclick=()=>vhGo(a.dataset.vhk));
   const more=p.querySelector('[data-vhmore]');
-  if(more)more.onclick=()=>vhOpen(true);}
+  if(more)more.onclick=()=>vhOpen(true);
+  // 24.2: it had no way to close. Josh: "It doesn't go away after you click
+  // on it". Every other popover in this file dismisses on an outside click
+  // and this one simply never got the same treatment -- so it sat over the
+  // page until a reload. Escape too, because a panel you cannot dismiss with
+  // Escape is the one you reach for Escape on.
+  //
+  // The listener is added on a timeout so the click that OPENED it does not
+  // immediately close it, which is how the other dismissers here do it.
+  setTimeout(()=>{
+    const close=ev=>{
+      if(p.contains(ev.target))return;
+      p.style.display='none';
+      document.removeEventListener('click',close);
+      document.removeEventListener('keydown',esc);};
+    const esc=ev=>{
+      if(ev.key!=='Escape')return;
+      p.style.display='none';
+      document.removeEventListener('click',close);
+      document.removeEventListener('keydown',esc);};
+    document.addEventListener('click',close);
+    document.addEventListener('keydown',esc);},50);}
 
 function showVersions(engine){
   const el=document.getElementById('uiver');if(!el)return;
@@ -4425,11 +4464,16 @@ function usageRows(kind){
 }
 
 // Jump to where the thing is EDITED, rather than opening an editor here.
+//
+// 24.2: these called showTab(), which has never existed -- the function is
+// switchTab(). So the ✎ button threw ReferenceError the moment it was
+// clicked, every time, and the jump never worked. Nothing caught it because
+// it only runs on a click, so no load-time check could see it.
 // A statistics page that quietly becomes an editor is how you change
 // something you were only looking at.
 function usageGoto(kind, id){
   if(kind === 'expansions'){
-    showTab('exp');
+    switchTab('exp');
     setTimeout(() => {
       const box = [...document.querySelectorAll('#exptable .etrig, .settable input')]
         .find(i => i.value === id);
@@ -4439,7 +4483,7 @@ function usageGoto(kind, id){
     }, 120);
     return;
   }
-  showTab('map');
+  switchTab('map');
   toast('Shortcut usage is recorded by the chord text; find “' + id
         + '” in Assignments to edit it.');
 }
