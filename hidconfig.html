@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 24.2.1</title>
+<title>HID Config 24.7</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -214,6 +214,15 @@ label.inl input{margin:0}
   padding:.5rem .6rem;border:1px solid var(--line);border-radius:6px;
   background:Canvas;color:CanvasText;tab-size:4}
 .txstagebox{height:var(--txh,26rem);min-height:10rem;resize:both}
+/* Find & Replace (24.3). The two fields are TEXTAREAS, not inputs, and that is
+   load-bearing: an <input> silently drops a newline out of anything pasted
+   into it, which is the exact paste this feature exists to handle. */
+.txfrgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.txfrbox{min-height:4.5rem;height:4.5rem;resize:vertical}
+.txfrhint{font-size:.76rem;line-height:1.6;margin:.45rem 0 0}
+.txfrhint code{font-size:.76rem;padding:.05rem .25rem;border-radius:4px;
+  background:var(--panel);border:1px solid var(--line)}
+@media(max-width:720px){.txfrgrid{grid-template-columns:1fr}}
 .txresize{resize:both;min-height:6rem;height:14rem}
 .txbox:focus{outline:2px solid var(--hi);outline-offset:-1px}
 .txcode{font-size:.78rem}
@@ -292,6 +301,32 @@ textarea{font-family:ui-monospace,monospace;font-size:.85rem}
 .row{display:flex;gap:.6rem;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
 .loggrid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
 @media(max-width:700px){.loggrid{grid-template-columns:1fr}}
+/* 24.5 Performance tab. Priorities sit LEFT of the features table when there
+   is room and ABOVE it when there is not -- which is what a two-column grid
+   collapsing to one column does for free, in source order, with no JS and no
+   width measuring. Priorities are first in the markup so the collapsed order
+   is the one Josh asked for. */
+.perfgrid{display:grid;grid-template-columns:minmax(230px,270px) 1fr;gap:.8rem;align-items:start}
+@media(max-width:900px){.perfgrid{grid-template-columns:1fr}}
+#perfprio ol{list-style:none;margin:.4rem 0 0;padding:0;counter-reset:pr}
+#perfprio li{counter-increment:pr;display:flex;align-items:center;gap:.5rem;
+  padding:.35rem .6rem;margin:.3rem 0;border:1px solid var(--line);border-radius:999px;
+  cursor:grab;font-size:.85rem;background:var(--panel);user-select:none}
+#perfprio li::before{content:counter(pr);font-weight:700;opacity:.55;min-width:1.1em}
+#perfprio li.drag{opacity:.4}
+#perfprio li.over{border-color:var(--hi);box-shadow:0 0 0 2px var(--pick-soft)}
+#perfprio li .grip{margin-left:auto;opacity:.4}
+table.perftbl{width:100%;border-collapse:collapse;font-size:.82rem}
+table.perftbl th,table.perftbl td{text-align:left;vertical-align:top;padding:.45rem .5rem;
+  border-bottom:1px solid var(--line)}
+table.perftbl th{font-size:.75rem;text-transform:uppercase;letter-spacing:.03em;opacity:.7}
+table.perftbl tbody tr:hover{background:var(--panel)}
+.perfwrap{overflow-x:auto}
+.perfw{font-size:.7rem;font-weight:700;padding:.1rem .45rem;border-radius:999px;white-space:nowrap}
+.perfw.hi{background:rgba(239,68,68,.18);color:var(--err)}
+.perfw.md{background:rgba(245,158,11,.18);color:var(--warn)}
+.perfw.lo{background:rgba(34,197,94,.16);color:var(--ok)}
+.perfw.na{background:rgba(128,128,128,.16);opacity:.75}
 .logbox{height:200px;overflow-y:auto;font-family:ui-monospace,monospace;font-size:.75rem;
 border:1px solid var(--line);border-radius:8px;padding:.5rem;background:rgba(0,0,0,.15);white-space:pre-wrap}
 .logbox .ev{color:var(--hi)}.logbox .rx{color:var(--ok)}.logbox .tx{color:var(--warn)}.logbox .er{color:var(--err)}
@@ -454,6 +489,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="tx">Text Transform</div>
   <div class="tab" data-t="log">Changes</div>
   <div class="tab" data-t="usage">Usage</div>
+  <div class="tab" data-t="perf">Performance</div>
 </div>
 
 <div class="bar" id="profbar">
@@ -605,13 +641,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     </div>
   </details>
  </div>
- <div class="panel" id="histpanel" style="display:none">
-   <div class="bar"><b>↺ History</b>
-     <span class="muted">every Save to device adds a version</span>
-     <span style="flex:1"></span>
-     <button onclick="document.getElementById('histpanel').style.display='none'">✕</button></div>
-   <div id="histbody"></div>
- </div>
  <div class="panel" id="editor">
    <div id="editorhead"><span id="editortitle">Mapping editor</span>
      <span style="flex:1"></span>
@@ -640,9 +669,58 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <button data-txa="pi-save" title="Store your transforms and categorizations on the Pi">⬆ Save to Pi</button>
       <span class="muted" id="txpistat">not loaded yet</span>
       <span style="flex:1"></span>
+      <button data-txa="find" title="Find and replace in any pane — paste a pattern with newlines and it still matches">🔍 Find &amp; Replace</button>
       <button data-txa="manage" title="Add, rename, remove or re-home transforms and categories">⚙ Manage</button>
       <button data-txa="copy" title="Copy the last pane">📋 Copy</button>
       <button data-txa="clear">✕ Clear</button>
+    </div>
+
+    <!-- find & replace (24.3) -->
+    <div id="txfind" class="panel" style="display:none">
+      <div class="bar" style="margin-top:0">
+        <b>Find &amp; Replace</b>
+        <span class="muted">works on one pane at a time</span>
+        <span style="flex:1"></span>
+        <button data-txa="find-close">✕ Close</button>
+      </div>
+      <div class="txfrgrid">
+        <div class="txpane">
+          <label for="txfr-find">Find <span class="muted">— paste freely; newlines,
+            tabs and non-breaking spaces are kept and still match</span></label>
+          <textarea id="txfr-find" class="txbox txfrbox" spellcheck="false"
+                    placeholder="paste or type what to look for"></textarea>
+        </div>
+        <div class="txpane">
+          <label for="txfr-repl">Replace with</label>
+          <textarea id="txfr-repl" class="txbox txfrbox" spellcheck="false"
+                    placeholder="leave empty to delete every match"></textarea>
+        </div>
+      </div>
+      <div class="bar" style="margin-top:.35rem">
+        <label style="margin:0"><input type="checkbox" id="txfr-rx"> regex</label>
+        <label style="margin:0"><input type="checkbox" id="txfr-case"> match case</label>
+        <label style="margin:0">In</label>
+        <select id="txfr-pane"></select>
+        <span style="flex:1"></span>
+        <button data-txa="find-count">🔍 Find</button>
+        <button data-txa="find-all" class="primary">⇄ Replace all</button>
+        <button data-txa="find-undo" title="Put the pane back the way it was before the last Replace all">⟲ Undo</button>
+      </div>
+      <div class="bar" style="margin-top:.2rem">
+        <span class="muted" id="txfr-stat">ready</span>
+      </div>
+      <pre id="txfr-prev" class="pfout" style="display:none;margin-top:.3rem"></pre>
+      <p class="muted txfrhint">
+        <b>Regex is JavaScript's own</b> — this tab runs entirely in your browser.
+        <br>· <b>Escape</b> a special character with a backslash:
+        <code>\.</code> matches a literal full stop, <code>\$</code> a literal dollar.
+        <br>· <b>Capture</b> with <code>( )</code> and put it back with
+        <code>$1</code>: find <code>(\w+), (\w+)</code>, replace <code>$2 $1</code>
+        — “Penman, Josh” becomes “Josh Penman”. <code>$&amp;</code> is the whole match.
+        <br>· A <b>literal <code>$</code></b> in the replacement is <code>$$</code>.
+        With <b>regex</b> unticked none of this applies: every character, <code>$</code>
+        included, is taken exactly as typed.
+      </p>
     </div>
 
     <!-- edit / explain panel -->
@@ -746,14 +824,40 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </div>
 
 <div id="page-log" style="display:none">
-  <div class="panel">
-    <h2 style="font-size:1rem">Change history <span class="muted" id="logcount" style="font-weight:400;font-size:.8rem"></span></h2>
+  <!-- 24.3: ONE place for every history. Josh asked for numbered line items in
+       the engine overlay, for the ↺ History button next to Backups to be part
+       of this tab rather than a floating panel of its own, and for "show
+       more…" at the end of the overlay to bring you here. Three questions,
+       three sections, one tab:
+         · what YOU changed        (the profile's own changelog)
+         · which versions the Pi has kept   (and what a restore would undo)
+         · what changed in the APP  (the release history behind the badge) -->
+  <div class="panel" data-uikey="log-yours">
+    <h2 style="font-size:1rem">What you changed <span class="muted" id="logcount" style="font-weight:400;font-size:.8rem"></span></h2>
     <p class="muted" style="font-size:.8rem">Written automatically each time you <b>⬆ Save to device</b>: a plain-English record of what changed, stored inside the profile so it travels with it.</p>
     <div class="bar"><button onclick="exportChangelog()">⬇ Export as .txt</button>
       <button onclick="clearChangelog()">🗑 Clear history</button></div>
-    <div id="logbody" style="white-space:pre-wrap;font-family:ui-monospace,monospace;
-      font-size:.78rem;line-height:1.5;border:1px solid var(--line);border-radius:8px;
-      padding:.6rem;margin-top:.5rem;max-height:65vh;overflow:auto"></div>
+    <div id="logbody" style="font-size:.78rem;line-height:1.5;
+      border:1px solid var(--line);border-radius:8px;
+      padding:.6rem;margin-top:.5rem;max-height:60vh;overflow:auto"></div>
+  </div>
+
+  <div class="panel" id="histpanel" data-uikey="log-versions">
+    <h2 style="font-size:1rem">↺ Versions kept on the Pi</h2>
+    <p class="muted" style="font-size:.8rem">One is written on every
+      <b>⬆ Save to device</b>. Open one to see what has changed since, and put
+      back individual values without losing anything else.</p>
+    <div class="bar"><button id="histload">⟳ Read versions from the Pi</button>
+      <span class="muted" id="histhint">needs a connected device</span></div>
+    <div id="histbody" style="margin-top:.4rem"></div>
+  </div>
+
+  <div class="panel" id="logapp" data-uikey="log-app">
+    <h2 style="font-size:1rem">What changed in this app</h2>
+    <p class="muted" style="font-size:.8rem">The same list as the version badge
+      at the top left, in full. Numbered so an item here and an item there are
+      the same item. Click one to jump to the part of the UI it changed.</p>
+    <div id="logappbody" style="font-size:.8rem;line-height:1.6"></div>
   </div>
 </div>
 <div id="page-usage" style="display:none">
@@ -786,6 +890,67 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div id="trainbody"></div>
   </div>
 </div>
+<!-- 24.5: Performance. The tab exists so a new observational feature can be
+     costed BEFORE it is built, rather than discovered to be expensive after.
+     Everything here is static, hand-maintained content sourced from
+     engine/audit/DISK_WRITES.md -- it deliberately asks the Pi for NOTHING.
+     A tab about disk and bandwidth cost that spent bandwidth to render itself
+     would be answering its own question badly. -->
+<div id="page-perf" style="display:none">
+  <div class="perfgrid">
+    <div class="panel" id="perfprio">
+      <h2 style="font-size:1rem;margin:0">Priorities</h2>
+      <p class="muted" style="font-size:.78rem">Drag to reorder. This is the
+        tie-breaker: when two features want the same millisecond or the same
+        write, the one higher up wins. Saved in this browser only — it is a
+        statement of intent, not configuration, so it never touches the Pi.</p>
+      <ol id="perfpriolist"></ol>
+      <p class="muted" style="font-size:.72rem;margin:.5rem 0 0">
+        <a href="#" id="perfprioreset">reset to the original order</a></p>
+    </div>
+    <div class="panel">
+      <h2 style="font-size:1rem;margin:0">Features, and what they cost</h2>
+      <p class="muted" style="font-size:.78rem">Measured on Pi1, 2026-09-05.
+        <b>Write</b> ranks pressure on the microSD — how much is written and,
+        more importantly, how bunched it is. Full working:
+        <code>engine/audit/DISK_WRITES.md</code>.</p>
+      <div class="perfwrap">
+        <table class="perftbl">
+          <thead><tr>
+            <th style="width:11rem">Feature</th>
+            <th style="width:30%">What it gives you</th>
+            <th>Impact on disk, bandwidth and the typing path</th>
+            <th style="width:5rem">Write</th>
+          </tr></thead>
+          <tbody id="perftblbody"></tbody>
+        </table>
+      </div>
+      <div id="perfreport" style="margin-top:1rem"></div>
+    </div>
+  </div>
+  <!-- 24.7: APM. Reads the live engine status (fid 3), which since 24.6 is on
+       tmpfs — so showing it costs no card writes at all. -->
+  <div class="panel" id="perfapm">
+    <h2 style="font-size:1rem;margin:0">Actions per minute</h2>
+    <p class="muted" style="font-size:.78rem">Counts only — how many actions,
+      of what class, in each ten-second window. <b>No key identities, no
+      order, no content are recorded anywhere</b>, which is why counting plain
+      keystrokes is safe here when the Usage ledger deliberately refuses to.
+      Since the engine restarted.</p>
+    <div id="perfapmbody"></div>
+  </div>
+  <!-- 24.7: per-stage service time. The 24.5 audit had to report processor
+       cost as unknown because nothing attributed the 15.88 ms to a stage. -->
+  <div class="panel" id="perfstage">
+    <h2 style="font-size:1rem;margin:0">Where the keypress time goes</h2>
+    <p class="muted" style="font-size:.78rem">The engine's own measurement of
+      itself, from reading the input to writing the HID report. Accumulated in
+      memory with Welford's method and published in the status snapshot — no
+      samples are stored, and nothing here touches the card.</p>
+    <div id="perfstagebody"></div>
+  </div>
+</div>
+
 <div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div></div>
 
 <div id="page-exp" style="display:none">
@@ -1126,15 +1291,44 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // deliberately short. It is a second copy of a subset of the changelog, which
 // is a real cost -- but the changelog is prose with no anchors, and prose
 // cannot be linked to a widget. Keep it to entries worth jumping to.
+//
+// 24.3: CHECK THE KEY RESOLVES. Two entries pointed at 'usage', which has
+// never been an id or a data-uikey anywhere in this file -- the Usage page is
+// `page-usage` and its sections are `usage-shortcuts`/`usage-expansions`. Both
+// had been greyed out as "no longer exists" since the day they were written,
+// and nothing said so because greying out is exactly what a removed widget
+// looks like. The whole list is now visible at once in the Changes tab, where
+// a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'24.7',items:[
+   {t:'APM sensing — counts only, no key identities, no order, no content',k:'perfapm'},
+   {t:'Where your keypress time actually goes: decode & map vs emit',k:'perfstage'},
+   {t:'Movement counted as episodes, and a macro is one action not fifty',k:'perfapm'}]},
+ {v:'24.6',items:[
+   {t:'Engine status moved to tmpfs — 178 MB/day of card writes becomes zero',k:'engstat'},
+   {t:'Why the obvious fix would have broken the staleness warning',k:'perfreport'}]},
+ {v:'24.5',items:[
+   {t:'New Performance tab: what each feature costs in disk writes',k:'page-perf'},
+   {t:'Drag your priorities into order, saved in this browser',k:'perfprio'},
+   {t:'Engine status is ≈99.9% of all engine writes — the finding, and the fix',k:'perfreport'}]},
+ {v:'24.4',items:[
+   {t:'Usage counts every chord you press, not only the ones you remapped',k:'page-usage'},
+   {t:'A macro firing is counted, by name',k:'macrolist'},
+   {t:'Write your own "Does what" on any Usage row',k:'page-usage'}]},
+ {v:'24.3',items:[
+   {t:'Find & Replace on the Text Transform panes',k:'txfind'},
+   {t:'Usage counts expansions by definition, and characters saved',k:'page-usage'},
+   {t:'Add a duration to "Avg saved" by hand, and keep timing while you are away',k:'exptable'},
+   {t:'One history, numbered, in the Changes tab',k:'logapp'},
+   {t:'Copy/Paste items grow to their text so the header can stick',k:'clipdock'}]},
  {v:'24.2',items:[
-   {t:'Usage ✎ button threw instead of jumping',k:'usage'},
+   {t:'Usage ✎ button threw instead of jumping',k:'page-usage'},
    {t:'This panel would not close',k:'uiver'}]},
  {v:'24.1',items:[
    {t:'One misplaced line had killed the tabs and Copy/Paste',k:'toptabs'}]},
  {v:'24.0',items:[
    {t:'kbd_shortcuts corpus, tracking and training',k:'usage-track'},
-   {t:'Shortcut names and "Does what" in Usage',k:'usage'}]},
+   {t:'Shortcut names and "Does what" in Usage',k:'page-usage'}]},
  {v:'23.9',items:[
    {t:'Time saved per expansion',k:'exptable'}]},
  {v:'23.8',items:[
@@ -1177,6 +1371,12 @@ function vhTarget(k){
 function vhGo(k){
   const el=vhTarget(k);
   if(!el){toast('that part of the UI no longer exists',true);return;}
+  // 24.3: switch to the target's TAB rather than un-hiding its page under the
+  // one you are on. The loop below clears display:none on every ancestor,
+  // which for a target on another tab used to reveal two pages at once and
+  // leave the tab strip pointing at neither.
+  for(let n=el;n&&n!==document.body;n=n.parentElement){
+    if(n.id&&n.id.indexOf('page-')===0){switchTab(n.id.slice(5));break;}}
   for(let n=el;n&&n!==document.body;n=n.parentElement){
     if(n.tagName==='DETAILS'&&!n.open)n.open=true;
     if(n.style&&n.style.display==='none')n.style.display='';}
@@ -1186,23 +1386,62 @@ function vhGo(k){
   el.style.outline='2px solid var(--pick,#d97706)';
   setTimeout(()=>{el.style.outline=o;},2000);}
 
+/* 24.3: numbered, and the numbering is GLOBAL rather than per release.
+   Josh asked for "numbered line items in the engine overlay" and for the same
+   history in the Changes tab, so item 7 has to be item 7 in both — a count
+   that restarted at each version would give you three different item 1s and
+   nothing to refer to. Newest is 1. */
+function vhNumbered(){
+  const out=[];
+  let n=0;
+  for(const rel of VERSION_HISTORY)
+    for(const it of rel.items) out.push({n:++n, v:rel.v, t:it.t, k:it.k});
+  return out;}
+
+function vhItemHTML(it,size){
+  const gone=!vhTarget(it.k);
+  const fs=size||'.76rem';
+  return `<div style="font-size:${fs};margin:.1rem 0 .1rem .5rem">`
+    +`<span class="muted" style="font-variant-numeric:tabular-nums">`
+    +`${it.n}.</span> `
+    +(gone
+      // The greying is free information: nothing in the DOM answers to the
+      // key, so that part of the UI is gone and there is nowhere to send you.
+      ? `<span class="muted" style="opacity:.45" title="this part of the UI no longer exists">${esc(it.t)}</span>`
+      : `<a class="mlink" data-vhk="${esc(it.k)}" style="cursor:pointer">${esc(it.t)}</a>`)
+    +`</div>`;}
+
 function vhHTML(all){
+  const items=vhNumbered();
   const vs=all?VERSION_HISTORY:VERSION_HISTORY.slice(0,VH_SHOWN);
   let h='<b>What changed</b>';
   for(const rel of vs){
     h+=`<div style="margin-top:.4rem"><b style="font-size:.8rem">${esc(rel.v)}</b>`;
-    for(const it of rel.items){
-      const gone=!vhTarget(it.k);
-      h+=`<div style="font-size:.76rem;margin:.1rem 0 .1rem .5rem">`
-        +(gone
-          ? `<span class="muted" style="opacity:.45" title="this part of the UI no longer exists">${esc(it.t)}</span>`
-          : `<a class="mlink" data-vhk="${esc(it.k)}" style="cursor:pointer">${esc(it.t)}</a>`)
-        +`</div>`;}
+    for(const it of items.filter(x=>x.v===rel.v)) h+=vhItemHTML(it);
     h+='</div>';}
   if(!all&&VERSION_HISTORY.length>VH_SHOWN)
     h+=`<div style="margin-top:.45rem"><a class="mlink" data-vhmore="1"
         style="cursor:pointer;font-size:.75rem">show more…</a></div>`;
+  else
+    // 24.3, Josh: "go there when the user clicks the 'show more' text at end
+    // of the engine overlay." A popover is the wrong shape for a long list --
+    // it is anchored to a badge in the corner and dismisses on any outside
+    // click, which is exactly the wrong behaviour once you want to read it.
+    h+=`<div style="margin-top:.45rem"><a class="mlink" data-vhtab="1"
+        style="cursor:pointer;font-size:.75rem">open the Changes tab →</a></div>`;
   return h;}
+
+/* The full list, in the Changes tab. Same numbers, same links. */
+function renderAppHistory(){
+  const el=$('logappbody');if(!el)return;
+  const items=vhNumbered();
+  let h='';
+  for(const rel of VERSION_HISTORY){
+    h+=`<div style="margin-top:.5rem"><b>${esc(rel.v)}</b>`;
+    for(const it of items.filter(x=>x.v===rel.v)) h+=vhItemHTML(it,'.8rem');
+    h+='</div>';}
+  el.innerHTML=h||'<p class="muted">Nothing recorded.</p>';
+  el.querySelectorAll('[data-vhk]').forEach(a=>a.onclick=()=>vhGo(a.dataset.vhk));}
 
 function vhOpen(all){
   const p=$('popover'),b=document.getElementById('uiver');
@@ -1213,6 +1452,12 @@ function vhOpen(all){
   p.querySelectorAll('[data-vhk]').forEach(a=>a.onclick=()=>vhGo(a.dataset.vhk));
   const more=p.querySelector('[data-vhmore]');
   if(more)more.onclick=()=>vhOpen(true);
+  const tab=p.querySelector('[data-vhtab]');
+  if(tab)tab.onclick=()=>{
+    p.style.display='none';
+    switchTab('log');
+    const t=$('logapp');
+    if(t)t.scrollIntoView({block:'start',behavior:'smooth'});};
   // 24.2: it had no way to close. Josh: "It doesn't go away after you click
   // on it". Every other popover in this file dismisses on an outside click
   // and this one simply never got the same treatment -- so it sat over the
@@ -1267,7 +1512,19 @@ function slug(x){return (String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').
 let rxTotal=0,rxGot={};
 const $=id=>document.getElementById(id);
 window.addEventListener('error',e=>{
-  try{toast('UI error: '+e.message,true);
+  try{
+  // "ResizeObserver loop completed with undelivered notifications" / "loop
+  // limit exceeded" is NOT a fault. The browser raises it whenever an
+  // observer callback changes layout, which is exactly what syncTopbarHeight
+  // and txSyncPaneSize are for; both converge on the next frame and nothing
+  // is lost. Toasting it painted a red "UI error" across a page that was
+  // working perfectly -- and Josh's report was "UI IS FLAKEY", so a false
+  // alarm here is not noise, it is misdirection. Same lesson as
+  // UI_ENGINE_EXPECT crying wolf: a warning that fires on a working setup is
+  // worse than no warning. Still logged, quietly, in case it ever matters.
+  if(/^ResizeObserver loop/.test(e.message||'')){
+    log('(benign) '+e.message,'','log'); return;}
+  toast('UI error: '+e.message,true);
   log('UI error: '+e.message+' @ line '+e.lineno,'er','log');}catch(_){}});
 function log(m,c='',box='log'){const el=$(box),l=document.createElement('div');
 if(c)l.className=c;l.textContent=new Date().toLocaleTimeString()+'  '+m;
@@ -1382,6 +1639,11 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===3){
         lastEng=obj;adoptEffective(obj);updateConStat();
+        // 24.7: refresh the APM readout on each status poll, but only while
+        // its tab is actually on screen -- rebuilding two tables every ten
+        // seconds behind a hidden panel is work nobody asked for.
+        if($('page-perf')&&$('page-perf').style.display!=='none'){
+          renderApm(); renderStages();}
         // 20.8.2 BF3: read the engine version from HERE, not from the config.
         // fid 0 is bridge_config.json served verbatim off the disk -- it is
         // the file the UI itself wrote, so it can never carry anything the
@@ -1665,7 +1927,12 @@ function pfResult(text){
   if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
   if(text.startsWith('USAGE')){
     try{ usageData=JSON.parse(text.slice(text.indexOf('\n')+1));
-         renderUsage(); renderTrack(); renderTraining(); toast('usage statistics loaded'); }
+         renderUsage(); renderTrack(); renderTraining();
+         // 24.3: the Expansions tab's "Used" column reads the same payload,
+         // so it has to be repainted here too -- otherwise it keeps saying
+         // "not fetched yet" on a page that has just fetched it.
+         if(typeof renderExpUsed==='function') renderExpUsed();
+         toast('usage statistics loaded'); }
     catch(e){ toast('usage payload unreadable: '+e.message,true); }
     return;}
   if(text.startsWith('HISTCFG ')){
@@ -1706,6 +1973,9 @@ $('profbackups').onclick=()=>showBackups();
 // 20.8 #1.4: local backup/restore. Bound unconditionally and NOT gated on a
 // connection -- the whole point is that it still works when the Pi does not.
 $('histbtn').onclick=()=>showHistory();
+// 24.3: the same action, from inside the Changes tab, so you do not have to
+// go back up to the profile bar to re-read the list.
+{const hl=$('histload');if(hl)hl.onclick=()=>showHistory();}
 $('bklocal').onclick=()=>downloadBundle();
 $('bkrestore').onchange=e=>{
   const f=e.target.files&&e.target.files[0];
@@ -3973,6 +4243,15 @@ function markClipsRead(){
   _clipsReadAt=((lastEng||{}).notes_writes)||0;
   const b=$('clipstale');if(b)b.style.display='none';}
 
+/* Size a clip's box to its text, between the old fixed height and 55vh (24.3).
+   Measured, not guessed: the height is cleared first so scrollHeight reports
+   what the content actually needs rather than what the box currently is. */
+function clipFitBox(ta){
+  if(!ta)return;
+  const min=126, max=Math.max(min,Math.round(innerHeight*0.55));
+  ta.style.height='auto';
+  ta.style.height=Math.min(max,Math.max(min,ta.scrollHeight+4))+'px';}
+
 function renderClips(){
   const host=$('cliplist');if(!host)return;
   const _noteClips=noteClipNames();
@@ -4060,6 +4339,29 @@ function renderClips(){
         :'background:#3a3f47;color:#f2f2f2;border:1px solid var(--line)');
     ta.value=c.text||'';                     // .value: never parsed as markup
     box.appendChild(ta);
+    // 24.3: fit the box to the note, up to half the window.
+    //
+    // Josh, 2026-09-02: "Open Copy/Paste items … still not sticking under the
+    // tab bar." Re-tested on 24.3: the sticky rule IS applied and IS active —
+    // computed position:sticky at exactly --topbar-h + --tabs-h, the same
+    // offset the Debug monitor pins at correctly. It was invisible for a
+    // different reason: an open item was 219px tall WHATEVER it contained (a
+    // 30px summary, a 37px button bar and a fixed 8-row textarea that scrolled
+    // internally), so it never outgrew the viewport and the header never had
+    // anything to hold against. A 3,000-character note in an eight-row box is
+    // the complaint underneath.
+    //
+    // So the box grows with its content instead. Short clips keep the size
+    // they had; a long note fills the screen, the page scrolls, and the header
+    // does what it was built in 23.5 to do. Capped at 55vh so one long note
+    // cannot push every other item off the screen.
+    //
+    // Fitted AFTER the item is in the document, not here: scrollHeight is 0
+    // for an element that has not been attached yet, and for one inside a
+    // closed <details>. Measuring at either moment gives the minimum height
+    // for every clip, which looks exactly like the feature not working.
+    ta.addEventListener('input',()=>clipFitBox(ta));
+    box.addEventListener('toggle',()=>{if(box.open)clipFitBox(ta);});
     // 23.5: live character count while editing. The limit was only ever
     // announced by truncating you at it, which is the worst moment to find
     // out -- the text is already gone from the box. Editing only: on a
@@ -4086,6 +4388,8 @@ function renderClips(){
       _count();};
     _count();
     host.appendChild(box);}
+  // Now that they are in the document and their heights are measurable (24.3).
+  host.querySelectorAll('details[open]>textarea').forEach(clipFitBox);
   const b=clipBytes();
   $('clipinfo').textContent=`${names.length} item(s) · ${(b/1024).toFixed(1)} KB of ${(CLIP_TOTAL_MAX/1024)|0} KB`;
   // ...and say so when the keyboard has written since this was read.
@@ -4345,8 +4649,23 @@ function histDangling(c){
 /* ---- panel ------------------------------------------------------------- */
 let _histIndex = null, _histPicked = null, _histCfg = null;
 
+/* 24.3: the ↺ History button next to Backups now takes you to the Changes
+   tab, where the versions list lives alongside the other two histories,
+   instead of opening a floating panel over whatever you were doing. Josh
+   asked for them integrated; three panels that each covered their own corner
+   of the screen was the thing being complained about. */
 window.showHistory = () => {
   _histIndex = null; _histPicked = null; _histCfg = null;
+  switchTab('log');
+  const p = $('histpanel');
+  if(p) p.scrollIntoView({block:'start', behavior:'smooth'});
+  if(!device){
+    const hb = $('histbody');
+    if(hb) hb.innerHTML = '<p class="muted">Connect to read the versions '
+      + 'kept on the Pi. Your own change log, below, works offline.</p>';
+    toast('connect to read the versions kept on the Pi', true);
+    return;
+  }
   pfCmd('hist');
   toast('reading history from the Pi…');
 };
@@ -4357,7 +4676,9 @@ function renderHistory(lines){
     return {seq:+seq, kind, ts:+ts, bytes:+bytes, note:note||''};
   });
   const el = $('histbody'); if(!el) return;
-  $('histpanel').style.display = 'block';
+  // 24.3: no longer un-hides a floating panel -- it lives in the Changes tab
+  // now, which is always there when that tab is open.
+  const hint = $('histhint'); if(hint) hint.textContent = '';
   if(!_histIndex.length){ el.innerHTML =
     '<p class="muted">No history yet. It is written on each Save to device.</p>';
     return; }
@@ -4445,18 +4766,103 @@ function renderHistoryDiff(seq, oldCfg){
 let usageData = null, usageSort = 'per_week', usageFilter = '',
     usageTab = 'usage';
 
+/* Characters, grouped so a six-figure total is readable at a glance (24.3).
+   Plain digits below 10,000 -- "8,412" and "8412" are equally readable, and
+   an abbreviation that early throws away precision for nothing. */
+function fmtChars(n){
+  n = Math.round(n || 0);
+  if(n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if(n >= 10000)   return Math.round(n / 1000) + 'k';
+  return n.toLocaleString();
+}
+
+/* One "Does what" cell (24.4).
+
+   Josh: "Feature USAGE: let me edit teh 'Does what' column / cells so I can
+   add in what it does."
+
+   His `active_os` is `win` and there is no Windows reference set yet, so this
+   column is empty for nearly every row he has. A typed-in description is the
+   answer that does not wait on the overnight corpus job.
+
+   HIS NOTE AND A CITED DESCRIPTION ARE NOT THE SAME KIND OF THING, and they
+   are not merged. A reference entry carries a source and a retrieval date;
+   a note does not, and letting one inherit the other's citation is exactly
+   what CLAUDE.md §2 forbids -- "an undated scrape presented as fact is worse
+   than no list". So his note is shown as his, and where a cited description
+   also exists, both are visible with the source link intact. */
+function usageDescHTML(r){
+  const cited = r.desc ? esc(r.desc.text)
+      + (r.desc.url ? ` <a class="mlink" href="${esc(r.desc.url)}"
+           target="_blank" rel="noopener"
+           title="${esc(r.desc.source||'')} · retrieved ${esc(r.desc.retrieved||'?')}">source</a>` : '')
+      : '';
+  const mine = r.note
+    ? `<span title="your own note">${esc(r.note)}</span>` : '';
+  const body = mine && cited ? mine + `<div class="muted"
+       style="font-size:.76rem">reference: ${cited}</div>`
+    : (mine || cited || '<span class="muted">—</span>');
+  return body + ` <a class="mlink udescedit" data-uid="${esc(r.id)}"
+      title="Write what this does" style="margin-left:.3rem">✎</a>`;
+}
+
+/* Edit one in place. A prompt() would work, but the existing text has to be
+   editable rather than retyped -- most edits to a description are a word. */
+function usageEditDesc(td, id){
+  if(!td || td.querySelector('.udescin')) return;
+  const cur = ((cfg && cfg.usage_notes) || {})[id] || '';
+  td.innerHTML = `<input type="text" class="udescin" style="width:14rem"
+      value="${esc(cur)}" placeholder="what this does">
+    <button class="udescok" style="font-size:.72rem;margin-left:.2rem">✓</button>
+    <button class="udescno" style="font-size:.72rem">✕</button>`;
+  const inp = td.querySelector('.udescin');
+  const done = () => renderUsage();
+  td.querySelector('.udescno').onclick = done;
+  const ok = () => {
+    if(!cfg){ toast('read the device first — there is no profile to save it in', true); return; }
+    const v = inp.value.trim();
+    cfg.usage_notes = cfg.usage_notes || {};
+    // An emptied box DELETES the note rather than storing "". A config full
+    // of empty strings shows as a change in every history diff and means
+    // nothing; same reasoning as the expansion Group column in 23.8.
+    if(v) cfg.usage_notes[id] = v; else delete cfg.usage_notes[id];
+    const where = cfgSaveNow();
+    renderUsage();
+    toast((v ? 'saved' : 'cleared') + ' · ' + where);
+  };
+  td.querySelector('.udescok').onclick = ok;
+  inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){ e.preventDefault(); ok(); }
+    if(e.key === 'Escape'){ e.preventDefault(); done(); }});
+  inp.focus();
+  inp.select();
+}
+
 function usageRows(kind){
   if(!usageData) return [];
   const src = usageData[kind] || {};
   const rows = Object.entries(src).map(([id, v]) => ({
     id, count: v.count, per_week: v.per_week,
+    // 24.3: characters the expansion saved you typing -- the value produced,
+    // less the trigger typed to produce it. 0 on every shortcut row, and on
+    // every expansion recorded before 24.3, which is why the column only
+    // appears on the expansions table.
+    chars: v.chars || 0,
     os: Object.keys(v.os || {}).join(', '),
     desc: (usageData.describe || {})[id] || null,
+    // 24.4: what HE says it does. Kept separate from `desc`, which is a
+    // CITED description out of a reference set -- merging them would let a
+    // typed-in note inherit a source it does not have, and CLAUDE.md §2 is
+    // explicit that an uncited claim presented as fact is worse than no list.
+    note: ((cfg && cfg.usage_notes) || {})[id] || '',
   }));
   const q = usageFilter.trim().toLowerCase();
   const filtered = q ? rows.filter(r =>
     r.id.toLowerCase().includes(q)
     || (r.desc && (r.desc.text || '').toLowerCase().includes(q))
+    // 24.4: his own notes are searchable too. A description you typed is the
+    // one you are most likely to search for.
+    || r.note.toLowerCase().includes(q)
     || r.os.toLowerCase().includes(q)) : rows;
   return filtered.sort((a, b) =>
     usageSort === 'id' ? a.id.localeCompare(b.id)
@@ -4499,21 +4905,28 @@ function renderUsage(){
   }
   const table = (kind, title, openDefault) => {
     const rows = usageRows(kind);
+    // Only expansions save typing, so only they get the column. A "Saved"
+    // column reading 0 down every shortcut row would be a column that means
+    // nothing, which is worse than a missing one.
+    const saved = kind === 'expansions';
+    const totalChars = saved ? rows.reduce((a, r) => a + r.chars, 0) : 0;
     return `<details ${openDefault ? 'open' : ''} data-uikey="usage-${kind}">
       <summary style="cursor:pointer"><b>${title}</b>
-        <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}</span></summary>
+        <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}${
+          totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span></summary>
       ${rows.length ? `<table style="width:100%">
         <tr><td><b>What you press</b></td><td><b>Per week</b></td>
-            <td><b>Total</b></td><td><b>OS</b></td><td><b>Does what</b></td><td></td></tr>
+            <td><b>Total</b></td>${saved ? '<td><b>Chars saved</b></td>' : ''}
+            <td><b>OS</b></td><td><b>Does what</b></td><td></td></tr>
         ${rows.map(r => `<tr>
           <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
           <td>${r.per_week}</td><td class="muted">${r.count}</td>
+          ${saved ? `<td class="muted" title="${
+            r.chars ? 'the text produced, less the trigger you typed'
+                    : 'recorded before 24.3, when this was not counted'
+          }">${r.chars ? fmtChars(r.chars) : '—'}</td>` : ''}
           <td class="muted">${esc(r.os)}</td>
-          <td>${r.desc ? esc(r.desc.text)
-              + (r.desc.url ? ` <a class="mlink" href="${esc(r.desc.url)}"
-                   target="_blank" rel="noopener"
-                   title="${esc(r.desc.source||'')} · retrieved ${esc(r.desc.retrieved||'?')}">source</a>` : '')
-              : '<span class="muted">—</span>'}</td>
+          <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
           <td><a class="mlink" data-ugo="${kind}" data-uid="${esc(r.id)}"
                  title="Go to where this is defined">✎</a></td>
         </tr>`).join('')}</table>`
@@ -4528,6 +4941,7 @@ function renderUsage(){
         <select id="usagesort">
           <option value="per_week" ${usageSort==='per_week'?'selected':''}>average per week</option>
           <option value="count" ${usageSort==='count'?'selected':''}>total</option>
+          <option value="chars" ${usageSort==='chars'?'selected':''}>characters saved</option>
           <option value="id" ${usageSort==='id'?'selected':''}>name</option>
         </select></label>
       <span class="muted">over the last ${usageData.weeks} week(s)</span>
@@ -4543,6 +4957,13 @@ function renderUsage(){
   $('usagereload').onclick = () => loadUsage();
   el.querySelectorAll('[data-ugo]').forEach(a =>
     a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
+  // 24.4: the ✎ inside a "Does what" cell edits the description; the ✎ in the
+  // last column still jumps to where the thing is defined. Two different
+  // pencils doing two different jobs, so they are bound by different
+  // attributes -- sharing a selector is how one would quietly start doing the
+  // other's work.
+  el.querySelectorAll('.udescedit').forEach(a =>
+    a.onclick = () => usageEditDesc(a.closest('td'), a.dataset.uid));
   // 24.1: INSIDE renderTraining, where `el` exists. This was appended after
   // the function in 24.0 and ran at top level, where `el` is undefined -- a
   // ReferenceError that killed every statement after it in the script,
@@ -4720,14 +5141,14 @@ function renderTraining(){
       <table style="width:100%">${top.map(r=>`<tr>
         <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
         <td>${r.per_week}/wk</td>
-        <td class="muted">${r.desc?esc(r.desc.text):''}</td></tr>`).join('')}</table>
+        <td class="muted">${esc(r.note || (r.desc ? r.desc.text : ''))}</td></tr>`).join('')}</table>
     </details>
     <details open><summary style="cursor:pointer"><b>Set up, barely used</b>
       <span class="muted">· under once a week</span></summary>
       ${rare.length ? `<table style="width:100%">${rare.map(r=>`<tr>
         <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
         <td>${r.per_week}/wk</td>
-        <td class="muted">${r.desc?esc(r.desc.text):''}</td>
+        <td class="muted">${esc(r.note || (r.desc ? r.desc.text : ''))}</td>
         <td><a class="mlink" data-ugo="shortcuts" data-uid="${esc(r.id)}">✎</a></td>
         </tr>`).join('')}</table>`
         : '<p class="muted">Nothing under once a week — either you use everything, or there is not much history yet.</p>'}
@@ -5540,11 +5961,41 @@ function changelogText(){
   if(!es.length)return'No changes recorded yet.\n\nA numbered entry is added each time you ⬆ Save to device.';
   return es.slice().reverse().map(e=>
     `${fmtWhen(e.ts)}  —  ${e.profile}\n`+e.changes.map(l=>'    '+l).join('\n')).join('\n\n');}
+/* 24.3: numbered entries rather than one preformatted blob.
+   The blob was the whole tab: every revision and every line of every revision
+   in one <pre>, so there was nothing to point at and nothing to count. Now
+   each save is a numbered entry (newest 1) with its own lines beneath it,
+   which is what makes "the third one down" a thing you can say. The .txt
+   export still goes through changelogText(), unchanged -- a file you keep
+   should not change shape because the screen did. */
 function renderChangelog(){
   const el=$('logbody');if(!el)return;
   const es=(cfg&&cfg._changelog)||[];
   $('logcount').textContent=es.length?`${es.length} saved revision${es.length>1?'s':''}`:'';
-  el.textContent=changelogText();}
+  if(!es.length){
+    el.innerHTML='<p class="muted">No changes recorded yet. A numbered entry '
+      +'is added each time you ⬆ Save to device.</p>';
+  }else{
+    let n=0;
+    el.innerHTML=es.slice().reverse().map(e=>{
+      n++;
+      const lines=(e.changes||[]).map(l=>
+        `<div style="margin-left:1.4rem">• ${esc(l)}</div>`).join('');
+      return `<div style="margin:.45rem 0">`
+        +`<span class="muted" style="font-variant-numeric:tabular-nums">${n}.</span> `
+        +`<b>${esc(fmtWhen(e.ts))}</b> <span class="muted">— ${esc(e.profile||'')}`
+        +`</span>${lines||'<div class="muted" style="margin-left:1.4rem">'
+        +'(no detail recorded)</div>'}</div>`;}).join('');}
+  renderAppHistory();
+  // The Pi's version list only exists once it has been read. Say which it is
+  // rather than showing an empty panel that looks like "no versions".
+  const hint=$('histhint');
+  if(hint)hint.textContent=_histIndex
+    ? '' : (device?'not read yet' : 'needs a connected device');
+  const hb=$('histbody');
+  if(hb&&!_histIndex&&!hb.innerHTML)
+    hb.innerHTML='<p class="muted">Not read yet — the list lives on the Pi '
+      +'and is fetched on request, because it can be long.</p>';}
 window.exportChangelog=()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([changelogText()],{type:'text/plain'}));
@@ -7329,6 +7780,14 @@ function renderExp(){
     +' Hover a cell for SD, min and max."><b>Avg saved</b>'
     +(totalN?` <span class="muted" style="font-weight:400;font-size:.72rem">`
       +`n=${totalN}</span>`:'')+'</td>'
+    // 24.3, Josh: "the character count … A) I think it should be shown here
+    // [Usage], and B) this is the way I want it to work on the Expansions tab
+    // as well." Next to "Avg saved" on purpose -- one column is time saved,
+    // the other characters saved, and they answer the same question in
+    // different units.
+    +'<td title="How often this expansion has fired, and how many characters '
+    +'it saved you typing. Counted by the engine; open the Usage tab to load '
+    +'or refresh it."><b>Used</b></td>'
     +'<td title="A free-text label for organising your own expansions. '
     +'Unlike an expansion SET it is not a file on the Pi -- it groups rows in '
     +'this table and nothing else."><b>Group</b></td></tr>';
@@ -7362,50 +7821,314 @@ function addExpRow(k,v){
     placeholder="type it here…" style="min-width:8rem"
     title="Type the expansion out by hand, then press ✓. Timed from your first keystroke to your last."><button class="etypesave" data-trig="${k.replace(/"/g,'&quot;')}" style="font-size:.72rem;margin-left:.2rem" title="Save this sample">✓</button></td>
   <td class="esaved" data-trig="${k.replace(/"/g,'&quot;')}"></td>
+  <td class="eused" data-trig="${k.replace(/"/g,'&quot;')}"></td>
   <td><input type="text" class="egroup" list="expgrouplist" style="min-width:6rem"
     value="${(((cfg&&cfg.exp_groups)||{})[k]||'').replace(/"/g,'&quot;')}"
     placeholder="—" title="Optional. Groups rows in this table; not an expansion set."></td>`;
   t.appendChild(tr);
-  // 23.9: time the manual typing, first keystroke to last.
+  // 23.9: time the manual typing. 24.3: and keep timing it while you are
+  // away. State lives in expRuns, NOT in this closure -- switchTab('exp')
+  // calls renderExp(), which rebuilds every row, so a closure variable is
+  // destroyed by looking at another tab. That is precisely the case Josh
+  // asked to support.
   const inp=tr.querySelector('.etype'), btn=tr.querySelector('.etypesave');
-  let t0=null, t1=null;
   if(inp){
+    const run=expRuns[k];
+    if(run&&run.text!=null)inp.value=run.text;      // survive a re-render
     inp.addEventListener('input',()=>{
-      const now=(performance&&performance.now)?performance.now():Date.now();
+      const r=expRun(k);
+      const now=expNow();
       // First keystroke starts the clock; every one after it moves the end.
-      // Measuring from first to LAST, not to the Save press, so a pause
-      // before reaching for the button is not counted as typing.
-      if(t0===null)t0=now;
-      t1=now;});
+      if(r.t0===null)r.t0=now;
+      r.t1=now;
+      r.text=inp.value;});
     inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
       if(btn)btn.click();}});}
   if(btn)btn.onclick=()=>{
     const text=(exps||{})[k]||'';
     if(!inp||!inp.value.trim()){toast('type the text out first',true);return;}
-    if(t0===null||t1===null||t1<=t0){
+    const r=expRuns[k]||{};
+    if(r.t0===null||r.t0===undefined||r.t1===null||r.t1<=r.t0){
       toast('nothing timed — type it in the box rather than pasting',true);
       return;}
-    const sample=t1-t0;
-    const saved=savedMs(sample,k,text);
-    cfg.exp_typing=cfg.exp_typing||{};
-    cfg.exp_typing[k]=accAdd(cfg.exp_typing[k]||{},saved);
-    inp.value='';t0=t1=null;
-    renderExpSaved();
-    toast(`saved ${fmtMs(sample)} → ${fmtMs(saved)} saved per use`);};
-  renderExpSavedCell(tr.querySelector('.esaved'),k);}
+    expAwayEnd(r);              // count the trip you are only just back from
+    const away=r.away||0;
+    const sample=(r.t1-r.t0)+away;
+    expAddSample(k,sample,
+      away?` (including ${fmtMs(away)} away from the page)`:'');
+    inp.value='';delete expRuns[k];};
+  renderExpSavedCell(tr.querySelector('.esaved'),k);
+  renderExpUsedCell(tr.querySelector('.eused'),k);}
+
+/* Paint one "Used" cell from the engine's own count (24.3).
+   Read-only, and from usageData rather than from cfg: this is what the ENGINE
+   observed, not something the UI could know or should ever write. If usage
+   has not been fetched yet the cell says so rather than showing a zero --
+   "never used" and "not loaded" are different facts, and a 0 that means the
+   second is exactly the kind of confident wrong number that gets acted on. */
+function renderExpUsedCell(td,trig){
+  if(!td)return;
+  if(!usageData||!usageData.expansions){
+    td.innerHTML='<span class="muted">·</span>';
+    td.title='Usage has not been fetched yet — open the Usage tab.';
+    return;}
+  const r=usageData.expansions[trig];
+  if(!r||!r.count){
+    td.innerHTML='<span class="muted">—</span>';
+    td.title=`Not used in the last ${usageData.weeks} week(s).`;
+    return;}
+  td.innerHTML=`${r.count}×`
+    +(r.chars?` <span class="muted">· ${fmtChars(r.chars)}</span>`:'');
+  td.title=`${r.count} use(s) over the last ${usageData.weeks} week(s)`
+    +(r.chars?`\n${r.chars.toLocaleString()} characters saved`
+             :'\nCharacters saved were not recorded before 24.3.');}
+
+function renderExpUsed(){
+  document.querySelectorAll('#exptable .eused').forEach(td=>
+    renderExpUsedCell(td,td.dataset.trig));}
+
+/* ---- the "Type it yourself" run, and what happens when you leave (24.3) ----
+
+   Josh: "sometimes the equivalent is actually something like leaving the page,
+   searching for a piece of information, and copying it into the output — so
+   just continue the timer."
+
+   23.9 measured FIRST keystroke to LAST, deliberately, so a pause before
+   reaching for ✓ was not counted as typing. That is still right for a pause;
+   it is wrong for the trip he is describing, where the looking-things-up IS
+   the work being measured. So the two are separated: the typing span is still
+   first-to-last, and time spent away from the page during the run is added on
+   top of it, per trip.
+
+   Per trip, and capped. An hour away is lunch, not research, and one forgotten
+   run would otherwise poison an average that exists to be compared. He said a
+   maximum was allowed but not required; this is the smallest honest one.
+
+   State lives HERE and not in the row's closure because switchTab('exp') calls
+   renderExp(), which rebuilds every row -- so a closure would be destroyed by
+   the very act of navigating away. */
+const EXP_AWAY_MAX_MS = 20*60*1000;
+const expRuns = {};        // trigger -> {t0,t1,away,awayAt,text}
+
+function expNow(){
+  return (window.performance&&performance.now)?performance.now():Date.now();}
+
+function expRun(trig){
+  return expRuns[trig] || (expRuns[trig] =
+    {t0:null,t1:null,away:0,awayAt:null,text:''});}
+
+function expAwayStart(){
+  const now=expNow();
+  for(const k in expRuns){
+    const r=expRuns[k];
+    if(r.t0!==null&&r.awayAt===null)r.awayAt=now;}}
+
+function expAwayEnd(one){
+  const now=expNow();
+  const each=r=>{
+    if(!r||r.awayAt===null||r.awayAt===undefined)return;
+    r.away=(r.away||0)+Math.min(EXP_AWAY_MAX_MS,Math.max(0,now-r.awayAt));
+    r.awayAt=null;};
+  if(one){each(one);return;}
+  for(const k in expRuns)each(expRuns[k]);}
+
+// Both signals, because they answer different questions: visibilitychange
+// fires when the browser TAB is hidden, blur when the window loses focus to
+// another application. Looking something up in another app is the second, and
+// watching only the first would miss it entirely.
+if(typeof document!=='undefined'&&document.addEventListener){
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)expAwayStart(); else expAwayEnd();});
+  window.addEventListener('blur',expAwayStart);
+  window.addEventListener('focus',()=>expAwayEnd());}
+
+/* One place where a sample becomes an average, so the timed path and the
+   typed-in "+" path can never disagree about what a sample means. Both are
+   "how long it would take ME to write this out"; savedMs turns that into the
+   saving by deducting what typing the trigger costs at his own measured rate.
+
+   24.3: and it writes to the Pi at once. Josh: "The ✓ on 'Type it yourself'
+   should save to the Pi immediately, rather than waiting for 'Save to
+   device'." */
+function expAddSample(trig,sampleMs,note){
+  const text=(exps||{})[trig]||'';
+  const saved=savedMs(sampleMs,trig,text);
+  cfg.exp_typing=cfg.exp_typing||{};
+  cfg.exp_typing[trig]=accAdd(cfg.exp_typing[trig]||{},saved);
+  renderExpSaved();
+  // ONE toast, carrying the saving AND where it went. Two toasts would mean
+  // the second overwrote the first and he only ever saw the second.
+  const where=cfgSaveNow();
+  toast(`${fmtMs(sampleMs)}${note||''} → ${fmtMs(saved)} saved per use `
+        +`· ${where}`);}
+
+/* Write the config now. Returns what to tell him, rather than toasting: the
+   caller has something to say as well, and this is the half he did not ask
+   for. It is a whole-config write (~19 KB, ~2 s at 9 KB/s, plus a backup and
+   a history version) because there is no per-key channel -- fid 0 is the file
+   -- and Josh asked for the sample to reach the Pi at once rather than
+   waiting for ⬆ Save to device.
+
+   24.4: the Usage tab's "Does what" notes save the same way, hence the
+   neutral name. A `const` alias was tried first and removed: a mid-file
+   const is the exact shape that produced the 24.1 dead page, and a rename of
+   two call sites is cheaper than a TDZ hazard. */
+let _expSaveBusy=false, _expSaveAgain=false;
+function cfgSaveNow(){
+  if(!device){
+    // Not an error: the sample IS in cfg and goes with the next write.
+    // Claiming it reached the Pi would be worse than saying it did not.
+    return 'kept in this browser — ⬆ Save to device once you reconnect';}
+  if(_expSaveBusy){
+    // Two ✓ presses in quick succession must not interleave two PUT streams
+    // over one HID channel. The second is folded into a single follow-up
+    // write, which carries both samples anyway -- cfg is one object.
+    _expSaveAgain=true;
+    return 'saving to the Pi…';}
+  const go=()=>{
+    _expSaveBusy=true;
+    recordChanges();
+    Promise.resolve(putFile(0,cfg))
+      .catch(e=>toast('could not save to the Pi: '+e.message,true))
+      .then(()=>{_expSaveBusy=false;
+        if(_expSaveAgain){_expSaveAgain=false;go();}});};
+  try{ go(); }
+  catch(e){ _expSaveBusy=false;
+            return 'could not save to the Pi: '+e.message; }
+  return 'saved to the Pi';}
+
+/* ---- reading a duration the way the engine writes one (24.3) ----
+
+   Josh: "perhaps a little '+' text hyperlink next to each one that lets me
+   input a duration in any of the forms we usually use".
+
+   "The forms we usually use" are two different things, and both are accepted:
+
+     a SPAN the engine reads back out of your text -- "1440h-1530h",
+       "10:50-11:20", "2p to 3p" -- the grammar in s4_expansions.duration_
+       from_text; and
+     a DURATION the engine writes -- "45s", "2m 13s", "1h 04m", "3d 2h" --
+       the output of s4_expansions.format_elapsed.
+
+   This is a second implementation of the first grammar, in JavaScript,
+   because the original is Python on the Pi and this tab runs in the browser
+   with the device possibly disconnected. Two implementations drift, so
+   engine/tests/test_duration_parse.py feeds the SAME table of strings to
+   both and fails if they ever disagree about a single one. */
+const _EXPT = '(?:(\\d{1,2}):(\\d{2}):\\d{2}'          // 11:09:00
+            + '|(\\d{1,2}):(\\d{2})\\s*([apAP])\\.?[mM]?\\.?'   // 10:50p
+            + '|(\\d{1,2}):(\\d{2})'                   // 10:50
+            + '|(\\d{1,2})(\\d{2})\\s*([apAP])\\.?[mM]?\\.?'    // 930a
+            + '|(\\d{1,2})(\\d{2})\\s*[hH](?![a-zA-Z])'         // 1440h
+            + '|(\\d{1,2})\\s*([apAP])\\.?[mM]?\\.?)';          // 2p
+const _EXPSEP = '\\s*(?:-|–|—|to|until|till)\\s*';
+// The lookbehind that stops "11:09:00 - " matching the "09:00" INSIDE it and
+// reporting the gap since 9am. That string is not a corner case: it is
+// exactly what the engine types for "%H:%M:%S".
+const _EXPRANGE = new RegExp('(?<![\\d:])'+_EXPT+_EXPSEP+'(?<![\\d:])'+_EXPT+'\\s*$');
+
+// Minutes since midnight from one alternative's capture groups, or null.
+function _expMin(g){
+  const n=x=>(x===undefined||x==='')?null:parseInt(x,10);
+  const forms=[[0,1,null],[2,3,4],[5,6,null],[7,8,9],[10,11,null],[12,null,13]];
+  for(const [hk,mk,mk2] of forms){
+    let h=n(g[hk]);
+    if(h===null)continue;
+    let m=mk===null?0:(n(g[mk])||0);
+    const mer=mk2===null?'':String(g[mk2]||'').toLowerCase();
+    if(mer){
+      if(h<1||h>12)return null;
+      h=(h%12)+(mer==='p'?12:0);
+    }else if(h<0||h>23)return null;
+    if(m<0||m>59)return null;
+    return h*60+m;}
+  return null;}
+
+function _expSpan(a,b){ const d=b-a; return d<0?d+1440:d; }
+
+/* Milliseconds, or null. Deliberately strict: a bare "1440" is NOT read as a
+   time, for the same reason the engine refuses it -- far more often a year, a
+   quantity or a reference number, and silently reinterpreting it is the kind
+   of surprise that makes a tool untrustworthy. A bare number here is read as
+   MINUTES, because that is what "how long would this take me" is measured in
+   and there is nothing else it could sensibly be. */
+function parseDurationMs(s){
+  s=String(s==null?'':s).trim();
+  if(!s)return null;
+  const rg=_EXPRANGE.exec(s);
+  if(rg){
+    const g=rg.slice(1);
+    const a=_expMin(g.slice(0,14)), b=_expMin(g.slice(14));
+    if(a!==null&&b!==null)return _expSpan(a,b)*60000;}
+  // "2m 13s", "1h 04m", "3d 2h", "45s", "+2m" -- format_elapsed's own output,
+  // leading "+" and all, so a duration copied off the screen pastes straight
+  // back in.
+  const unit={d:86400000,h:3600000,m:60000,s:1000};
+  const parts=s.replace(/^\+/,'').match(/(\d+(?:\.\d+)?)\s*([dhms])\b/gi);
+  if(parts&&parts.length){
+    let total=0,ok=true;
+    // Everything must be a unit token, or it is not a duration at all: "3h of
+    // faffing" should be refused, not silently read as 3h.
+    const rest=s.replace(/^\+/,'').replace(/(\d+(?:\.\d+)?)\s*[dhms]\b/gi,'')
+                .replace(/[\s,]/g,'');
+    if(rest)ok=false;
+    for(const p of parts){
+      const m=/(\d+(?:\.\d+)?)\s*([dhms])/i.exec(p);
+      total+=parseFloat(m[1])*unit[m[2].toLowerCase()];}
+    if(ok)return total;}
+  if(/^\d+(\.\d+)?$/.test(s))return parseFloat(s)*60000;   // bare = minutes
+  return null;}
 
 // Paint one "Avg saved" cell from the stored accumulator.
 function renderExpSavedCell(td,trig){
   if(!td)return;
   const a=((cfg&&cfg.exp_typing)||{})[trig];
-  if(!a||!a.n){td.innerHTML='<span class="muted">—</span>';return;}
-  const sd=accSd(a);
-  td.textContent=fmtMs(a.mean);
-  td.title=`${a.n} sample${a.n>1?'s':''}`
-    +`\nSD  ${fmtMs(sd)}`
-    +`\nmin ${fmtMs(a.min)}`
-    +`\nmax ${fmtMs(a.max)}`
-    + (a.n<2?'\n\n(SD needs at least two samples)':'');}
+  // 24.3: the "+" is always there, so a sample can be added to a cell that
+  // has none -- which is the cell that most needs one.
+  const plus=`<a class="mlink eplus" data-trig="${esc(trig)}"
+     title="Add a duration by hand: 1440h-1530h, 10:50-11:20, 2m 13s, 90 (minutes)"
+     style="margin-left:.35rem">＋</a>`;
+  if(!a||!a.n){td.innerHTML='<span class="muted">—</span>'+plus;}
+  else{
+    const sd=accSd(a);
+    td.innerHTML=esc(fmtMs(a.mean))+plus;
+    td.title=`${a.n} sample${a.n>1?'s':''}`
+      +`\nSD  ${fmtMs(sd)}`
+      +`\nmin ${fmtMs(a.min)}`
+      +`\nmax ${fmtMs(a.max)}`
+      + (a.n<2?'\n\n(SD needs at least two samples)':'');}
+  const p=td.querySelector('.eplus');
+  if(p)p.onclick=()=>expAskDuration(td,trig);}
+
+/* The "+" turns the cell into a one-field form. In place rather than a
+   prompt(): a prompt cannot show what it accepts, and "any of the forms we
+   usually use" is a list you want in front of you while typing. */
+function expAskDuration(td,trig){
+  if(!td||td.querySelector('.edurin'))return;
+  const back=td.innerHTML;
+  td.innerHTML=`<input type="text" class="edurin" style="width:7.5rem"
+      placeholder="2m 13s"
+      title="1440h-1530h · 10:50-11:20 · 2p to 3p · 2m 13s · 1h 04m · 90 (minutes)">
+    <button class="edurok" style="font-size:.72rem;margin-left:.2rem">✓</button>
+    <button class="edurno" style="font-size:.72rem">✕</button>`;
+  const inp=td.querySelector('.edurin');
+  const done=()=>{td.innerHTML=back;renderExpSavedCell(td,trig);};
+  td.querySelector('.edurno').onclick=done;
+  const ok=()=>{
+    const ms=parseDurationMs(inp.value);
+    if(ms===null||!(ms>0)){
+      // Naming the forms beats "invalid input": the failure is almost always
+      // a form he did not know was accepted.
+      toast('could not read that as a duration — try 2m 13s, 1h 04m, '
+            +'1440h-1530h or a plain number of minutes',true);
+      inp.focus();inp.select();return;}
+    done();
+    expAddSample(trig,ms,' (entered by hand)');};
+  td.querySelector('.edurok').onclick=ok;
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();ok();}
+    if(e.key==='Escape'){e.preventDefault();done();}});
+  inp.focus();}
 
 function renderExpSaved(){
   document.querySelectorAll('#exptable .esaved').forEach(td=>
@@ -7443,8 +8166,19 @@ function savedMs(sample, trigger, text){
   if(!t) return 0;
   return Math.max(0, sample*(1-Math.min(1, k/t)));}
 
+/* 24.3: minutes and hours, in the same two-unit-at-most shape the engine uses
+   for format_elapsed. Until now this topped out at seconds, which was fine
+   while every sample was somebody typing a line by hand -- but a duration
+   entered through the "+" can be "1440h-1530h", and rendering fifty minutes
+   as "3000.0s" is a number you have to do arithmetic on to read. */
 function fmtMs(ms){
   if(ms==null) return '—';
+  if(ms>=86400000){const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000);
+    return h?`${d}d ${h}h`:`${d}d`;}
+  if(ms>=3600000){const h=Math.floor(ms/3600000),m=Math.round(ms%3600000/60000);
+    return m?`${h}h ${String(m).padStart(2,'0')}m`:`${h}h`;}
+  if(ms>=60000){const m=Math.floor(ms/60000),s=Math.round(ms%60000/1000);
+    return s?`${m}m ${String(s).padStart(2,'0')}s`:`${m}m`;}
   return ms>=10000 ? (ms/1000).toFixed(1)+'s'
        : ms>=1000  ? (ms/1000).toFixed(2)+'s'
        : Math.round(ms)+'ms';}
@@ -8709,6 +9443,10 @@ function txRenderPanes(){
   for(let i = 0; i < txStages.length; i++) txRenderNext(i);
   txRenderRail();
   txSyncPaneSize();
+  // The Find & Replace target list names the panes, so it goes stale the
+  // moment a transform adds or drops one.
+  txfrFillPanes();
+  if(txfrUndo && txfrUndo.pane >= txStages.length) txfrUndo = null;
 }
 
 function txRenderNext(i){
@@ -8875,6 +9613,287 @@ function txTagSelection(tagId){
     }
   }
 }
+/* ==================== find & replace (24.3) ====================
+   Josh: "FIND & Replace that can handle pasting in text with hidden
+   characters like newlines, etc. and still work (like TextEdit) AND has a
+   regex [ ] (checkbox) option (with replacements using regex references
+   too)."
+
+   THE HIDDEN CHARACTERS ARE THE WHOLE PROBLEM. What you paste is not what you
+   see. Word hands you non-breaking spaces, Windows hands you CRLF, and both
+   are invisible in the box you pasted them into -- so a naive comparison
+   fails on precisely the paste this feature exists for, with no visible
+   reason why. Both sides are therefore folded the SAME way before matching:
+   CR/CRLF become LF, and the non-breaking space family becomes an ordinary
+   space.
+
+   Folding the haystack for MATCHING is not the same as rewriting it. The fold
+   is 1:1 in length, so an index into the folded text is an index into the
+   original, and every replacement is spliced back into the ORIGINAL. Text
+   this replace did not touch comes out byte for byte as it went in -- no
+   silent normalisation of characters nobody asked about.
+
+   THE ENGINE IS JAVASCRIPT'S OWN RegExp, because this tab runs entirely in
+   the browser -- no Pi, no network. So back-references are `$1`, the whole
+   match is `$&`, and a literal dollar is `$$`. Written into the panel as
+   well as here: an answer only in the source is an answer Josh has to come
+   and find. */
+/* The non-breaking space family, written as escapes on purpose: as
+   literal characters they are invisible in this source too, and an
+   invisible character class is how one of them quietly goes missing. */
+const TXFR_NBSP = /[\u00A0\u2007\u202F]/g;
+let txfrUndo = null;          // one level: {pane, html, text}
+
+/* Fold the invisibles. Length-preserving for everything except CRLF, which
+   only ever appears in what was pasted INTO the find box, never in a DOM text
+   node -- the browser has already normalised those. */
+function txfrFold(s){
+  return String(s == null ? '' : s).replace(/\r\n?/g, '\n')
+                                   .replace(TXFR_NBSP, ' ');
+}
+function txfrFoldNode(s){ return String(s == null ? '' : s).replace(TXFR_NBSP, ' '); }
+
+function txfrRegex(opts){
+  const pat = txfrFold(opts.find);
+  // Literal mode escapes everything, so nothing the paste happens to contain
+  // is read as syntax. That is what "still work (like TextEdit)" means.
+  const src = opts.regex ? pat : pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // `m` so ^ and $ mean line, the way every editor he uses behaves. No `s`:
+  // a bare `.` not crossing lines is the convention, and quietly changing it
+  // would make a pattern do more than it reads.
+  return new RegExp(src, 'gm' + (opts.matchCase ? '' : 'i'));
+}
+
+/* Every match, left to right. A zero-width match (`\b`, `x*`) would otherwise
+   never advance lastIndex and spin for ever. */
+function txfrMatches(hay, rx, limit){
+  const hits = [];
+  rx.lastIndex = 0;
+  let m;
+  while((m = rx.exec(hay))){
+    hits.push(m);
+    if(m[0] === '') rx.lastIndex++;
+    if(limit && hits.length >= limit) break;
+    if(hits.length > 200000) break;                 // a runaway pattern
+  }
+  return hits;
+}
+
+/* Expand the replacement for ONE match. With regex unticked this returns the
+   text verbatim: a `$` you typed is a `$`, which is the difference between a
+   find-and-replace and a booby trap. */
+function txfrExpand(repl, m, hay, isRegex){
+  repl = String(repl == null ? '' : repl).replace(/\r\n?/g, '\n');
+  if(!isRegex) return repl;
+  return repl.replace(/\$(\$|&|`|'|<([^>]*)>|\d{1,2})/g, (all, tok, name) => {
+    if(tok === '$') return '$';
+    if(tok === '&') return m[0];
+    if(tok === '`') return hay.slice(0, m.index);
+    if(tok === "'") return hay.slice(m.index + m[0].length);
+    if(name !== undefined) return (m.groups && m.groups[name] != null) ? m.groups[name] : '';
+    const last = m.length - 1;
+    const n = parseInt(tok, 10);
+    if(n >= 1 && n <= last) return m[n] == null ? '' : m[n];
+    // "$12" with only 3 groups means group 1 followed by a literal "2" --
+    // String.replace's own rule. Diverging here would make `$1` behave
+    // differently from every other tool, in a way nobody would think to test.
+    if(tok.length === 2){
+      const one = parseInt(tok[0], 10);
+      if(one >= 1 && one <= last) return (m[one] == null ? '' : m[one]) + tok[1];
+    }
+    return all;                       // no such group: leave it visibly alone
+  });
+}
+
+/* The core. `raw` is what is really there; `hay` is `raw` folded, SAME LENGTH,
+   so indices cross over. Returns the new `raw` and how many were replaced. */
+function txfrApply(raw, hay, opts, limit){
+  const rx = txfrRegex(opts);
+  const hits = txfrMatches(hay, rx, limit);
+  if(!hits.length) return { text: raw, count: 0, hits: hits };
+  let out = '', pos = 0;
+  for(const m of hits){
+    out += raw.slice(pos, m.index);
+    out += txfrExpand(opts.repl, m, hay, !!opts.regex);
+    pos = m.index + m[0].length;
+  }
+  return { text: out + raw.slice(pos), count: hits.length, hits: hits };
+}
+function txfrReplaceAll(text, opts){
+  const r = txfrApply(text, txfrFold(text), opts);
+  return { text: r.text, count: r.count };
+}
+
+/* Text nodes, in document order, skipping the categorization chips: those are
+   UI furniture the transform put there, not part of the document, and
+   rewriting a chip's label would corrupt the coding rather than the text. */
+function txfrTextNodes(root, out){
+  out = out || [];
+  const kids = (root && root.childNodes) || [];
+  for(let i = 0; i < kids.length; i++){
+    const n = kids[i];
+    if(n.nodeType === 3){ out.push(n); continue; }
+    if(n.nodeType !== 1) continue;
+    if(n.classList && n.classList.contains('txchip')) continue;
+    txfrTextNodes(n, out);
+  }
+  return out;
+}
+
+/* Which pane, and what is in it. Output panes carry their plain text in
+   txStages, which is authoritative and re-renders losslessly (the chips are
+   derived from the categorizations, not stored in the markup). The INPUT pane
+   has no such backing store -- its value is the rich structure Word pasted,
+   which txBlocks reads for list nesting and indents -- so it is edited in
+   place, node by node, and that structure survives untouched. */
+function txfrPaneCount(){ return txStages.length; }
+function txfrHint(s){
+  const bits = [];
+  const nl = (s.match(/\n/g) || []).length;
+  const tab = (s.match(/\t/g) || []).length;
+  const nb = (s.match(TXFR_NBSP) || []).length;
+  if(nl)  bits.push(nl + ' newline' + (nl === 1 ? '' : 's'));
+  if(tab) bits.push(tab + ' tab' + (tab === 1 ? '' : 's'));
+  if(nb)  bits.push(nb + ' non-breaking space' + (nb === 1 ? '' : 's'));
+  return bits.length ? ' (your pattern holds ' + bits.join(', ') + ')' : '';
+}
+function txfrOpts(){
+  return { find: ($('txfr-find') || {}).value || '',
+           repl: ($('txfr-repl') || {}).value || '',
+           regex: !!($('txfr-rx') || {}).checked,
+           matchCase: !!($('txfr-case') || {}).checked };
+}
+function txfrSay(msg, bad){
+  const el = $('txfr-stat');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = bad ? 'var(--bad,#b91c1c)' : '';
+}
+function txfrFillPanes(){
+  const sel = $('txfr-pane');
+  if(!sel) return;
+  const was = sel.value;
+  sel.innerHTML = '';
+  for(let i = 0; i < txStages.length; i++){
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = i === 0 ? 'Input'
+                            : 'Output ' + i + ' — via ' + txLabel(txStages[i].id);
+    sel.appendChild(o);
+  }
+  sel.value = (was && +was < txStages.length) ? was : String(txStages.length - 1);
+}
+
+/* A preview rather than a jump-to-next-match. The panes are a pipeline, not a
+   document with a cursor, and "show me what this will do to all 40 of them"
+   is the question actually being asked before pressing Replace all. */
+function txfrPreview(hits, hay, opts){
+  const box = $('txfr-prev');
+  if(!box) return;
+  if(!hits.length){ box.style.display = 'none'; return; }
+  const show = hits.slice(0, 5);
+  const seen = s => s.replace(/\n/g, '⏎').replace(/\t/g, '⇥')
+                     .replace(TXFR_NBSP, '␣');
+  const lineOf = i => hay.slice(0, i).split('\n').length;
+  box.textContent = show.map(m =>
+    'line ' + lineOf(m.index) + ':  ' + seen(m[0]) + '   →   '
+    + seen(txfrExpand(opts.repl, m, hay, !!opts.regex))).join('\n')
+    + (hits.length > show.length
+       ? '\n… and ' + (hits.length - show.length) + ' more' : '');
+  box.style.display = 'block';
+}
+
+function txfrRun(mode){
+  const opts = txfrOpts();
+  if(!opts.find){ txfrSay('type or paste something to find', true); return; }
+  let rx;
+  try{ rx = txfrRegex(opts); }
+  catch(e){
+    // A bad pattern SAYS SO. Falling back to "no matches" would look like a
+    // working search that found nothing, which is the worst of both.
+    txfrSay('that regex will not compile: ' + e.message, true);
+    const p = $('txfr-prev'); if(p) p.style.display = 'none';
+    return;
+  }
+  const i = Math.max(0, Math.min(txStages.length - 1, +(($('txfr-pane')||{}).value || 0)));
+  const el = $('txpane' + i);
+  if(!el){ txfrSay('that pane is not on screen', true); return; }
+  const where = i === 0 ? 'the Input pane' : 'Output ' + i;
+
+  if(i === 0){
+    // Node by node: each block is searched on its own, so the rich structure
+    // is preserved exactly. A pattern containing a newline therefore cannot
+    // match here -- the newlines you see are block boundaries, not
+    // characters -- and saying so is better than finding nothing in silence.
+    const nodes = txfrTextNodes(el);
+    let hits = 0, prev = [];
+    for(const n of nodes){
+      const raw = n.nodeValue || '';
+      const r = txfrApply(raw, txfrFoldNode(raw), opts);
+      if(!r.count) continue;
+      hits += r.count;
+      for(const m of r.hits) if(prev.length < 5) prev.push({ m, hay: txfrFoldNode(raw) });
+      if(mode === 'all'){ n.nodeValue = r.text; }
+    }
+    if(mode === 'count'){
+      const box = $('txfr-prev');
+      if(box){
+        if(prev.length){
+          const seen = s => s.replace(/\t/g, '⇥').replace(TXFR_NBSP, '␣');
+          box.textContent = prev.map(p => seen(p.m[0]) + '   →   '
+            + seen(txfrExpand(opts.repl, p.m, p.hay, !!opts.regex))).join('\n')
+            + (hits > prev.length ? '\n… and ' + (hits - prev.length) + ' more' : '');
+          box.style.display = 'block';
+        } else box.style.display = 'none';
+      }
+      txfrSay(hits ? hits + ' match' + (hits === 1 ? '' : 'es') + ' in ' + where
+                   : 'no matches in ' + where
+                     + (/\n/.test(txfrFold(opts.find))
+                        ? ' — this pattern spans lines, and the Input pane '
+                          + 'searches each block separately so its structure '
+                          + 'survives. Run it on an output pane.'
+                        : txfrHint(opts.find)),
+              !hits);
+      return;
+    }
+    if(!hits){ txfrSay('nothing to replace in ' + where + txfrHint(opts.find), true); return; }
+    txfrSay('replaced ' + hits + ' in ' + where + ' — ⟲ Undo puts it back');
+    txStat(txPaneText(0));
+    return;
+  }
+
+  const text = txStages[i].text || '';
+  const hay = txfrFold(text);
+  const r = txfrApply(text, hay, opts);
+  if(mode === 'count'){
+    txfrPreview(r.hits, hay, opts);
+    txfrSay(r.count ? r.count + ' match' + (r.count === 1 ? '' : 'es') + ' in ' + where
+                    : 'no matches in ' + where + txfrHint(opts.find), !r.count);
+    return;
+  }
+  if(!r.count){ txfrSay('nothing to replace in ' + where + txfrHint(opts.find), true); return; }
+  txfrUndo = { pane: i, text: txStages[i].text, html: el.innerHTML };
+  txStages[i].text = r.text;
+  el.innerHTML = txHighlight(r.text, TXstate.link[txStages[i].id] || []);
+  txfrSay('replaced ' + r.count + ' in ' + where + ' — ⟲ Undo puts it back');
+  txStat(r.text);
+}
+
+function txfrUndoLast(){
+  // Only output panes are undoable: the input pane is edited in place and is
+  // itself undoable with the browser's own ⌘Z, which is the affordance
+  // already there. Claiming an Undo that did nothing would be worse.
+  if(!txfrUndo){ txfrSay('nothing to undo — the Input pane undoes with ⌘/Ctrl+Z', true); return; }
+  const { pane, text, html } = txfrUndo;
+  if(pane >= txStages.length){ txfrUndo = null; txfrSay('that pane is gone', true); return; }
+  txStages[pane].text = text;
+  const el = $('txpane' + pane);
+  if(el) el.innerHTML = html;
+  txfrUndo = null;
+  txfrSay('put back');
+  txStat(text);
+}
+
 /* ==================== toolbar ==================== */
 function txBuildTools(){
   const bar = $('txtools');
@@ -9220,6 +10239,16 @@ function txInit(){
       case 'clear':
         txStages = [{ id:null, text:'' }];
         txRenderPanes(); txStat(''); break;
+      case 'find': {
+        const p = $('txfind');
+        const open = p.style.display !== 'block';
+        p.style.display = open ? 'block' : 'none';
+        if(open){ txfrFillPanes(); const f = $('txfr-find'); if(f) f.focus(); }
+        break; }
+      case 'find-close': $('txfind').style.display = 'none'; break;
+      case 'find-count': txfrRun('count'); break;
+      case 'find-all':   txfrRun('all');   break;
+      case 'find-undo':  txfrUndoLast();   break;
       case 'manage': $('txmanage').style.display = 'block'; txRenderManage(); break;
       case 'manage-close': $('txmanage').style.display = 'none'; break;
       case 'tags-open':  $('txtags').style.display = 'block'; txRenderTags(); break;
@@ -9765,16 +10794,355 @@ function pfSchedule(){
   }, Math.min(wait, 2147483000));
 }
 
+/* ============ 24.5: Performance ============ */
+// The numbers here are TRANSCRIBED from engine/audit/DISK_WRITES.md, measured
+// off Pi1 on 2026-09-05. Nothing computes them and nothing fetches them: the
+// audit is a reading of the source code, which no running engine can report on
+// itself. When the audit is refreshed, refresh this table in the same commit --
+// there is no mechanism keeping the two honest, and a stale cost table is worse
+// than none because it will be believed.
+const PERF_LS = 'hidcfg.perf.prio.v1';
+
+// Seeded in Josh's stated order (2026-09-05), then everything else. `id` is
+// stable and is what gets persisted -- reordering or re-wording this array
+// must not silently reset a saved order, so never renumber the ids.
+const PERF_PRIO_DEFAULT = [
+  {id:'type', label:'Typing & mousing'},
+  {id:'macros', label:'Macros'},
+  {id:'exp', label:'Text expansions'},
+  {id:'calc', label:'Inline calculations'},
+  {id:'usage', label:'Usage recording'},
+  {id:'log', label:'Changes & history'},
+  {id:'backup', label:'Backups'},
+  {id:'os', label:'OS switching'},
+  {id:'bt', label:'Bluetooth'},
+  {id:'tx', label:'Text transform'},
+  {id:'status', label:'Engine status'}
+];
+
+// w: write pressure -- hi/md/lo/na. `na` means "writes nothing to storage",
+// which is a different claim from "writes a little", and the two must not be
+// allowed to look the same.
+const PERF_FEATURES = [
+  {f:'Typing &amp; mousing', w:'na',
+   d:'Every key and every mouse movement, remapped through the layers, chords and combos.',
+   i:'The hot path, and the one budget everything else is charged against: '
+    +'<b>mean 15.88&nbsp;ms</b> from evdev read to report written (sd&nbsp;27.49, '
+    +'max&nbsp;89.65). Reports go to <code>/dev/hidg0</code> and <code>/dev/hidg1</code> — '
+    +'character devices, so the busiest writer in the system causes <b>no card wear at '
+    +'all</b>. Nothing here touches storage. That spread has never been attributed to a '
+    +'stage, so no feature below can yet be blamed for it either.'},
+  {f:'Macros', w:'na',
+   d:'One trigger fires a scripted sequence — the Ctrl+Alt window-resize hold, and the rest.',
+   i:'Pure transform in memory; <code>s3_macros.py</code> writes nothing. Firing one is '
+    +'counted, and that counter is buffered like any other (see Usage recording).'},
+  {f:'Text expansions', w:'lo',
+   d:'A short trigger becomes a longer piece of text, per-expansion Unicode method.',
+   i:'Matching is in memory. One writer: an <b>elapsed-trigger</b> expansion rewrites the '
+    +'whole of <code>elapsed.json</code> each time it fires. Tiny today and a handful a '
+    +'day — but it is the only user-facing writer whose rate is set by <i>typing</i> '
+    +'rather than by clicking, so it is the one that scales if elapsed triggers get common.'},
+  {f:'Inline calculations', w:'na',
+   d:'Type <code>2+2==</code>, get <code>2+2=4</code> without leaving the line.',
+   i:'Evaluated in memory on the expansion path and never persisted. No disk cost, and '
+    +'its processor cost sits inside the unattributed 15.88&nbsp;ms above.'},
+  {f:'Usage recording', w:'lo',
+   d:'Counts what you actually reach for, so the rankings and Training have something real.',
+   i:'<b>The pattern to copy.</b> One dict increment per key-down — measured at ~1.7&nbsp;µs, '
+    +'four orders of magnitude below the service time — buffered in memory and flushed on a '
+    +'<b>60&nbsp;s timer</b>. At most 1,440 writes/day, only when something was actually '
+    +'pressed, mean file 36 bytes across 132 live files. The write is kept off the keystroke '
+    +'path by design.'},
+  {f:'Changes &amp; history', w:'lo',
+   d:'Every Save is recorded, with revert.',
+   i:'Two writes per Save: a delta (or a full snapshot on the size-ratio rule) plus a '
+    +'rewrite of the index. Capped — <code>MAX_DELTAS&nbsp;20</code>, '
+    +'<code>KEEP_CHECKPOINTS&nbsp;12</code>, and it prunes. 30 files, 168&nbsp;KB live. '
+    +'Well-behaved.'},
+  {f:'Backups', w:'md',
+   d:'Each Save keeps a timestamped copy of the config it replaced.',
+   i:'~36&nbsp;KB per Save, which is fine. <b>What is not fine: nothing ever prunes it.</b> '
+    +'371 files and 8.4&nbsp;MB live, against history’s 30 files for the same events, '
+    +'growing without a ceiling. Not card wear — but every one of those files comes down on '
+    +'each <code>pi_sync.sh pull</code>, and it is the main source of the many-tiny-files '
+    +'problem. A <code>KEEP_BACKUPS</code> cap mirroring history’s would settle it.'},
+  {f:'Config save', w:'md',
+   d:'Sending the working config to the Pi.',
+   i:'The whole 36&nbsp;KB file, always — a delta chain was considered and rejected, because '
+    +'one corrupt delta takes the profile down and write-temp-then-rename is atomic where a '
+    +'chain is not. Bandwidth is the real cost on a ~9&nbsp;KB/s link, and that is already '
+    +'handled: compaction took it 34,610&nbsp;→&nbsp;19,045 bytes, and an unchanged read '
+    +'that hash-matches transfers <b>zero</b>.'},
+  {f:'OS switching', w:'lo',
+   d:'Detects the host OS and swaps profile, so the same keys do the right thing.',
+   i:'~20 bytes, written <b>only when the detected OS changes</b> — a handful a day at worst. '
+    +'A profile save provokes a re-read on the engine side via the mtime watch.'},
+  {f:'Bluetooth', w:'lo',
+   d:'The BLE link to the phone, including taking the time from it.',
+   i:'~10 bytes per phone time frame into <code>clock_offset</code>. The cadence is set by '
+    +'the phone, not by us, which is the only reason it is worth listing — it is the one '
+    +'writer whose rate this project does not control.'},
+  {f:'Text transform', w:'lo',
+   d:'Rewrites selected text in place.',
+   i:'Writes on edit only. Anything removed is <b>moved to backups rather than deleted</b>, '
+    +'so it feeds the growth noted under Backups.'},
+  {f:'Engine status', w:'na',
+   d:'The live snapshot the UI reads to show device state, the active layer and the effective tables.',
+   i:'<b>Was ≈178&nbsp;MB/day — around 99.9% of everything the engine wrote. Now zero.</b> '
+    +'12,382 bytes were rewritten every 6&nbsp;seconds, unconditionally, whether or not '
+    +'anything had changed and whether or not anyone was at the keyboard. <b>24.6 moved it to '
+    +'tmpfs</b> (<code>/run/expander</code>): it is a photograph of a running engine and is '
+    +'meaningless once the engine stops, so it had no business being on the card. Same 6&nbsp;s '
+    +'cadence, same staleness warning, nothing else changed.<br><br>'
+    +'<i>The obvious fix would have broken something.</i> Hashing the snapshot and skipping '
+    +'identical writes freezes <code>ts</code> — which is what this UI uses to warn '
+    +'“engine may not be running” after 30&nbsp;s. A healthy idle engine would have sat under '
+    +'a permanent stale warning, for ~70% of the saving instead of 100%.'},
+  {f:'Benchmarking', w:'lo',
+   d:'Measures the path and keeps a profile per device.',
+   i:'On demand only. One wrinkle: the manual start opens <code>bench.log</code> '
+    +'<b>truncating</b> while the scheduled run opens it <b>appending</b> — so a manual run '
+    +'erases a scheduled run’s log. Low stakes, but the appending one carries the '
+    +'reasoning and only one of them can be right.'}
+];
+
+const PERF_REPORT =
+  '<h3 style="font-size:.9rem;margin:0 0 .4rem">What this adds up to</h3>'
+ +'<p style="font-size:.82rem;line-height:1.55;margin:.2rem 0"><b>Biggest write impact — '
+ +'fixed in 24.6.</b> The <b>engine status snapshot</b> was ≈178&nbsp;MB/day and roughly '
+ +'99.9% of all engine writes, nearly all of it identical to what was already on the card. '
+ +'It now lives on tmpfs and costs the card <b>nothing</b>. Worth recording why the obvious '
+ +'fix was rejected: hashing the snapshot and skipping identical writes freezes '
+ +'<code>ts</code>, which is this UI’s liveness signal, so an idle engine would have shown a '
+ +'permanent stale warning — 70% of the saving in exchange for a new failure mode, where '
+ +'moving the file gets 100% and changes no behaviour at all. <b>Before optimising a write, '
+ +'read its consumer.</b><br><br>'
+ +'That leaves <b>backups</b> as the largest outstanding item, by default rather than by '
+ +'size: cheap per event, but unpruned and unbounded, and it taxes every pull. With the '
+ +'snapshot gone the engine’s steady-state card traffic is essentially nothing — usage '
+ +'flushes when you have actually typed, and everything else waits for you to click Save.</p>'
+ +'<p style="font-size:.82rem;line-height:1.55;margin:.5rem 0"><b>Biggest processor impact.</b> '
+ +'This used to read “we do not know, and that is the honest answer” — because nothing '
+ +'attributed the 15.88&nbsp;ms service time to a stage. <b>24.7 instrumented it</b>, and the '
+ +'split is in “Where the keypress time goes” below: decode &amp; map against emit, measured '
+ +'live rather than estimated. The per-keystroke costs of the observational features are '
+ +'measured too and are not the story — the usage counter is ~1.7&nbsp;µs and the APM counter '
+ +'0.425&nbsp;µs, together about 0.01% of one keypress.</p>'
+ +'<p style="font-size:.82rem;line-height:1.55;margin:.5rem 0"><b>Costing the next feature.</b> '
+ +'Three questions, in order. Does it write on the typing path? — if so, redesign it to buffer '
+ +'and flush on a timer. What is its steady-state rate with nobody typing? — the status '
+ +'snapshot is the cautionary tale, a modest file on a short timer beating every deliberate '
+ +'write in the system by three orders of magnitude, unnoticed because each write is small. '
+ +'Does it write when nothing changed? — comparing first is free. By these rules <b>APM is '
+ +'cheap</b>: it is a counter over events the recorder already sees, and it belongs as one '
+ +'more key in an hourly bucket that is already being written — not a new file, and not a new '
+ +'timer.</p>';
+
+let perfPrio = null;
+
+function perfLoadPrio(){
+  const byId = {};
+  PERF_PRIO_DEFAULT.forEach(p => { byId[p.id] = p; });
+  let order = [];
+  try{
+    const r = localStorage.getItem(PERF_LS);
+    if(r) order = JSON.parse(r) || [];
+  }catch(e){ order = []; }
+  // Rebuild from the DEFAULT list, not from what was stored. A saved id that
+  // no longer exists is dropped and a new feature appears at the bottom rather
+  // than vanishing -- otherwise adding a row here would make it invisible to
+  // anyone who had ever dragged the list.
+  const seen = new Set();
+  const out = [];
+  for(const id of order){ if(byId[id] && !seen.has(id)){ out.push(byId[id]); seen.add(id); } }
+  for(const p of PERF_PRIO_DEFAULT){ if(!seen.has(p.id)) out.push(p); }
+  perfPrio = out;
+}
+
+function perfSavePrio(){
+  try{ localStorage.setItem(PERF_LS, JSON.stringify(perfPrio.map(p => p.id))); }
+  catch(e){ toast('could not save the priority order in this browser', true); }
+}
+
+function perfRenderPrio(){
+  const ol = $('perfpriolist');
+  if(!ol) return;
+  ol.innerHTML = '';
+  perfPrio.forEach((p, i) => {
+    const li = document.createElement('li');
+    li.draggable = true;
+    li.dataset.idx = i;
+    li.innerHTML = '<span></span><span class="grip">⠿</span>';
+    li.firstChild.textContent = p.label;      // textContent: never trust a label to markup
+    ol.appendChild(li);
+  });
+}
+
+// Drag reorder. HTML5 drag rather than pointer maths because the list is short,
+// the rows are a fixed shape, and the browser already does the hit-testing.
+(function perfDragInit(){
+  let from = null;
+  document.addEventListener('dragstart', e => {
+    const li = e.target.closest && e.target.closest('#perfpriolist li');
+    if(!li) return;
+    from = +li.dataset.idx;
+    li.classList.add('drag');
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox will not start a drag without data on the transfer.
+    try{ e.dataTransfer.setData('text/plain', String(from)); }catch(_){}
+  });
+  document.addEventListener('dragover', e => {
+    const li = e.target.closest && e.target.closest('#perfpriolist li');
+    if(!li || from === null) return;
+    e.preventDefault();
+    document.querySelectorAll('#perfpriolist li.over').forEach(x => x.classList.remove('over'));
+    li.classList.add('over');
+  });
+  document.addEventListener('drop', e => {
+    const li = e.target.closest && e.target.closest('#perfpriolist li');
+    if(!li || from === null) return;
+    e.preventDefault();
+    const to = +li.dataset.idx;
+    if(to !== from){
+      const moved = perfPrio.splice(from, 1)[0];
+      perfPrio.splice(to, 0, moved);
+      perfSavePrio();
+      perfRenderPrio();
+    }
+    from = null;
+  });
+  document.addEventListener('dragend', () => {
+    from = null;
+    document.querySelectorAll('#perfpriolist li').forEach(x =>
+      x.classList.remove('drag', 'over'));
+  });
+})();
+
+// 24.7: the APM readout. Driven entirely by the engine status payload the UI
+// already polls every 10 s, so it adds no request of its own -- a panel about
+// cost that generated traffic to render itself would be the same mistake the
+// rest of this tab avoids.
+function renderApm(){
+  const el = $('perfapmbody'); if(!el) return;
+  const a = lastEng && lastEng.apm;
+  if(!a){ el.innerHTML = '<span class="muted" style="font-size:.82rem">'
+    + (device ? 'No APM data yet — the engine publishes it a few seconds after '
+              + 'it starts. (Engine 24.7 or later.)'
+              : 'Connect to the Pi to see live APM.') + '</span>'; return; }
+  if(a.enabled === false){ el.innerHTML = '<span class="muted" '
+    + 'style="font-size:.82rem">APM counting is switched off in the config '
+    + '(<code>"apm": {"enabled": false}</code>).</span>'; return; }
+  const cls = a.classes || {}, bands = a.bands || {};
+  const total = Object.values(cls).reduce((x,y)=>x+(y||0), 0);
+  // Bands come back keyed by an APM range ("36-59", "780+"). Sort by the
+  // NUMBER at the front, not as text, or "6-11" sorts above "36-59".
+  const bandKeys = Object.keys(bands).sort((x,y)=>parseInt(x)-parseInt(y));
+  const maxBand = Math.max(1, ...bandKeys.map(k=>bands[k]));
+  const stat = (label, val, note) =>
+    '<div style="flex:1;min-width:110px"><div style="font-size:1.5rem;'
+    + 'font-weight:700;line-height:1.1">' + val + '</div><div class="muted" '
+    + 'style="font-size:.72rem">' + label + (note ? ' · ' + note : '') + '</div></div>';
+  el.innerHTML =
+      '<div class="row" style="margin:.5rem 0 1rem">'
+    + stat('peak APM', a.peak_apm ?? '—', 'busiest 10 s')
+    + stat('mean APM', a.mean_apm ?? '—', 'including idle')
+    + stat('actions', total.toLocaleString(), 'total')
+    + stat('windows', (a.ticks||0).toLocaleString(), (a.tick_s||10)+'s each')
+    + '</div>'
+    + '<div class="perfwrap"><table class="perftbl"><thead><tr>'
+    + '<th>By class</th><th style="width:60%">Share</th><th style="width:5rem">Count</th>'
+    + '</tr></thead><tbody>'
+    + Object.keys(cls).filter(k=>cls[k]).sort((x,y)=>cls[y]-cls[x]).map(k=>{
+        const pc = total ? (cls[k]/total*100) : 0;
+        return '<tr><td><b>'+k+'</b></td><td><div style="background:var(--hi);'
+          + 'height:9px;border-radius:5px;width:'+Math.max(1,pc).toFixed(1)+'%"></div></td>'
+          + '<td>'+cls[k].toLocaleString()+' <span class="muted">('
+          + pc.toFixed(0)+'%)</span></td></tr>';}).join('')
+    + '</tbody></table></div>'
+    + '<p class="muted" style="font-size:.78rem;margin:.9rem 0 .3rem">'
+    + '<b>How your ten-second windows are distributed.</b> The <code>0</code> '
+    + 'band is thinking time — kept rather than discarded, because whether a '
+    + 'pause counts is a question best answered after the fact, not decided at '
+    + 'recording time.</p>'
+    + '<div class="perfwrap"><table class="perftbl"><thead><tr>'
+    + '<th style="width:7rem">APM band</th><th>Windows</th><th style="width:5rem">Count</th>'
+    + '</tr></thead><tbody>'
+    + bandKeys.map(k=>
+        '<tr><td><b>'+k+'</b></td><td><div style="background:var(--ok);height:9px;'
+        + 'border-radius:5px;width:'+Math.max(1,bands[k]/maxBand*100).toFixed(1)
+        + '%"></div></td><td>'+bands[k].toLocaleString()+'</td></tr>').join('')
+    + '</tbody></table></div>';
+}
+
+// 24.7: where the service time actually goes. Until now the engine published
+// only the end-to-end number (mean 15.88 ms, sd 27.49), which could not say
+// whether the time went into working out what to do or into doing it — so the
+// Performance tab had to report processor cost as "we do not know". This is
+// the split that answers it.
+function renderStages(){
+  const el = $('perfstagebody'); if(!el) return;
+  const st = lastEng && lastEng.service_stage_ms, tot = lastEng && lastEng.service_ms;
+  if(!st || !tot){ el.innerHTML = '<span class="muted" style="font-size:.82rem">'
+    + (device ? 'No timing yet — type a few keys through the Pi. (Engine 24.7 or later.)'
+              : 'Connect to the Pi to see stage timings.') + '</span>'; return; }
+  // sd from Welford's M2, the same merge the engine uses. Never averaged —
+  // CLAUDE.md records that averaging standard deviations was 57.7% wrong.
+  const sd = a => (a && a.n > 1) ? Math.sqrt(a.m2 / (a.n - 1)) : 0;
+  const row = (name, a, what) => {
+    const pc = tot.mean ? (a.mean / tot.mean * 100) : 0;
+    return '<tr><td><b>'+name+'</b><br><span class="muted" style="font-size:.72rem">'
+      + what + '</span></td>'
+      + '<td><div style="background:var(--warn);height:9px;border-radius:5px;width:'
+      + Math.max(1, Math.min(100, pc)).toFixed(1)+'%"></div></td>'
+      + '<td>'+a.mean.toFixed(2)+' ms <span class="muted">('+pc.toFixed(0)+'%)</span></td>'
+      + '<td>'+sd(a).toFixed(2)+'</td><td>'+(a.max||0).toFixed(1)+'</td></tr>';};
+  const unacc = Math.max(0, tot.mean - (st.map.mean + st.emit.mean));
+  el.innerHTML =
+      '<div class="perfwrap"><table class="perftbl"><thead><tr>'
+    + '<th style="width:12rem">Stage</th><th>Share of the keypress</th>'
+    + '<th style="width:8rem">Mean</th><th style="width:4rem">sd</th>'
+    + '<th style="width:4rem">Max</th></tr></thead><tbody>'
+    + row('decode &amp; map', st.map, 'working out what to do — layers, chords, combos')
+    + row('emit', st.emit, 'doing it — writing HID reports to the gadget')
+    + '</tbody></table></div>'
+    + '<p class="muted" style="font-size:.78rem;margin:.7rem 0 0">End to end: <b>'
+    + tot.mean.toFixed(2)+' ms</b> mean, sd '+sd(tot).toFixed(2)+', max '
+    + (tot.max||0).toFixed(1)+' ms over '+(tot.n||0).toLocaleString()+' keypresses.'
+    + (unacc > 0.01 ? ' <b>'+unacc.toFixed(2)+' ms</b> is unaccounted — paths that '
+        + 'reach the output without passing the map stage contribute to the total '
+        + 'and to neither stage, which is deliberate: better that the stages sum to '
+        + 'less than the whole than that one absorbs time it did not spend.' : '')
+    + '</p>';
+}
+
+let perfBuilt = false;
+function renderPerf(){
+  renderApm(); renderStages();
+  if(perfPrio === null) perfLoadPrio();
+  perfRenderPrio();
+  if(perfBuilt) return;                 // the table is static; build it once
+  perfBuilt = true;
+  const W = {hi:'high', md:'watch', lo:'low', na:'none'};
+  $('perftblbody').innerHTML = PERF_FEATURES.map(r =>
+    '<tr><td><b>' + r.f + '</b></td><td class="muted">' + r.d + '</td><td>' + r.i
+  + '</td><td><span class="perfw ' + r.w + '">' + W[r.w] + '</span></td></tr>').join('');
+  $('perfreport').innerHTML = PERF_REPORT;
+}
+
 /* ============ tabs ============ */
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt','log','tx','usage'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log','tx','usage','perf'])$('page-'+p).style.display=p===t?'':'none';
   if(t==='tx')txInit();
   if(t==='os')renderOsTab();
   if(t==='log')renderChangelog();
   // 21.0: Usage fetches on first open, not on connect -- statistics are the
   // least urgent thing on a 9 KB/s channel.
   if(t==='usage'){ if(!usageData&&device)loadUsage(); renderUsage(); renderTrack(); renderTraining(); }
+  // 24.5: renderPerf asks the Pi for nothing, so it needs no `device` guard --
+  // the tab is readable with the engine disconnected, which is exactly when
+  // someone is most likely to be wondering what is costing what.
+  if(t==='perf')renderPerf();
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
@@ -9821,6 +11189,10 @@ document.body.appendChild($('editor'));   // 6.3: escape any transformed ancesto
     p.style.top=Math.max(0,Math.min(innerHeight-40,ev.clientY-dy))+'px';});
   window.addEventListener('pointerup',()=>drag=false);})();
 document.querySelectorAll('#toptabs .tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.t));
+$('perfprioreset').onclick=e=>{
+  e.preventDefault();
+  try{ localStorage.removeItem(PERF_LS); }catch(_){}
+  perfPrio=null; renderPerf(); toast('priority order reset');};
 // 21.0: Usage / Training are sub-tabs of one page, so Training can reuse the
 // data Usage already fetched instead of asking the Pi twice.
 document.querySelectorAll('#usagetabs .tab').forEach(t=>t.onclick=()=>{
