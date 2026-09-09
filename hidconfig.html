@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.1.2</title>
+<title>HID Config 25.1.3</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1346,6 +1346,31 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'25.1.3',items:[
+   {t:'This list again: six releases were missing from it',k:'uiver'},
+   {t:'The popover no longer hides under the tab strip, and long lists scroll',k:'uiver'},
+   {t:'On layer 2+ the picker shows that layer’s mapping, not the button’s role',k:'remap'}]},
+ {v:'25.1.2',items:[
+   {t:'Editing a button on layer 2 no longer deletes its Hold → Layer role',k:'remap'},
+   {t:'Clearing a shared tap/hold now asks first, and names the tap it takes',k:'remap'},
+   {t:'Opening the remap editor no longer writes an empty table to your profile',k:'remap'}]},
+ {v:'25.1.1',items:[
+   {t:'The Feather link reports its own CRC failures and lost bytes',k:'debug'},
+   {t:'A clean link says nothing — so the line means something when it appears',k:'debug'}]},
+ {v:'25.1',items:[
+   {t:'Notes longer than 245 characters no longer vanish without a word',k:'cliplist'},
+   {t:'There is no time limit on a note, and never was — only length',k:'cliplist'}]},
+ {v:'25.0',items:[
+   {t:'Duration settings: units, brackets, the +, and how stale a start may be',k:'dyntable'},
+   {t:'Live preview of every duration magnitude before you save',k:'dyntable'}]},
+ {v:'24.9',items:[
+   {t:'PONG and BENCH: moved out of RAW into their own Link & Engine pane',k:'linklog'},
+   {t:'⏸ Stop looks like Stop: the keepalive was never an event',k:'linklog'},
+   {t:'A dropped HID usage says so instead of disappearing',k:'debug'}]},
+ {v:'24.8',items:[
+   {t:'A layer role set on one keyboard stays on that keyboard',k:'remap'},
+   {t:'Search actions moved above the On press dropdown',k:'remap'},
+   {t:'Device rules always beat all-device rules — now pinned by a test',k:'remap'}]},
  {v:'24.7',items:[
    {t:'APM sensing — counts only, no key identities, no order, no content',k:'perfapm'},
    {t:'Where your keypress time actually goes: decode & map vs emit',k:'perfstage'},
@@ -5838,9 +5863,29 @@ function placePopover(p,r,gap){
   if(left+pw>vw-M)left=vw-pw-M;         // pull back from the right edge
   if(left<M)left=M;                     // ...but never past the left one
   // Prefer below. If it would not fit and there is more room above, flip.
+  // 25.1.3: a TALL popover was pinned to y=8 -- underneath the sticky topbar
+  // and tab strip, which is why Josh could see 24.6 but not 24.7: "the last
+  // version I can see is 24.6 (possibly 24.7, but that's hidden under the
+  // "Mapping ... Performance" Tabs". "Show more" then appeared to do nothing,
+  // because what it added went further under the header.
+  //
+  // The two bands already publish their heights as CSS variables for the
+  // sticky panel offsets; reuse them rather than measuring again, so this
+  // cannot drift away from what the CSS actually does.
+  const cs=getComputedStyle(document.documentElement);
+  const band=(n)=>parseFloat(cs.getPropertyValue(n))||0;
+  const minTop=M+band('--topbar-h')+band('--tabs-h');
+  // Never taller than the space between the header and the bottom edge. A
+  // popover that cannot fit must SCROLL, not overflow off-screen -- 25 entries
+  // of version history is well past a screenful.
+  const room=vh-minTop-M;
+  if(ph>room){p.style.maxHeight=room+'px';p.style.overflowY='auto';}
+  else{p.style.maxHeight='';p.style.overflowY='';}
+  const ph2=Math.min(ph,room);
   let top=r.bottom+gap;
-  if(top+ph>vh-M&&r.top-gap-ph>=M)top=r.top-gap-ph;
-  if(top+ph>vh-M)top=Math.max(M,vh-ph-M);
+  if(top+ph2>vh-M&&r.top-gap-ph2>=minTop)top=r.top-gap-ph2;
+  if(top+ph2>vh-M)top=vh-ph2-M;
+  if(top<minTop)top=minTop;
   p.style.left=(left+window.scrollX)+'px';
   p.style.top=(top+window.scrollY)+'px';}
 
@@ -6770,9 +6815,30 @@ function renderEditor(){
   // identity became un-editable: the button editor had no Baseline pane, so
   // there was no way back short of reloading a profile.
   const srcLayer=layerOfSource(isBtn?'btn':'key',canon,selDev);
-  if(srcLayer!=null)ui.press='layer';
-  const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)">Hold → Layer ${srcLayer}</span>`:'';
-  const layerOpt=`<option value="layer" ${ui.press==='layer'?'selected':''}>Hold → Layer…</option>`;
+  // 25.1.3: ONLY layer 0 shows the role in the picker.
+  //
+  // Josh, 2026-09-09 08:58:49: "when I try to change the E9 button 3
+  // assignment under layer 2 to the "Delete" key like it used to be, it snaps
+  // back to the "Hold -> Layer..." and gives me a green message".
+  //
+  // 25.1.2 stopped the role being DELETED from another layer, which was
+  // right, but left this line forcing the picker to "Hold -> Layer" on EVERY
+  // layer. So the role and the layer-2 mapping fought over one dropdown: he
+  // picked Delete, the mapping was written, and the re-render put the picker
+  // straight back to the role. Before 25.1.2 it "worked" only because
+  // choosing Delete destroyed the role -- which is the bug that ate his
+  // mapping in the first place.
+  //
+  // A tap/hold is a property of the BUTTON, and layer 0 is where the button
+  // itself is edited. On any other layer the picker shows that layer's
+  // mapping, and the role appears as the badge in the heading -- visible,
+  // not editable from the wrong place.
+  const roleHere=srcLayer!=null&&layer===0;
+  if(roleHere)ui.press='layer';
+  const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)" title="${layer===0?'Edit this here.':'This belongs to the button itself — edit it on layer 0.'}">Hold → Layer ${srcLayer}${layer===0?'':' (set on layer 0)'}</span>`:'';
+  // Offered on layer 0 only, for the same reason: the option is what makes
+  // the picker look like the place to change a role that does not live here.
+  const layerOpt=layer===0?`<option value="layer" ${ui.press==='layer'?'selected':''}>Hold → Layer…</option>`:'';
   ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnTitle:(KEYS[canon]||'?')}${physTag}${baseTag} — layer ${layer}${layerBadge}</h2>
   ${scopeSel}
   ${identBlock}
@@ -6957,10 +7023,10 @@ function renderEditor(){
       // Editing any other layer is editing that layer's MAPPING, and must
       // leave the role alone. This line is older than 24.8; the layer work
       // did not introduce it, but it is the thing that ate the mapping.
-      if(srcLayer!=null&&p!=='layer'&&layer===0)setLayerSource(null);
-      else if(srcLayer!=null&&p!=='layer'){
-        toast(`kept ${btnLabel(sel.id)}'s Hold \u2192 Layer ${srcLayer}: `
-              +`that lives on layer 0, and you are editing layer ${layer}`);}
+      // 25.1.3: no toast on other layers. The picker no longer offers the
+      // role there, so there is nothing to explain -- and a green message on
+      // every ordinary edit is noise, which is how Josh met it.
+      if(roleHere&&p!=='layer')setLayerSource(null);
       apply(uiToAction({press:p,release:$('release').value,
         pressBtn:$('pressBtn')?.value,pressKey:$('pressKey')?.value,
         pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value,
