@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 24.9</title>
+<title>HID Config 25.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1015,7 +1015,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <b>⬆ Save to device</b> button at the top to apply.</p>
     <table style="width:100%" id="dyntable"></table>
     <button id="dynadd" style="margin-top:.35rem">＋ Add date/time trigger</button>
-    <!-- 25.1: Josh, 2026-09-08 10:57 -- "on the Expansions section, ensure
+    <!-- 25.0: Josh, 2026-09-08 10:57 -- "on the Expansions section, ensure
          that I can EDIT the time duration expansion settings (and add new
          subsections, if necessary) to tweak its abilities". These four were
          constants in s4_expansions.py, so changing any of them meant editing
@@ -7535,6 +7535,73 @@ function strftimePreview(fmt){
     j:String(Math.floor((d-start)/86400000)).padStart(3,'0'),'%':'%'};
   return String(fmt||'').replace(/%(.)/g,(m,c)=>c in map?map[c]:m);}
 
+/* ---- 25.0: duration settings -------------------------------------------
+   Four conventions that were constants in s4_expansions.py. The engine holds
+   the same defaults and resets to them on every load, so a setting deleted
+   here is genuinely deleted rather than lingering where nobody can see it.
+
+   `max_gap_s` is entered as a DURATION ("7d", "90m"), not a number of
+   seconds, and is read with parseDurationMs -- the parser that already reads
+   format_elapsed's own output back. A second parser for the same job is how
+   two things that must agree stop agreeing. */
+const DUR_DEFAULTS={max_gap_s:7*24*3600,units:2,sign:true,wrap:'()'};
+function durSettings(){
+  return Object.assign({},DUR_DEFAULTS,(cfg&&cfg.duration_settings)||{});}
+// The engine's format_elapsed, for the preview only. Kept to two units max
+// and the same shapes, because the preview claiming a format the engine does
+// not produce is worse than no preview.
+function durPreviewText(secs,s){
+  const two=s.units!==1, p=s.sign?'+':'';
+  let out;
+  if(secs<60)out=p+secs+'s';
+  else if(secs<3600){const m=Math.floor(secs/60),r=secs%60;
+    out=(r&&two)?`${p}${m}m ${String(r).padStart(2,'0')}s`:`${p}${m}m`;}
+  else if(secs<86400){const h=Math.floor(secs/3600),m=Math.floor(secs%3600/60);
+    out=(m&&two)?`${p}${h}h ${String(m).padStart(2,'0')}m`:`${p}${h}h`;}
+  else{const d=Math.floor(secs/86400),h=Math.floor(secs%86400/3600);
+    out=(h&&two)?`${p}${d}d ${h}h`:`${p}${d}d`;}
+  const w=(typeof s.wrap==='string'&&s.wrap.length===2)?s.wrap:'';
+  return w?w[0]+out+w[1]:out;}
+function fmtGap(secs){
+  if(secs%86400===0)return (secs/86400)+'d';
+  if(secs%3600===0)return (secs/3600)+'h';
+  if(secs%60===0)return (secs/60)+'m';
+  return secs+'s';}
+function renderDurSettings(){
+  const s=durSettings();
+  const u=$('durunits'),w=$('durwrap'),g=$('dursign'),m=$('durmax');
+  if(!u)return;
+  u.value=String(s.units===1?1:2);
+  w.value=(typeof s.wrap==='string'&&[ '()','[]','{}','' ].includes(s.wrap))
+    ?s.wrap:'()';
+  g.checked=!!s.sign;
+  m.value=fmtGap(s.max_gap_s);
+  const prev=$('durprev');
+  if(prev)prev.textContent=durPreviewText(133,s)+'  ·  '
+    +durPreviewText(3860,s)+'  ·  '+durPreviewText(266400,s);
+  const write=()=>{
+    const out={units:+u.value===1?1:2,
+               sign:g.checked,
+               wrap:w.value,
+               max_gap_s:DUR_DEFAULTS.max_gap_s};
+    const ms=parseDurationMs(m.value);
+    if(ms===null||ms<=0){
+      // REFUSE rather than fall back silently. A cap that quietly reverted to
+      // 7 days would look exactly like one that took, and the symptom -- a
+      // duration appearing when you expected none -- is days away from the
+      // typo that caused it.
+      m.style.borderColor='var(--bad,#c33)';
+      toast('“'+m.value+'” is not a duration — try 7d, 90m, 2h. Not saved.',
+            true);
+      return;}
+    m.style.borderColor='';
+    out.max_gap_s=Math.round(ms/1000);
+    cfg.duration_settings=out;
+    renderDurSettings();
+    toast('duration settings changed — press ⬆ Save to device to apply');};
+  [u,w,g].forEach(el=>el.onchange=write);
+  m.onchange=write;}
+
 function renderDynTable(view){
   const t=$('dyntable');if(!t)return;
   t.innerHTML='<tr><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
@@ -7590,7 +7657,8 @@ function renderDynTable(view){
     nt['\\new'+n]={fmt:'%H:%M',space:false,elapsed:false,duronly:false,
                    name:'New trigger'};
     writeDynTriggers(nt);renderDynTable();
-    toast('added — set its trigger and format, then ⬆ Save to device');};}
+    toast('added — set its trigger and format, then ⬆ Save to device');};
+  renderDurSettings();}   // 25.0: same panel, same render pass
 
 /* ============ 21.9 UI search ============ */
 // The page is one long scroll of collapsible sections, so "where is that
