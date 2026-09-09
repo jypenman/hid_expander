@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 24.7</title>
+<title>HID Config 24.9</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -520,7 +520,17 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="loggrid">
     <div><div class="muted"><b>⬅ RAW</b> from keyboard/mouse</div><div class="logbox" id="log"></div></div>
     <div><div class="muted"><b>➡ SENT</b> to this PC</div><div class="logbox" id="outlog"></div></div>
-  </div></div>
+  </div>
+  <!-- 24.9: PONG and BENCH: used to land in the RAW pane, which is labelled
+       "from keyboard/mouse" and is meant to be a record of what you pressed.
+       Worse, PONG is the BROWSER's own keepalive, so it kept arriving after
+       ⏸ Stop -- Josh reasonably read that as Stop being broken. Neither line
+       is an input event, so neither belongs in an input log. -->
+  <div style="margin-top:.5rem"><div class="muted"><b>🔗 LINK &amp; ENGINE</b>
+    — keepalives and background notices, not things you pressed. This pane
+    keeps filling after ⏸ Stop: Stop halts the event stream from the Pi, and
+    these are not events.</div><div class="logbox" id="linklog"
+    style="max-height:9rem"></div></div></div>
 </details>
 
 <details class="dbg" id="clipdock" data-uikey="clipdock"><summary>📋 Copy / Paste</summary>
@@ -1005,6 +1015,42 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <b>⬆ Save to device</b> button at the top to apply.</p>
     <table style="width:100%" id="dyntable"></table>
     <button id="dynadd" style="margin-top:.35rem">＋ Add date/time trigger</button>
+    <!-- 25.1: Josh, 2026-09-08 10:57 -- "on the Expansions section, ensure
+         that I can EDIT the time duration expansion settings (and add new
+         subsections, if necessary) to tweak its abilities". These four were
+         constants in s4_expansions.py, so changing any of them meant editing
+         code and deploying. GLOBAL rather than per-trigger on purpose: they
+         are conventions about how a duration READS, and a document where one
+         trigger writes "(+2m 13s)" and another writes "[2m]" is worse than
+         either convention applied everywhere. -->
+    <div style="margin-top:.6rem;padding:.5rem .6rem;border:1px solid var(--line);border-radius:4px">
+      <b style="font-size:.82rem">Duration settings</b>
+      <p class="muted" style="font-size:.76rem;margin:.25rem 0 .45rem">
+      How every duration above is written. These apply to all duration
+      triggers, so what you paste always reads the same way. Saved with the
+      top <b>⬆ Save to device</b>.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end">
+        <label style="margin:0">Units shown
+          <select id="durunits" style="width:auto">
+            <option value="2">two — 1h 04m</option>
+            <option value="1">one — 1h</option>
+          </select></label>
+        <label style="margin:0">Brackets
+          <select id="durwrap" style="width:auto">
+            <option value="()">( ) — (2m 13s)</option>
+            <option value="[]">[ ] — [2m 13s]</option>
+            <option value="{}">{ } — {2m 13s}</option>
+            <option value="">none — 2m 13s</option>
+          </select></label>
+        <label style="margin:0" title="The + means the start time is not on screen. Off writes bare durations everywhere.">
+          <input type="checkbox" id="dursign"> Show <code>+</code> when the start is off-screen</label>
+        <label style="margin:0" title="A stored start older than this is treated as 'I last used this weeks ago', not a measurement: it re-stamps and claims no duration.">
+          Ignore gaps longer than
+          <input type="text" id="durmax" style="width:5rem" placeholder="7d"></label>
+        <span class="muted" style="font-size:.78rem">Preview:
+          <code id="durprev" style="font-family:monospace"></code></span>
+      </div>
+    </div>
     <div style="margin-top:.5rem;padding:.45rem .55rem;border:1px solid var(--line);border-radius:4px">
       <b style="font-size:.82rem">Duration column</b>
       <p class="muted" style="font-size:.76rem;margin:.25rem 0 0">
@@ -1526,6 +1572,17 @@ window.addEventListener('error',e=>{
     log('(benign) '+e.message,'','log'); return;}
   toast('UI error: '+e.message,true);
   log('UI error: '+e.message+' @ line '+e.lineno,'er','log');}catch(_){}});
+/* 24.9: engine notices that are NOT input events. The engine already keeps
+   them apart by prefix -- `OUT:` is routed to the SENT pane above, and
+   BENCH:/BLE:/OS: are background chatter from bench_sched, s8_ble_link and
+   the OS-detect path. Josh asked what `BENCH:auto engine rc=0` was doing in
+   his raw events: it is the scheduled benchmark finishing its passive
+   engine probe, rc=0 meaning it succeeded.
+
+   An ALLOW-LIST, deliberately, not "anything I don't recognise". A line this
+   file has never seen before stays in the RAW pane where it is visible --
+   filtering by ignorance is how a real diagnostic disappears. */
+const NOTICE_RX=/^(BENCH:|BLE:|OS:)/;
 function log(m,c='',box='log'){const el=$(box),l=document.createElement('div');
 if(c)l.className=c;l.textContent=new Date().toLocaleTimeString()+'  '+m;
 el.appendChild(l);el.scrollTop=el.scrollHeight;
@@ -1574,7 +1631,12 @@ function onReport(e){
   // on PONG alone would have reported a busy link as stale.
   markAlive();
   const d=new Uint8Array(e.data.buffer),t=d[0];
-  if(t===PONG)log('← PONG','rx');
+  // 24.9: the link keepalive, not an input event. Josh: "WHAT IS "PONG" In
+  // my Raw events? This seemed to carry on writing even when debug monitor
+  // is stopped!" -- it is checkLive()'s PING coming back every LIVE_PING_MS,
+  // proving the USB link is alive, and it is the browser's own loop, so
+  // ⏸ Stop (which turns off the Pi's EVENT stream) never touched it.
+  if(t===PONG)log('← PONG  (link keepalive)','rx','linklog');
   else if(t===EVENT){
     $('evcount').textContent=(+$('evcount').textContent||0)+1;
     // v4 frames: [EVENT, len, more, text] -- reassemble continuations
@@ -1583,6 +1645,7 @@ function onReport(e){
     if(more)return;
     const txt=window._evbuf; window._evbuf='';
     if(txt.startsWith('OUT:')){const raw=txt.slice(4);log(annotate(raw),'tx','outlog');liveOut(raw);}
+    else if(NOTICE_RX.test(txt))log(txt,'ev','linklog');   // 24.9
     else{log(annotate(txt),'ev','log');liveRaw(txt);}}
   else if(t===CFG_BEGIN){rxTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);rxGot={};
     _readPoke();}
@@ -1900,7 +1963,8 @@ $('showkeys').onclick=()=>{
     showKeysIdle();}};
 $('evoff').onclick=e=>{send([EVENTS_OFF]);$('evon').classList.remove('rec');
   $('evon').textContent='▶ Events';clickFx(e.target);};
-$('clear').onclick=e=>{$('log').innerHTML='';$('outlog').innerHTML='';clickFx(e.target);};
+$('clear').onclick=e=>{$('log').innerHTML='';$('outlog').innerHTML='';
+  $('linklog').innerHTML='';clickFx(e.target);};   // 24.9: all three panes
 /* 22.9: send a command that may not fit in one report.
    rpt[1] is a length byte that can say 42, but a report is 32 bytes -- so a
    longer command lost everything past byte 30, silently, while still claiming
@@ -2356,10 +2420,13 @@ function _thFor(slot,scope){
     return t[slot.dev]=t[slot.dev]||{};}
   return cfg.tap_hold=cfg.tap_hold||{};}
 
-// Layer roles, tap/hold and group membership are GLOBAL constructs -- they are
-// keyed on the canonical key or logical button with no device dimension. They
-// can only travel in the 'custom' scope; in any other scope moving them would
-// silently change behaviour on devices you were not looking at.
+// Group membership is a GLOBAL construct -- keyed on the canonical key or
+// logical button with no device dimension -- so it can only travel in the
+// 'custom' scope; in any other scope moving it would silently change
+// behaviour on devices you were not looking at.
+// Layer roles are NOT in that category any more: tap_hold_by_device gave
+// buttons a device dimension in 20.8.2 BF2, and layer_keys_by_device gave
+// keys one in 24.8, so both now travel in whichever scope you are editing.
 function harvestSlot(slot,scope){
   const b={map:{},p2:{},layer:null,tapAct:null,groups:[],base:undefined};
   // Baseline trades WHAT THE KEY IS, nothing else. Touching the mapping
@@ -2405,18 +2472,24 @@ function harvestSlot(slot,scope){
   if(scope==='baseline'&&slot.kind==='btn'){
     b.owner=btnOwner(slot.dev,slot.id)||null;
   }
-  // A BUTTON's layer role is now per-device (tap_hold_by_device), so it can
-  // travel in either scope. A KEY's layer role still has no device dimension
-  // (layer_keys is global), so it only travels on "all devices".
+  // A BUTTON's layer role is per-device (tap_hold_by_device, 20.8.2 BF2) and
+  // as of 24.8 a KEY's is too (layer_keys_by_device), so both travel in
+  // either scope. Before 24.8 a key's role travelled only on "all devices",
+  // because global was the only place it could live.
   if(scope!=='baseline'){
     if(slot.kind==='btn'){
       const th=_thLookup(slot.id,slot.dev);
       if(th){b.layer=th[1];b.tapAct=th[0];}
       if(scope==='devcustom')_thFor(slot,scope)[slot.id]=null;  // vacate HERE
       else delete _thFor(slot,scope)[slot.id];
-    }else if(scope==='custom'){
-      const v=(cfg.layer_keys||{})[slot.canon];
-      if(v!=null){b.layer=+v;delete cfg.layer_keys[slot.canon];}}}
+    }else{
+      const v=_lkLookup(slot.canon,slot.dev);
+      if(v!=null)b.layer=v;
+      // Vacate the same way a button does: a device-scoped swap writes null
+      // so the shared entry does not show through again on this device,
+      // while a shared swap deletes outright.
+      if(scope==='devcustom')_lkFor(slot.dev,true)[slot.canon]=null;
+      else delete _lkFor(slot.dev,false)[slot.canon];}}
   return b;}
 
 /* Translate one action between the button world and the key world.
@@ -2461,7 +2534,7 @@ function writeSlot(slot,b,notes,scope){
       let tap=b.tapAct;
       if(!tap){const r=_xAct(b.map[0],'btn');tap=(r.v&&Array.isArray(r.v))?r.v:['btn',slot.id];}
       _thFor(slot,scope)[slot.id]=[tap,b.layer];
-    }else (cfg.layer_keys=cfg.layer_keys||{})[slot.canon]=b.layer;}
+    }else _lkFor(slot.dev,scope==='devcustom')[slot.canon]=b.layer;}
   for(const g of b.groups){
     const grp=(cfg.mapping_groups||{})[g.name];
     if(!grp)continue;
@@ -2755,6 +2828,33 @@ function _thLookup(id,dev){
     if(id in t)return t[id]||null;      // present-but-null = explicitly none
   }
   return null;}
+/* 24.8: the same two functions for a KEY's layer role, which until now had no
+   device dimension at all. Josh made the E9's "1" open layer 5 and every "1"
+   on every keyboard became a layer trigger, because cfg.layer_keys is shared.
+   Mirrors the engine's layer_key_for(): device table first, present-but-null
+   meaning "explicitly no layer role here" so a device-scoped edit can cancel
+   a shared entry without deleting it from every other keyboard.
+   Returns null for "not a layer trigger", so callers test `!=null`. */
+function _lkTables(dev){
+  const out=[];
+  if(dev&&cfg.layer_keys_by_device&&cfg.layer_keys_by_device[dev])
+    out.push(cfg.layer_keys_by_device[dev]);
+  out.push(cfg.layer_keys||{});
+  return out;}
+function _lkLookup(canon,dev){
+  for(const t of _lkTables(dev)){
+    if(canon in t){const v=t[canon];return v==null?null:+v;}
+  }
+  return null;}
+// Where a key's layer role is WRITTEN, given the mapping scope. The twin of
+// _thFor(). 'devcustom' with no device never reaches here -- setLayerSource
+// refuses first, because writing the shared table when one device was asked
+// for is the bug this release exists to fix.
+function _lkFor(dev,devScoped){
+  if(devScoped){
+    const t=(cfg.layer_keys_by_device=cfg.layer_keys_by_device||{});
+    return t[dev]=t[dev]||{};}
+  return cfg.layer_keys=cfg.layer_keys||{};}
 // 20.9.6 repair: 20.9.5 wrote "explicitly nothing here" nulls for a logical
 // button even when another input on the same device had just been given that
 // button. Those nulls shadow mappings that are not orphans, which is how a
@@ -2782,6 +2882,16 @@ function repairOrphanShadows(){
 function layerSources(dev){ // layer -> {type:'key'|'btn', id}
   const out={};
   for(const[u,L]of Object.entries(cfg.layer_keys||{}))out[+L]={type:'key',id:+u};
+  // 24.8: device table after the shared one, so a device-specific key role
+  // WINS the slot -- the same order the button branch below uses, and the
+  // same order the engine resolves in.
+  if(dev&&cfg.layer_keys_by_device&&cfg.layer_keys_by_device[dev])
+    for(const[u,L]of Object.entries(cfg.layer_keys_by_device[dev])){
+      if(L==null){ // explicitly no role here: drop one the shared table gave
+        for(const k of Object.keys(out))
+          if(out[k].type==='key'&&out[k].id===+u)delete out[k];
+        continue;}
+      out[+L]={type:'key',id:+u};}
   // shared first, then device, so a device-specific role WINS the slot
   for(const[b,v]of Object.entries(cfg.tap_hold||{}))out[v[1]]={type:'btn',id:+b};
   if(dev&&cfg.tap_hold_by_device&&cfg.tap_hold_by_device[dev])
@@ -2793,13 +2903,19 @@ function layerSources(dev){ // layer -> {type:'key'|'btn', id}
       out[v[1]]={type:'btn',id:+b};}
   return out;}
 function layerOfSource(type,id,dev){
-  if(type==='key'){
-    const v=cfg.layer_keys&&cfg.layer_keys[id];return v!=null?+v:null;}
+  if(type==='key')return _lkLookup(id,dev);
   const th=_thLookup(id,dev);return th?th[1]:null;}
 function allLayers(){
   const set=new Set([0,1,2,3,4,5]);
   for(const L of Object.values(cfg.layer_keys||{}))set.add(+L);
   for(const v of Object.values(cfg.tap_hold||{}))set.add(v[1]);
+  // 24.8: a layer that only one device opens is still a layer. Left out, its
+  // number would be missing from every layer picker and the change viewer
+  // would call its mappings dangling.
+  for(const t of Object.values(cfg.layer_keys_by_device||{}))
+    for(const L of Object.values(t||{}))if(L!=null)set.add(+L);
+  for(const t of Object.values(cfg.tap_hold_by_device||{}))
+    for(const v of Object.values(t||{}))if(v)set.add(+v[1]);
   return[...set].sort((a,b)=>a-b);}
 
 /* ============ device model: everything is just a Bluetooth device ============ */
@@ -3182,7 +3298,7 @@ function renderLayoutKbd(d,w){
           +`<span class="kcenter">${esc(KEYS[bAsKey]||MODS[bAsKey]||'?')}</span>`
           +`<span class="chip" title="Baseline: this button IS this key">≡key</span>`
           +(ek.v!==undefined?`<span class="chip">${esc(actShort(ek.v))}</span>`:'')
-          +elLayerBadge('key',ek.canon);
+          +elLayerBadge('key',ek.canon,d.id);
         if(editing)bindEditKey(el,d,idx);
         else{
           el.onclick=e=>{
@@ -3291,7 +3407,7 @@ function renderLayoutKbd(d,w){
       +baseChip+`<span class="kcenter">${centerName}</span>`
       +(_p2b?`<span class="chip" title="Baseline: this key acts as mouse button ${_p2b} (${esc(btnLabel(_p2b))}) and follows that button's mappings on every layer">≡btn ${_p2b}</span>`
             :(custChip||gestChip))
-      +chordChip+(_p2b?elLayerBadge('btn',_p2b):elLayerBadge('key',eff.canon));
+      +chordChip+(_p2b?elLayerBadge('btn',_p2b,d.id):elLayerBadge('key',eff.canon,d.id));
     if(editing)bindEditKey(el,d,idx);
     else{
       el.onmousedown=e=>{if(e.shiftKey||e.altKey)e.preventDefault();};
@@ -4601,6 +4717,7 @@ function histPathLabel(p){
     mouse_mappings_by_device:'Button mapping (device)',
     baseline:'Baseline', macros:'Macro', tap_hold:'Tap/hold',
     tap_hold_by_device:'Tap/hold (device)', layer_keys:'Layer key',
+    layer_keys_by_device:'Layer key (device)',
     mod_chords:'Mod chord', combos:'Combo', os_profiles:'OS profile',
     mapping_groups:'Group', port2_kbd:'Gesture'}[head] || head;
   return pretty + (rest.length ? ' · ' + rest.join(' · ') : '');
@@ -4627,6 +4744,10 @@ function histDangling(c){
   for(const v of Object.values(c.tap_hold || {})) if(v) layers.add(+v[1]);
   for(const t of Object.values(c.tap_hold_by_device || {}))
     for(const v of Object.values(t || {})) if(v) layers.add(+v[1]);
+  // 24.8: a layer opened only by one device's key is still opened. Missing
+  // here, every mapping on it would be reported as dangling.
+  for(const t of Object.values(c.layer_keys_by_device || {}))
+    for(const L of Object.values(t || {})) if(L != null) layers.add(+L);
   const macros = new Set(Object.keys(c.macros || {}).map(Number));
   const scan = (tbl, what) => {
     for(const [k, v] of Object.entries(tbl || {})){
@@ -6633,6 +6754,15 @@ function renderEditor(){
   ${scopeSel}
   ${identBlock}
   <div class="row"><div>
+    <!-- 24.8: Josh asked for "Search actions" ABOVE the dropdown under "on
+         press". It is how you actually reach this dialog's most common
+         outcome, and it was below the mode picker and the argument picker --
+         so the fastest route sat behind the two slowest ones. -->
+    <div id="pressAssign" style="margin-bottom:.45rem;padding-bottom:.4rem;border-bottom:1px dashed var(--line)">
+      <div class="muted" style="font-size:.72rem">Search actions — quick-assign to <b>On press</b> ↓:</div>
+      ${searchBoxHTML()}${capBoxHTML()}
+      <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
+    </div>
     <label>On press</label><select id="press">
       <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
       <option value="suppress" ${ui.press==='suppress'?'selected':''}>Suppress</option>
@@ -6643,11 +6773,6 @@ function renderEditor(){
       ${layerOpt}
       ${isBtn?`<option value="dpi" ${ui.press==='dpi'?'selected':''}>DPI cycle</option>`:''}
     </select><div id="pressArg"></div>
-    <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
-      <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
-      ${searchBoxHTML()}${capBoxHTML()}
-      <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
-    </div>
     <label style="margin-top:.5rem">On release</label><select id="release">
       <option value="none" ${ui.release==='none'?'selected':''}>Nothing</option>
       <option value="macro" ${ui.release==='macro'?'selected':''}>Macro…</option>
@@ -6657,11 +6782,33 @@ function renderEditor(){
     ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
   </div></div>`;
   if(identRef)bindIdentity(selDev,identRef,scope);
+  // 24.8: this function used to write cfg.layer_keys and cfg.tap_hold
+  // unconditionally, whatever the scope picker said. That is the whole bug:
+  // Josh set the E9's "1" to Hold -> Layer 5 and every keyboard's "1" became
+  // a layer trigger. It also sits OUTSIDE apply(), so 23.6's
+  // refuse-to-write-shared guard -- which lives inside apply() -- never ran
+  // on this path. Both halves are fixed here: honour the scope, and refuse
+  // rather than fall back to shared.
   function setLayerSource(L){
-    if(L==null){ if(isBtn)delete cfg.tap_hold[sel.id];
-      else{cfg.layer_keys=cfg.layer_keys||{};delete cfg.layer_keys[canon];} return; }
-    if(isBtn){const th=cfg.tap_hold[sel.id]||[['btn',sel.id],L];th[1]=L;cfg.tap_hold[sel.id]=th;}
-    else{cfg.layer_keys=cfg.layer_keys||{};cfg.layer_keys[canon]=L;}}
+    if(sel.scope==='devcustom'&&!selDev){
+      toast('no device to scope this to — click the key or button on a '
+            +'device wireframe first',true);
+      return false;}
+    if(isBtn){
+      const th=_thFor({dev:selDev},devScoped?'devcustom':'custom');
+      if(L==null){
+        // Device scope VACATES with a null rather than deleting: deleting
+        // would let the shared entry show through again, which is not what
+        // "take the layer role off this device's button" means.
+        if(devScoped)th[sel.id]=null; else delete th[sel.id];
+        return true;}
+      const prev=_thLookup(sel.id,selDev);
+      th[sel.id]=[(prev&&prev[0])||['btn',sel.id],L];
+      return true;}
+    const lk=_lkFor(selDev,devScoped);
+    if(L==null){ if(devScoped)lk[canon]=null; else delete lk[canon]; }
+    else lk[canon]=L;
+    return true;}
   const apply=a=>{
     // 23.6: belt-and-braces for the silent-shared-write bug. The pill that
     // could set this state is now disabled without a device, but if the state
@@ -6730,9 +6877,16 @@ function renderEditor(){
       if(p==='layer'){
         let L=$('pressLayer')?$('pressLayer').value:'0';
         if(L==='__new__'){L=Math.max(0,...allLayers())+1;}
-        setLayerSource(+L);
+        // 24.8: setLayerSource now refuses (returns false) rather than
+        // silently writing the shared table. Deleting the mapping and
+        // claiming success after a refusal would be the worst of both.
+        if(!setLayerSource(+L))return;
         if(!isBtn)delete kmap[key];   // a layer key produces no output while held
-        render();toast('layer trigger set — ⬆ Save to device');return;}
+        render();
+        toast(devScoped
+          ?`layer trigger set on ${devName(selDev)} only — ⬆ Save to device`
+          :'layer trigger set on ALL devices — ⬆ Save to device');
+        return;}
       // leaving layer mode: drop the layer-source entry
       if(srcLayer!=null&&p!=='layer')setLayerSource(null);
       apply(uiToAction({press:p,release:$('release').value,
