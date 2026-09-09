@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.2</title>
+<title>HID Config 25.3</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -81,6 +81,31 @@ button:disabled{opacity:.4;cursor:default}
   /* it overlays the item's own body as that scrolls under it */
   padding:.3rem 0;margin:0 -.6rem;padding-left:.6rem;padding-right:.6rem;
   border-bottom:1px solid var(--line)}
+/* 25.3: THE DOCK. Josh, three times now (2026-09-01 15:26, 2026-09-02,
+   2026-09-09 10:22): "Figure out how to get open notes in Copy/Paste to stop
+   scrolling and stick right under the "Mapping ... Performance" tab section,
+   so I can still see them even when I scroll further down on the page."
+
+   The two previous attempts both used position:sticky, and both were verified
+   by checking that the summary pinned -- which it does. Measured on
+   2026-09-09: it holds at the band through y=600 and y=800, then releases at
+   y=1000. That is not a bug, it is the definition. A sticky element is bound
+   by its own containing block, so once you scroll past the note's <details>
+   it MUST leave. "even when I scroll further down on the page" is precisely
+   the case sticky cannot serve, which is why re-applying the rule looked
+   right every time and never fixed it.
+
+   So an open note is MOVED into this fixed dock, and moved back when closed.
+   Bounded and scrollable, because notes are long and a band that eats the
+   viewport is the failure mode the sticky comment above was already worried
+   about. */
+#clipdockbar{position:fixed;z-index:45;display:none;
+  background:Canvas;border:1px solid var(--line);border-top:none;
+  border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,.18);
+  max-height:38vh;overflow:auto;padding:.3rem .6rem}
+#clipdockbar details{margin:.25rem 0}
+.clipph{border:1px dashed var(--line);border-radius:8px;
+  padding:.35rem .6rem;margin:.35rem 0;font-size:.78rem}
 /* Same reasoning as .topbar: on a short window stacked sticky bands eat the
    screen, so everything above gives up and scrolls. */
 @media (max-height:520px){#cliplist details[open]>summary,
@@ -1346,6 +1371,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'25.3',d:'2026-09-09',items:[
+   {t:'An OPEN Copy/Paste note now stays under the tabs however far you scroll',k:'clipdock'},
+   {t:'Why the last two attempts failed: sticky cannot outlive its container',k:'clipdock'},
+   {t:'Closing a note puts it back where it was',k:'clipdock'}]},
  {v:'25.2',d:'2026-09-09',items:[
    {t:'URGENT: on layer 2 the E9 button fires Delete again, not its tap',k:'remap'},
    {t:'A tap/hold no longer shadows a mapping on a layer you opened',k:'remap'},
@@ -4448,9 +4477,80 @@ function clipFitBox(ta){
   ta.style.height='auto';
   ta.style.height=Math.min(max,Math.max(min,ta.scrollHeight+4))+'px';}
 
+/* ---- 25.3: the Copy/Paste dock --------------------------------------
+   An OPEN note is moved out of #cliplist and into a fixed bar under the two
+   sticky bands, so it stays readable however far down the page you scroll.
+   Closing it moves it back. See the CSS above for why this is not sticky.
+
+   MOVED, not cloned: appendChild relocates the element, so its buttons, its
+   textarea and its listeners come with it. A clone would have looked right
+   and been dead on click -- the exact class of bug the ui-change skill says
+   no load-time check can catch.
+
+   Idempotent by construction: every call first returns whatever is docked to
+   its placeholder, then re-docks what is open. renderClips() rebuilds
+   #cliplist from scratch, so anything left in the dock would otherwise be
+   orphaned -- a note visible on screen that no longer exists in the list. */
+function clipDock(){
+  let d=$('clipdockbar');
+  if(!d){d=document.createElement('div');d.id='clipdockbar';
+         document.body.appendChild(d);}
+  return d;}
+
+function placeClipDock(){
+  const d=$('clipdockbar'),host=$('cliplist');
+  if(!d||d.style.display==='none')return;
+  const cs=getComputedStyle(document.documentElement);
+  const band=n=>parseFloat(cs.getPropertyValue(n))||0;
+  d.style.top=(band('--topbar-h')+band('--tabs-h'))+'px';
+  // Line up with the Copy/Paste column so it reads as that section lifted to
+  // the top, not as a floating panel from somewhere else. The list itself may
+  // be empty while everything is docked, so fall back to its parent.
+  const ref=(host&&host.getBoundingClientRect().width)?host
+           :(host&&host.parentElement)||document.body;
+  const r=ref.getBoundingClientRect();
+  d.style.left=Math.round(r.left)+'px';
+  d.style.width=Math.round(r.width)+'px';}
+
+function syncClipDock(){
+  const host=$('cliplist');
+  const d=clipDock();
+  if(!host){d.style.display='none';return;}
+  // 1. everything currently docked goes home first
+  for(const el of [...d.children]){
+    const ph=host.querySelector('.clipph[data-clipkey="'
+      +CSS.escape(el.dataset.clipkey||'')+'"]');
+    if(ph)ph.replaceWith(el); else host.appendChild(el);}
+  // 2. then dock whatever is open. Only OPEN ones -- Josh: "Remember this
+  //    should only happen with OPEN Notes."
+  let n=0;
+  for(const el of [...host.children]){
+    if(el.tagName!=='DETAILS'||!el.open||!el.dataset.clipkey)continue;
+    const ph=document.createElement('div');
+    ph.className='clipph muted';
+    ph.dataset.clipkey=el.dataset.clipkey;
+    const nm=(clips[el.dataset.clipkey]||{}).name||el.dataset.clipkey;
+    ph.textContent='📌 '+nm+' — pinned under the tabs while it is open';
+    el.replaceWith(ph);
+    d.appendChild(el);n++;}
+  d.style.display=n?'block':'none';
+  placeClipDock();}
+
+window.addEventListener('resize',placeClipDock);
+
 function renderClips(){
   const host=$('cliplist');if(!host)return;
   const _noteClips=noteClipNames();
+  // 25.3: EMPTY THE DOCK BEFORE THE REBUILD, not after.
+  //
+  // host.innerHTML='' destroys the placeholders but NOT the docked elements,
+  // which live in #clipdockbar. syncClipDock() at the end then found no
+  // placeholder to return them to, appended the stale copies to the list, and
+  // docked both those and the freshly built ones -- two notes became four.
+  // Caught by re-rendering while docked in the browser; nothing load-time
+  // would have seen it, since the page is perfectly valid either way.
+  const _dock=$('clipdockbar');
+  if(_dock){_dock.innerHTML='';_dock.style.display='none';}
   host.innerHTML='';
   // 22.0 #5: note targets pinned to the top. The keyboard writes to these
   // from anywhere, so they are the entries you come to this section to read;
@@ -4482,11 +4582,12 @@ function renderClips(){
     const editing=!!_clipEdit[key];
     const box=document.createElement('details');
     box.className='asggrp';
+    box.dataset.clipkey=key;                       // 25.3: the dock's handle
     // 19.9 #1.2: remember each item's own open state -- opening or saving one
     // must never collapse another, and saving keeps the item open.
     if(_clipOpen[key]===undefined)_clipOpen[key]=editing;
     box.open=!!_clipOpen[key]||editing;
-    box.addEventListener('toggle',()=>{_clipOpen[key]=box.open;});
+    box.addEventListener('toggle',()=>{_clipOpen[key]=box.open;syncClipDock();});
     box.style.cssText='margin:.35rem 0;border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem';
     const sum=document.createElement('summary');
     sum.style.cssText='cursor:pointer;font-weight:600';
@@ -4596,7 +4697,13 @@ function renderClips(){
     if(behind)st.title='The keyboard has saved '
       +((((lastEng||{}).notes_writes)||0)-_clipsReadAt)
       +' note(s) since this list was read from the Pi. What you see here is '
-      +'the older copy — press to re-read.';}}
+      +'the older copy — press to re-read.';}
+  // 25.3: renderClips() rebuilds #cliplist from scratch, so anything the dock
+  // was holding is now detached. Re-dock from the fresh elements. Anchored on
+  // the END of this function deliberately: my first attempt searched forward
+  // for "\nfunction " and landed inside an unrelated async handler, which is
+  // exactly the blind-block edit rule 1 of the ui-change skill warns about.
+  syncClipDock();}
 window.addClip=()=>{
   const nm=prompt('Name this item (letters, numbers, spaces):','snippet '+(Object.keys(clips).length+1));
   if(nm===null)return;
@@ -4646,7 +4753,8 @@ window.moveRuleOutOfPack=async(r)=>{
   else scopeTable(os,e.table||'kbd_mappings')[`${e.layer},${e.id}`]=e.action;
   await saveAdditions();
   render();
-  toast('moved back into your profile — ⬆ Save to device');};
+  toast('moved back into your profile — ⬆ Save to device');
+};
 /* turn an Assignments row into an addition entry */
 function ruleToEntry(r){
   const os=r.os||'';
