@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.1.3</title>
+<title>HID Config 25.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1346,71 +1346,76 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
- {v:'25.1.3',items:[
+ {v:'25.2',d:'2026-09-09',items:[
+   {t:'URGENT: on layer 2 the E9 button fires Delete again, not its tap',k:'remap'},
+   {t:'A tap/hold no longer shadows a mapping on a layer you opened',k:'remap'},
+   {t:'Each version now shows the date it was pushed',k:'uiver'},
+   {t:'Jump links clear the sticky header, and work on empty panels',k:'logapp'}]},
+ {v:'25.1.3',d:'2026-09-09',items:[
    {t:'This list again: six releases were missing from it',k:'uiver'},
    {t:'The popover no longer hides under the tab strip, and long lists scroll',k:'uiver'},
    {t:'On layer 2+ the picker shows that layer’s mapping, not the button’s role',k:'remap'}]},
- {v:'25.1.2',items:[
+ {v:'25.1.2',d:'2026-09-09',items:[
    {t:'Editing a button on layer 2 no longer deletes its Hold → Layer role',k:'remap'},
    {t:'Clearing a shared tap/hold now asks first, and names the tap it takes',k:'remap'},
    {t:'Opening the remap editor no longer writes an empty table to your profile',k:'remap'}]},
- {v:'25.1.1',items:[
+ {v:'25.1.1',d:'2026-09-08',items:[
    {t:'The Feather link reports its own CRC failures and lost bytes',k:'debug'},
    {t:'A clean link says nothing — so the line means something when it appears',k:'debug'}]},
- {v:'25.1',items:[
+ {v:'25.1',d:'2026-09-08',items:[
    {t:'Notes longer than 245 characters no longer vanish without a word',k:'cliplist'},
    {t:'There is no time limit on a note, and never was — only length',k:'cliplist'}]},
- {v:'25.0',items:[
+ {v:'25.0',d:'2026-09-08',items:[
    {t:'Duration settings: units, brackets, the +, and how stale a start may be',k:'dyntable'},
    {t:'Live preview of every duration magnitude before you save',k:'dyntable'}]},
- {v:'24.9',items:[
+ {v:'24.9',d:'2026-09-08',items:[
    {t:'PONG and BENCH: moved out of RAW into their own Link & Engine pane',k:'linklog'},
    {t:'⏸ Stop looks like Stop: the keepalive was never an event',k:'linklog'},
    {t:'A dropped HID usage says so instead of disappearing',k:'debug'}]},
- {v:'24.8',items:[
+ {v:'24.8',d:'2026-09-08',items:[
    {t:'A layer role set on one keyboard stays on that keyboard',k:'remap'},
    {t:'Search actions moved above the On press dropdown',k:'remap'},
    {t:'Device rules always beat all-device rules — now pinned by a test',k:'remap'}]},
- {v:'24.7',items:[
+ {v:'24.7',d:'2026-09-06',items:[
    {t:'APM sensing — counts only, no key identities, no order, no content',k:'perfapm'},
    {t:'Where your keypress time actually goes: decode & map vs emit',k:'perfstage'},
    {t:'Movement counted as episodes, and a macro is one action not fifty',k:'perfapm'}]},
- {v:'24.6',items:[
+ {v:'24.6',d:'2026-09-05',items:[
    {t:'Engine status moved to tmpfs — 178 MB/day of card writes becomes zero',k:'engstat'},
    {t:'Why the obvious fix would have broken the staleness warning',k:'perfreport'}]},
- {v:'24.5',items:[
+ {v:'24.5',d:'2026-09-05',items:[
    {t:'New Performance tab: what each feature costs in disk writes',k:'page-perf'},
    {t:'Drag your priorities into order, saved in this browser',k:'perfprio'},
    {t:'Engine status is ≈99.9% of all engine writes — the finding, and the fix',k:'perfreport'}]},
- {v:'24.4',items:[
+ {v:'24.4',d:'2026-09-05',items:[
    {t:'Usage counts every chord you press, not only the ones you remapped',k:'page-usage'},
    {t:'A macro firing is counted, by name',k:'macrolist'},
    {t:'Write your own "Does what" on any Usage row',k:'page-usage'}]},
- {v:'24.3',items:[
+ {v:'24.3',d:'2026-09-05',items:[
    {t:'Find & Replace on the Text Transform panes',k:'txfind'},
    {t:'Usage counts expansions by definition, and characters saved',k:'page-usage'},
    {t:'Add a duration to "Avg saved" by hand, and keep timing while you are away',k:'exptable'},
    {t:'One history, numbered, in the Changes tab',k:'logapp'},
    {t:'Copy/Paste items grow to their text so the header can stick',k:'clipdock'}]},
- {v:'24.2',items:[
+ {v:'24.2',d:'2026-09-02',items:[
    {t:'Usage ✎ button threw instead of jumping',k:'page-usage'},
    {t:'This panel would not close',k:'uiver'}]},
- {v:'24.1',items:[
+ {v:'24.1',d:'2026-09-02',items:[
    {t:'One misplaced line had killed the tabs and Copy/Paste',k:'toptabs'}]},
- {v:'24.0',items:[
+ {v:'24.0',d:'2026-09-02',items:[
    {t:'kbd_shortcuts corpus, tracking and training',k:'usage-track'},
    {t:'Shortcut names and "Does what" in Usage',k:'page-usage'}]},
- {v:'23.9',items:[
+ {v:'23.9',d:'2026-09-01',items:[
    {t:'Time saved per expansion',k:'exptable'}]},
- {v:'23.8',items:[
+ {v:'23.8',d:'2026-09-01',items:[
    {t:'Group column on expansions',k:'exptable'},
    {t:'Notes stamp themselves',k:'clipdock'}]},
- {v:'23.7',items:[
+ {v:'23.7',d:'2026-09-01',items:[
    {t:'Arrow keys no longer destroy a note',k:'clipdock'},
    {t:'The engine-version warning stopped crying wolf',k:'uiver'}]},
- {v:'23.6',items:[
+ {v:'23.6',d:'2026-09-01',items:[
    {t:'Device-scoped edits stopped writing the shared table',k:'remap'}]},
- {v:'23.5',items:[
+ {v:'23.5',d:'2026-09-01',items:[
    {t:'Search box readable (was white on white)',k:'uisearch'},
    {t:'Tabs moved above Load selected, and stick',k:'toptabs'},
    {t:'Open copy/paste items stay on screen',k:'clipdock'},
@@ -1420,17 +1425,17 @@ const VERSION_HISTORY=[
    {t:'Every macro lists what fires it',k:'macrolist'},
    {t:'Benchmark strip names every leg',k:'benchstrip'},
    {t:'Devices show which Pi they arrive through',k:'devices'}]},
- {v:'23.4',items:[
+ {v:'23.4',d:'2026-09-01',items:[
    {t:'Pi2→C6 measured the keepalive, not the link',k:'benchstrip'}]},
  {v:'23.3',items:[
    {t:'BT latency recorded per device, on connect',k:'benchstrip'}]},
  {v:'23.2',items:[
    {t:'One registry of leg names; bounds stated as bounds',k:'benchstrip'}]},
- {v:'23.0',items:[
+ {v:'23.0',d:'2026-08-31',items:[
    {t:'Pi2 runs both stacks at once, split by device route',k:'devices'}]},
- {v:'22.9',items:[
+ {v:'22.9',d:'2026-08-28',items:[
    {t:'Restoring a backup could never have worked',k:'profbackups'}]},
- {v:'22.8',items:[
+ {v:'22.8',d:'2026-08-28',items:[
    {t:'Baseline moves the mappings with it',k:'remap'}]},
 ];
 const VH_SHOWN=3;        // versions shown before "show more"
@@ -1452,7 +1457,39 @@ function vhGo(k){
     if(n.tagName==='DETAILS'&&!n.open)n.open=true;
     if(n.style&&n.style.display==='none')n.style.display='';}
   $('popover').style.display='none';
-  el.scrollIntoView({block:'center',behavior:'smooth'});
+  // 25.2: two provable defects in this jump, and one thing I could NOT prove.
+  //
+  // Josh: "fix the hyperlink, which still doesn't work!"
+  //
+  // 1. `block:'center'` puts a target near the top of a short page UNDER the
+  //    sticky topbar and tab strip -- the same clipping that hid the version
+  //    popover in 25.1.3. scroll-margin-top is the property that exists for
+  //    this, and scrollIntoView honours it.
+  // 2. A target with NO BOX cannot be scrolled to at all. Two keys in
+  //    VERSION_HISTORY measure 0px high -- a table whose rows render later,
+  //    a panel that is empty until a device is connected -- so the jump had
+  //    nothing to aim at. Fall back to the nearest ancestor that has a box,
+  //    which is the panel the user wanted to be looking at anyway.
+  //
+  // NOT changed: I suspected the scroll ran before `switchTab` and the
+  // <details> opens above had settled, and wrote a two-frame deferral for it.
+  // Then I checked: getBoundingClientRect and scrollIntoView both force a
+  // synchronous reflow, so the layout IS current when this line runs. The
+  // deferral was fixing a bug I had not demonstrated -- and it silently never
+  // ran in a background tab, where requestAnimationFrame does not fire.
+  // Removed rather than kept "just in case".
+  //
+  // scrollIntoView, not window.scrollTo: it finds whichever element is
+  // actually scrolling, and this page has panels with their own overflow
+  // (#rightcol among them). A window scroll assumes the document is the
+  // scroller and does nothing when it is not.
+  let t=el;
+  while(t&&t!==document.body&&!t.getClientRects().length)t=t.parentElement;
+  if(!t)t=el;
+  const _cs=getComputedStyle(document.documentElement);
+  const _band=n=>parseFloat(_cs.getPropertyValue(n))||0;
+  t.style.scrollMarginTop=(_band('--topbar-h')+_band('--tabs-h')+12)+'px';
+  t.scrollIntoView({block:'start',behavior:'smooth'});
   const o=el.style.outline;
   el.style.outline='2px solid var(--pick,#d97706)';
   setTimeout(()=>{el.style.outline=o;},2000);}
@@ -1482,12 +1519,22 @@ function vhItemHTML(it,size){
       : `<a class="mlink" data-vhk="${esc(it.k)}" style="cursor:pointer">${esc(it.t)}</a>`)
     +`</div>`;}
 
+/* 25.2: Josh asked for the date each version was pushed. Taken from the
+   commit that bumped the <title>, which is the closest thing to a push date
+   this repo actually records -- a push follows its commit within minutes and
+   the test suite gates it, so there is no version that was committed and
+   never deployed. Stated here rather than implied, so nobody later reads it
+   as the date the work was done. */
+function vhDate(rel){
+  return rel.d?` <span class="muted" style="font-weight:400;font-size:.72rem">`
+    +`${esc(rel.d)}</span>`:'';}
 function vhHTML(all){
   const items=vhNumbered();
   const vs=all?VERSION_HISTORY:VERSION_HISTORY.slice(0,VH_SHOWN);
   let h='<b>What changed</b>';
   for(const rel of vs){
-    h+=`<div style="margin-top:.4rem"><b style="font-size:.8rem">${esc(rel.v)}</b>`;
+    h+=`<div style="margin-top:.4rem"><b style="font-size:.8rem">${esc(rel.v)}</b>`
+      +vhDate(rel);
     for(const it of items.filter(x=>x.v===rel.v)) h+=vhItemHTML(it);
     h+='</div>';}
   if(!all&&VERSION_HISTORY.length>VH_SHOWN)
@@ -1508,7 +1555,7 @@ function renderAppHistory(){
   const items=vhNumbered();
   let h='';
   for(const rel of VERSION_HISTORY){
-    h+=`<div style="margin-top:.5rem"><b>${esc(rel.v)}</b>`;
+    h+=`<div style="margin-top:.5rem"><b>${esc(rel.v)}</b>`+vhDate(rel);
     for(const it of items.filter(x=>x.v===rel.v)) h+=vhItemHTML(it,'.8rem');
     h+='</div>';}
   el.innerHTML=h||'<p class="muted">Nothing recorded.</p>';
