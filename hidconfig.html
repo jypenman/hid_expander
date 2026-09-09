@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.3</title>
+<title>HID Config 25.4</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1371,6 +1371,9 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'25.4',d:'2026-09-09',items:[
+   {t:'A calculation that cannot be worked out now types nothing at all',k:'exptable'},
+   {t:'…and no longer eats the “=” signs you typed around it',k:'exptable'}]},
  {v:'25.3',d:'2026-09-09',items:[
    {t:'An OPEN Copy/Paste note now stays under the tabs however far you scroll',k:'clipdock'},
    {t:'Why the last two attempts failed: sticky cannot outlive its container',k:'clipdock'},
