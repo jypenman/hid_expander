@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.7.1</title>
+<title>HID Config 25.9</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1469,6 +1469,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'25.9',d:'2026-09-11',items:[
+   {t:'Actions per minute moved to the TOP of Usage, and folds away',k:'perfapm'},
+   {t:'The zero APM band now reads \u201c0\u201d \u2014 it was mislabelled \u201c0-5\u201d',k:'perfapm'},
+   {t:'\u201cJust typing\u201d: Shift+; lives in its own collapsed section, showing it makes \u201c:\u201d',k:'usage-typing'},
+   {t:'\u2026and Shift+F3 stays a real shortcut, because it produces no character',k:'page-usage'}]},
  {v:'25.7.1',d:'2026-09-11',items:[
    {t:'Shift-click two modifiers to SEE what they reach — it no longer refuses',k:'wireframes'},
    {t:'\u2026and looking changes nothing: modifiers alone write no rule',k:'wireframes'}]},
@@ -5473,6 +5478,35 @@ function usageEditDesc(td, id){
   inp.select();
 }
 
+/* 25.9: IS THIS ROW A SHORTCUT, OR IS IT JUST TYPING?
+
+   Josh, 2026-09-09 10:20: "On the "Usage" section ensure that any 'shft' +
+   regular key is not mentioned (or rather, is mentioned in a section hidden
+   by default, which gives the actual key that maps to - for example shift +
+   ; ={{# }} :, etc."
+   And 2026-09-11: "Gather up all the keys that emit just a single key and are
+   a normal keyboard thing (like Shift+;", etc.) into an appropriately named
+   category that I can collapse and expand."
+
+   The second half of the first note is the more useful half, and it is what
+   makes the section worth having rather than a bin: it RESOLVES the chord to
+   the character it produces. `Shift+;` is not a shortcut you chose, it is how
+   you type `:`.
+
+   THE TEST IS WHAT THE CHORD PRODUCES, NOT WHETHER IT CONTAINS SHIFT.
+   `Shift+;` produces `:` and belongs here; `Shift+F3` produces nothing you
+   could type and is a real shortcut. Ruling the section by "has Shift in it"
+   would sweep up the second, which is exactly the kind of quietly-wrong
+   filter that makes a hidden section dangerous -- you stop seeing things you
+   needed to see.
+
+   Returns the character, or null if this row is a genuine shortcut. */
+function typingChar(id){
+  const pc=parseCorpusChord(id);
+  if(!pc)return null;                      // unparseable: treat as a shortcut
+  if(pc.mods!==modsToEngine(0x02))return null;   // Shift and nothing else
+  return heldCenter(pc.canon,pc.mods);}
+
 function usageRows(kind){
   if(!usageData) return [];
   const src = usageData[kind] || {};
@@ -5538,8 +5572,8 @@ function renderUsage(){
     const b = $('usageload'); if(b) b.onclick = () => loadUsage();
     return;
   }
-  const table = (kind, title, openDefault) => {
-    const rows = usageRows(kind);
+  const table = (kind, title, openDefault, keep) => {
+    const rows = keep ? usageRows(kind).filter(keep) : usageRows(kind);
     // Only expansions save typing, so only they get the column. A "Saved"
     // column reading 0 down every shortcut row would be a column that means
     // nothing, which is worse than a missing one.
@@ -5568,6 +5602,33 @@ function renderUsage(){
         : '<p class="muted">Nothing recorded yet.</p>'}
     </details>`;
   };
+  /* The collapsed half of the same split. Separate function rather than a
+     fourth argument to table(): it has a different column ("Produces") and a
+     different point, and bending the shared renderer to carry both is how one
+     table ends up meaning two things. */
+  const typingTableHTML = () => {
+    const rows = usageRows('shortcuts')
+      .map(r => ({r, ch: typingChar(r.id)})).filter(x => x.ch);
+    if(!rows.length) return '';
+    return `<details data-uikey="usage-typing">
+      <summary style="cursor:pointer"><b>Just typing</b>
+        <span class="muted">· ${rows.length} row${rows.length===1?'':'s'} —
+        Shift plus a key, which is how you type a character rather than a
+        shortcut you chose</span></summary>
+      <table style="width:100%">
+        <tr><td><b>What you press</b></td><td><b>Produces</b></td>
+            <td><b>Per week</b></td><td><b>Total</b></td></tr>
+        ${rows.map(({r, ch}) => `<tr>
+          <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
+          <td style="font-family:ui-monospace,monospace"><b>${esc(ch)}</b></td>
+          <td>${r.per_week}</td><td class="muted">${r.count}</td>
+        </tr>`).join('')}
+      </table>
+      <p class="muted" style="font-size:.75rem">Collapsed by default, not
+      dropped: these are still keystrokes you made, and the counts are real.
+      They are simply not shortcuts.</p>
+    </details>`;
+  };
   el.innerHTML = `
     <div class="bar">
       <input type="text" id="usagefilter" placeholder="filter…"
@@ -5583,7 +5644,9 @@ function renderUsage(){
       <span style="flex:1"></span>
       <button id="usagereload">⟳ Reload</button>
     </div>
-    ${table('shortcuts', 'Key combinations, layers and macros', true)}
+    ${table('shortcuts', 'Key combinations, layers and macros', true,
+            r=>!typingChar(r.id))}
+    ${typingTableHTML()}
     ${table('expansions', 'Text expansions', true)}
     ${usageSetsHTML()}`;
   $('usagefilter').oninput = e => { usageFilter = e.target.value; renderUsage();
