@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.6</title>
+<title>HID Config 25.7.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -967,6 +967,22 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   </div>
 </div>
 <div id="page-usage" style="display:none">
+  <!-- 24.7: APM. Reads the live engine status (fid 3), which since 24.6 is on
+       tmpfs — so showing it costs no card writes at all.
+       25.9: moved here from Performance, at the TOP, and collapsible —
+       Josh asked for all three. `open` by default because he said he likes
+       it as it is; <details> remembers nothing, so the UI-state memory
+       (data-uikey) is what carries the fold across reloads. -->
+  <details class="panel" id="perfapm" data-uikey="perfapm" open
+    style="margin-bottom:.5rem">
+    <summary style="cursor:pointer;font-weight:600;font-size:1rem">Actions per minute</summary>
+    <p class="muted" style="font-size:.78rem">Counts only — how many actions,
+      of what class, in each ten-second window. <b>No key identities, no
+      order, no content are recorded anywhere</b>, which is why counting plain
+      keystrokes is safe here when the Usage ledger deliberately refuses to.
+      Since the engine restarted.</p>
+    <div id="perfapmbody"></div>
+  </details>
   <div class="tabs" id="usagetabs" style="margin-bottom:.4rem">
     <div class="tab on" data-ut="usage">Usage</div>
     <div class="tab" data-ut="train">Training</div>
@@ -1034,17 +1050,11 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <div id="perfreport" style="margin-top:1rem"></div>
     </div>
   </div>
-  <!-- 24.7: APM. Reads the live engine status (fid 3), which since 24.6 is on
-       tmpfs — so showing it costs no card writes at all. -->
-  <div class="panel" id="perfapm">
-    <h2 style="font-size:1rem;margin:0">Actions per minute</h2>
-    <p class="muted" style="font-size:.78rem">Counts only — how many actions,
-      of what class, in each ten-second window. <b>No key identities, no
-      order, no content are recorded anywhere</b>, which is why counting plain
-      keystrokes is safe here when the Usage ledger deliberately refuses to.
-      Since the engine restarted.</p>
-    <div id="perfapmbody"></div>
-  </div>
+  <!-- 25.9: "Actions per minute" MOVED to the top of the Usage tab. Josh,
+       2026-09-09 10:21: "Put the 'Actions per minute' Section in "Usage", not
+       in "Performance" - "Performance" pertains to the HID performnace,
+       "Usage" has the user's usage." His distinction, and it is the right
+       one: Performance is what the machine costs, Usage is what he did. -->
   <!-- 24.7: per-stage service time. The 24.5 audit had to report processor
        cost as unknown because nothing attributed the 15.88 ms to a stage. -->
   <div class="panel" id="perfstage">
@@ -1459,6 +1469,14 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'25.7.1',d:'2026-09-11',items:[
+   {t:'Shift-click two modifiers to SEE what they reach — it no longer refuses',k:'wireframes'},
+   {t:'\u2026and looking changes nothing: modifiers alone write no rule',k:'wireframes'}]},
+ {v:'25.7',d:'2026-09-11',items:[
+   {t:'The dashed lines follow your profile — toggling a shortcut repaints them at once',k:'wireframes'},
+   {t:'A panel beside the mapping editor: what this key ALREADY does in your OS and apps',k:'scpanel'},
+   {t:'App and OS in bold, what it does underneath',k:'scpanel'},
+   {t:'It says when the shortcut corpus isn\u2019t loaded, instead of implying the key is free',k:'scpanel'}]},
  {v:'25.6',d:'2026-09-11',items:[
    {t:'Click a key and the wireframes show what it reaches — chords, combos, layers',k:'wireframes'},
    {t:'Hold Shift and the keycaps read \u201c!\u201d and \u201c@\u201d, not \u201c1\u201d and \u201c2\u201d',k:'wireframes'},
@@ -4102,8 +4120,28 @@ function addComboSel(dev,u){
       if((cfg.combos||{})[exId]){sel={type:'combo',id:exId};render();
         toast('editing existing combo');return;}}
   }
-  // ---- store as a MOD-CHORD when a modifier is involved --------------------
+  // ---- 25.7.1: MODIFIERS ALONE ARE A QUESTION, NOT A RULE -----------------
+  //
+  // Josh, 2026-09-11: "UI Bug: Note that when I try to select two modifier
+  // keys to see what shortcuts they link to, I get a message 'a modifier rule
+  // needs exactly one non-modifier key' and it won't let me select it."
+  //
+  // He is doing exactly what 25.6 was built for -- hold Ctrl+Shift, see what
+  // they reach -- and this function refused, because its only job until now
+  // was to WRITE a rule, and "Ctrl+Shift" is not a rule. The refusal was
+  // correct about storage and wrong about intent.
+  //
+  // An all-modifier selection now becomes an INSPECT selection: sel.type
+  // 'held', which heldInputs() reads and which writes NOTHING. That also
+  // closes half of the trap noted in 25.6 -- that shift-clicking to look
+  // could change the profile. Picking a non-modifier key still builds a rule,
+  // exactly as before, because that IS a rule.
   const {mods,plain}=splitMods(keys);
+  if(mods&&!plain.length){
+    sel={type:'held',keys,dev:dev||''};
+    render();
+    toast('showing what '+modsName(mods)+' reaches — nothing was changed');
+    return;}
   if(mods){
     if(plain.length!==1){
       toast('a modifier rule needs exactly one non-modifier key (e.g. Cmd + `)',true);
@@ -6230,7 +6268,10 @@ function heldInputs(){
   const out={keys:[],btns:[],dev:''};
   if(!sel)return out;
   out.dev=sel.dev||'';
-  if(sel.type==='modchord'&&Array.isArray(sel.keys))out.keys=sel.keys.slice();
+  // 25.7.1: 'held' is the inspect-only selection -- two or more modifiers
+  // with no key, which is a question about the keyboard rather than a rule.
+  if(sel.type==='held'&&Array.isArray(sel.keys))out.keys=sel.keys.slice();
+  else if(sel.type==='modchord'&&Array.isArray(sel.keys))out.keys=sel.keys.slice();
   else if(sel.type==='combo'){
     const c=(cfg.combos||{})[sel.id];
     if(c&&Array.isArray(c.keys))out.keys=c.keys.slice();}
@@ -6440,7 +6481,10 @@ function heldEffects(dev){
    sentence, which is what makes a list of twenty scannable. */
 function shortcutPanelHTML(canon){
   if(canon==null||canon===0)return '';
-  const box=inner=>`<div style="flex:1 1 13rem;min-width:11rem;max-width:20rem;
+  // An id, so this panel can be found by a test and by a deep link rather
+  // than by matching on its own heading text.
+  const box=inner=>`<div id="scpanel" data-uikey="scpanel"
+    style="flex:1 1 13rem;min-width:11rem;max-width:20rem;
     border:1px solid var(--line);border-radius:8px;padding:.45rem .6rem;
     align-self:flex-start"><div class="muted" style="font-size:.72rem;
     font-weight:600;margin-bottom:.3rem">⌨ Already does something</div>
@@ -7406,6 +7450,22 @@ function renderEditor(){
   positionEditor();
   $('editortitle').textContent=sel.type==='wheel'?'Wheel':sel.type==='stepper'?'E9 stepper':sel.type==='combo'?'Combo':sel.type==='modchord'?'Modifier shortcut':'Mapping editor';
   if(sel.type==='wheel'){return renderWheelEd(ed);}
+  // 25.7.1: an inspect-only selection has no mapping to edit -- it is a set
+  // of held modifiers. Show what it reaches and say plainly that nothing was
+  // written, because the same gesture with a non-modifier key DOES write.
+  if(sel.type==='held'){
+    const names=(sel.keys||[]).map(u=>MODS[u]||KEYS[u]||('0x'+u.toString(16)));
+    const eff=heldEffects(sel.dev||'');
+    let n=0;for(const v of eff.values())n+=v.length;
+    ed.innerHTML=`<h2 style="font-size:1rem">${esc(names.join(' + '))} — held</h2>
+      <p class="muted" style="font-size:.8rem">Nothing was changed. This is a
+      look at what these modifiers reach: <b>${n}</b> thing${n===1?'':'s'},
+      marked on the wireframes.</p>
+      <p class="muted" style="font-size:.78rem">Add a non-modifier key to the
+      selection to turn it into an editable rule, or click any single key to
+      go back to the mapping editor.</p>
+      ${shortcutPanelHTML(null)}`;
+    return;}
   if(sel.type==='stepper'){return renderStepperEd(ed);}
   if(sel.type==='combo'){return renderComboEd(ed);}
   if(sel.type==='modchord'){return renderModChordEd(ed);}
@@ -12251,6 +12311,20 @@ function renderApm(){
   // Bands come back keyed by an APM range ("36-59", "780+"). Sort by the
   // NUMBER at the front, not as text, or "6-11" sorts above "36-59".
   const bandKeys = Object.keys(bands).sort((x,y)=>parseInt(x)-parseInt(y));
+  /* 25.9: THE ZERO BAND IS EXACTLY ZERO, and the engine labels it "0-5".
+     Josh, 2026-09-11: "separate out "0" as its own band, and ">0-5" as it's
+     own band."
+     He is reading the label, and the label is wrong. `BINS` in apm.py starts
+     (0, 1, 3, ...) in actions per TICK, so band 0 holds ticks with NO actions
+     at all -- a pause. bin_label() renders `0*6` to `1*6-1`, i.e. "0-5",
+     which reads as though slow activity lands there too. It cannot: at
+     TICK_S=10 one action is already 6 APM, which is where the next band
+     starts. ">0-5" would be a permanently empty band, and he agreed to drop
+     it -- "Go with just the label".
+     Relabelled HERE, not in the engine: "0-5" is the stored key in every hour
+     bucket already recorded, and renaming it on the engine side would split
+     his history in two to fix a presentation problem. */
+  const bandLabel = k => (parseInt(k)===0 && /^0-/.test(k)) ? '0' : k;
   const maxBand = Math.max(1, ...bandKeys.map(k=>bands[k]));
   const stat = (label, val, note) =>
     '<div style="flex:1;min-width:110px"><div style="font-size:1.5rem;'
@@ -12277,12 +12351,17 @@ function renderApm(){
     + '<b>How your ten-second windows are distributed.</b> The <code>0</code> '
     + 'band is thinking time — kept rather than discarded, because whether a '
     + 'pause counts is a question best answered after the fact, not decided at '
-    + 'recording time.</p>'
+    + 'recording time. There is no band between 0 and 6: a single action in a '
+    + 'ten-second window already <i>is</i> 6 APM.</p>'
     + '<div class="perfwrap"><table class="perftbl"><thead><tr>'
     + '<th style="width:7rem">APM band</th><th>Windows</th><th style="width:5rem">Count</th>'
     + '</tr></thead><tbody>'
     + bandKeys.map(k=>
-        '<tr><td><b>'+k+'</b></td><td><div style="background:var(--ok);height:9px;'
+        '<tr><td><b>'+bandLabel(k)+'</b>'
+        + (bandLabel(k)==='0'
+           ? ' <span class="muted" style="font-weight:400">no actions</span>'
+           : '')
+        + '</td><td><div style="background:var(--ok);height:9px;'
         + 'border-radius:5px;width:'+Math.max(1,bands[k]/maxBand*100).toFixed(1)
         + '%"></div></td><td>'+bands[k].toLocaleString()+'</td></tr>').join('')
     + '</tbody></table></div>';
