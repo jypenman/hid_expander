@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.9</title>
+<title>HID Config 26.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -61,7 +61,7 @@ button:disabled{opacity:.4;cursor:default}
    keyboard focus, so it costs mouse users nothing. */
 button:not(:disabled):active,
 .pill:active,.tab:active,.key:active,summary:active,
-.chip a:active,a[href]:active,.clipph:active,.dockgrip:active{
+.chip a:active,a[href]:active,summary:active{
   transform:translateY(1px);
   filter:brightness(.86) saturate(1.15);
   box-shadow:inset 0 2px 5px rgba(0,0,0,.3)}
@@ -126,42 +126,60 @@ input:focus-visible,textarea:focus-visible,.dockgrip:focus-visible{
    would cost a line without telling you which item you are looking at.
    Offsets come from the two bands above (measured in syncTopbarHeight), so
    this lands under them rather than behind them. */
-#cliplist details[open]>summary,
-#debugmon[open]>summary{position:sticky;
-  top:calc(var(--topbar-h,0px) + var(--tabs-h,0px));
+/* placeholder-26-0 */
+/* 25.9.2: THE WHOLE PANEL STICKS, NOT ITS HEADER.
+
+   Josh, 2026-09-11, after trying 25.9.1: "The current "Debug Monitor" and
+   "Copy / Paste" sticking behavior is not quite what I want: i) I do want the
+   CONTENT to stick if it's open . . . so maybe we can't use this method. (The
+   whole point is that if it's open, I want the content of Notes and Debug to
+   remain on screen even if I scroll down to a different section of the page)."
+
+   He is right about the method. Stacked sticky HEADERS pin a header; the body
+   scrolls away underneath it by design. No amount of tuning makes a sticky
+   header keep its own content on screen -- that is what the header sticking
+   TO the content means.
+
+   But the earlier conclusion ("sticky cannot do this, so it must be a fixed
+   dock") was too strong, and the dock is what he disliked. A sticky element
+   is bound by its CONTAINING BLOCK, and 25.3 measured that against the wrong
+   containing block: a note's own <details>. Make the element that sticks the
+   SECTION -- #clipdock and #debugmon are both direct children of <body> --
+   and its containing block is the page. It then stays on screen for the whole
+   page, with its content, exactly as he asked.
+
+   Bounded and internally scrollable, or a tall open note eats the viewport --
+   the same cap the dock needed, for the same reason. `overflow:auto` HERE is
+   safe: it is the sticky element itself, not an ancestor. An ancestor with a
+   scrolling overflow is what silently disables sticky, and none of
+   #clipdock's or #debugmon's ancestors has one (audited, and tested).
+
+   Nothing is MOVED. That is the whole gain over the dock: no placeholders, no
+   re-homing on rebuild, and none of the bugs that came with it (two notes
+   became four in 25.3; 25.5 nearly deleted the Debug monitor on every save).
+
+   --stick-top stacks them so the two sections never cover each other, set on
+   toggle only -- never on scroll. */
+#clipdock[data-open="true"],
+#debugmon[data-open="true"]{position:sticky;
+  top:calc(var(--topbar-h,0px) + var(--tabs-h,0px) + var(--stick-top,0px));
   z-index:40;background:Canvas;
-  /* it overlays the item's own body as that scrolls under it */
+  max-height:var(--stick-max,38vh);overflow:auto;
+  border:1px solid var(--line);border-radius:8px;
+  box-shadow:0 6px 18px rgba(0,0,0,.14)}
+#debugmon[data-open="true"]{z-index:41}
+/* The summaries keep their own sticky INSIDE the panel, so scrolling a long
+   note inside the box still shows which note you are in. This one IS bounded
+   by the panel, which is now correct rather than a limitation. */
+#clipdock[data-open="true"] #cliplist details[open]>summary{position:sticky;
+  top:0;z-index:2;background:Canvas;
   padding:.3rem 0;margin:0 -.6rem;padding-left:.6rem;padding-right:.6rem;
   border-bottom:1px solid var(--line)}
-/* 25.3: THE DOCK. Josh, three times now (2026-09-01 15:26, 2026-09-02,
-   2026-09-09 10:22): "Figure out how to get open notes in Copy/Paste to stop
-   scrolling and stick right under the "Mapping ... Performance" tab section,
-   so I can still see them even when I scroll further down on the page."
-
-   The two previous attempts both used position:sticky, and both were verified
-   by checking that the summary pinned -- which it does. Measured on
-   2026-09-09: it holds at the band through y=600 and y=800, then releases at
-   y=1000. That is not a bug, it is the definition. A sticky element is bound
-   by its own containing block, so once you scroll past the note's <details>
-   it MUST leave. "even when I scroll further down on the page" is precisely
-   the case sticky cannot serve, which is why re-applying the rule looked
-   right every time and never fixed it.
-
-   So an open note is MOVED into this fixed dock, and moved back when closed.
-   Bounded and scrollable, because notes are long and a band that eats the
-   viewport is the failure mode the sticky comment above was already worried
-   about. */
-#clipdockbar{position:fixed;z-index:45;display:none;
-  background:Canvas;border:1px solid var(--line);border-top:none;
-  border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,.18);
-  overflow:auto;padding:.3rem .6rem}
-/* 25.5: height is a variable so the grip can set it and localStorage can
-   remember it. 38vh remains the default -- a band that eats the viewport is
-   the failure mode the note above is already about. */
-#clipdockbar{max-height:var(--dock-h,38vh)}
-#clipdockbar details{margin:.25rem 0}
-.clipph{border:1px dashed var(--line);border-radius:8px;
-  padding:.35rem .6rem;margin:.35rem 0;font-size:.78rem}
+/* 25.9.1: the fixed dock (25.3, extended in 25.5) is GONE, replaced by the
+   stacked sticky headers above at Josh's request. Its CSS and its JS went
+   with it rather than being left dormant: a second mechanism for one job is
+   how the two disagree later, and this file has paid for that twice. The
+   history is in docs/CHANGELOG.md 25.3, 25.5 and 25.9.1. */
 /* Same reasoning as .topbar: on a short window stacked sticky bands eat the
    screen, so everything above gives up and scrolls. */
 @media (max-height:520px){#cliplist details[open]>summary,
@@ -206,6 +224,22 @@ font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12)
 .key.mapped{border-color:var(--ok);border-width:2px}
 .key.layerkey{background:rgba(184,134,11,.45)}
 .key.chordhl{outline:2px dashed var(--warn);outline-offset:1px}
+/* 26.0: the legend chip. It must NOT make its row taller -- that is Josh's
+   own constraint and the reason this is a chip rather than another line.
+   A smaller font than the summary it sits in, line-height 1, and vertical
+   padding of zero, so the row's height stays governed by the heading text. */
+.legendchip{display:inline-block;margin-left:.5rem;padding:1px .45rem;
+  font-size:.66rem;font-weight:400;line-height:1;vertical-align:middle;
+  border:1px solid var(--line);border-radius:999px;cursor:pointer;
+  color:var(--mut);user-select:none}
+/* Measured, because "if possible" was not the interesting half of his
+   request. At line-height 1.5 the chip's inline box was TALLER than the
+   ".88rem" Connected summary's own line box and pushed that row 0.9px --
+   invisible to look at, and exactly the thing he asked not to happen. The
+   chip now contributes less height than the smallest row it sits in. */
+.legendchip:hover{border-color:var(--hi);color:var(--hi)}
+#popover .legendpop{max-width:min(46rem,92vw);padding:.5rem .7rem;
+  font-size:.78rem;line-height:1.6}
 /* 25.6: what a key would DO while something is held. The chip sits at the
    bottom of the cap, where the existing .chip lives, so a key never has two
    competing labels in the same place. Colours are Josh's: "Make in-use
@@ -691,13 +725,31 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   </div>
   <div id="groupshost" style="margin:.3rem 0"></div>
   <details id="wfsection" data-uikey="wireframes" open class="panel" style="padding:.5rem .7rem">
+    <!-- 26.0: Josh, 2026-09-11 14:13:11 (HID Notes): "Add a little 'legend'
+         at the top (in the space to the right of 'Wireframes' and 'Connected'
+         - WITHOUT MAKING THAT SPACE ANY BIGGER, if possible)".
+
+         That last clause is the constraint, not a preference: this row is the
+         header of a page he scrolls constantly, and a legend that costs a line
+         every time is worse than the ambiguity it resolves. So it is a chip on
+         the line that already exists, and the content appears on demand in a
+         popover.
+
+         It reads #legendbody rather than carrying its own copy. The wireframe
+         vocabulary has grown a lot (25.6 alone added the held chips, the
+         green/yellow tones and the swapped key centres) and two legends that
+         drift apart is precisely the confusion this is meant to end. -->
     <summary style="cursor:pointer;font-weight:600">🖼 Wireframes
-      <span class="muted" id="wfcount" style="font-weight:400;font-size:.8rem"></span></summary>
+      <span class="muted" id="wfcount" style="font-weight:400;font-size:.8rem"></span>
+      <span class="legendchip" onclick="legendPop(event,this)"
+        title="What the colours, outlines and corners mean">🎨 legend</span></summary>
     <div id="stage" style="position:relative">
       <svg id="chordsvg"></svg>
       <details id="wfconn" data-uikey="wf-connected" open style="margin:.3rem 0">
         <summary style="cursor:pointer;font-weight:600;font-size:.88rem">✅ Connected
-          <span class="muted" id="wfconncount" style="font-weight:400;font-size:.78rem"></span></summary>
+          <span class="muted" id="wfconncount" style="font-weight:400;font-size:.78rem"></span>
+          <span class="legendchip" onclick="legendPop(event,this)"
+            title="What the colours, outlines and corners mean">🎨 legend</span></summary>
         <div class="devrow" id="devcards"></div>
       </details>
       <details id="wfdisc" data-uikey="wf-disconnected" style="margin:.3rem 0">
@@ -712,7 +764,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     margin:.3rem 0;padding:.35rem .6rem;border:1px solid var(--line);
     border-radius:8px"></div>
   <details id="legend" data-uikey="legend" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
-    <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
+    <div id="legendbody" style="padding:.4rem;font-size:.8rem;line-height:1.7">
       <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
       <span style="background:rgba(245,158,11,.55);padding:0 .3rem;border-radius:3px">yellow flash</span> key sent to the PC ·
       <span style="background:rgba(34,197,94,.55);padding:0 .3rem;border-radius:3px">green flash</span> macro output ·
@@ -723,6 +775,15 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <span style="outline:2px solid #a855f7;padding:0 .3rem;border-radius:3px">purple outline</span> belongs to a highlighted <b>group</b> (toggle groups in the 🗂 Groups card)<br>
       corners on each key: <span style="color:var(--err)">red top-left</span> = original before this device's Baseline · grey center = current identity · <span style="color:var(--ok)">green bottom-right</span> = custom output on this layer · <span style="color:#000;background:var(--layer);border-radius:3px;padding:0 .2rem">L#</span> top-right = triggers that layer<br>
       <span style="color:var(--hi);font-weight:700">⌘ badge</span> (bottom-left) = this key has a <b>modifier shortcut</b> (e.g. Cmd+Tab); hover to see it · a per-OS <b>modifier swap</b> shows like a Baseline change: red original, grey what it now sends<br>
+      <span class="heldchip inuse" style="display:inline">green label</span> a
+      shortcut you already use · <span class="heldchip learn" style="display:inline">yellow
+      label</span> one you are learning · <span class="heldchip" style="display:inline">grey
+      label</span> your own mapping or chord · <b>multiple</b> = more than one
+      set claims that key, hover for all of them (25.6)<br>
+      While a key is held, the <b>grey centre changes to what the key would
+      then produce</b> — hold Shift and <code>;</code> reads <code>:</code>.
+      Shift only: with Ctrl or Alt in the mix the result is a command, not a
+      character, so the centre is left alone (25.6)<br>
       <b>Modifier swaps live in Baseline:</b> to make a keyboard's <b>LAlt</b> act as <b>LWin</b> (Option/Command feel), click that key and set Baseline · LAlt → LWin. It then shows red LAlt → grey LWin. Nothing is swapped by default.
     </div>
   </details>
@@ -1469,6 +1530,23 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'26.1',d:'2026-09-11',items:[
+   {t:'A \u2328 marker on a Usage row \u2014 click it to see which devices produced that chord',k:'page-usage'},
+   {t:'Shift on one keyboard and the key on another now reads as \u201cA + B\u201d',k:'page-usage'},
+   {t:'Costs 0.86\u00b5s per chord; an unmodified keystroke is untouched',k:'perfstage'}]},
+ {v:'26.0',d:'2026-09-11',items:[
+   {t:'A \u201c\ud83c\udfa8 legend\u201d chip beside Wireframes and Connected \u2014 on the line that was already there',k:'wireframes'},
+   {t:'It shows the same legend as the panel below, so the two can never disagree',k:'legend'},
+   {t:'The legend learned 25.6\u2019s vocabulary: green/yellow labels, \u201cmultiple\u201d, swapped key centres',k:'legend'}]},
+ {v:'25.9.2',d:'2026-09-11',items:[
+   {t:'An open Copy/Paste or Debug panel now stays on screen WITH ITS CONTENT, anywhere on the page',k:'clipdock'},
+   {t:'Nothing is moved out of the list to do it \u2014 no dock, no placeholders',k:'clipdock'},
+   {t:'Two open panels split the viewport; close one and the other takes the space',k:'debug'}]},
+ {v:'25.9.1',d:'2026-09-11',items:[
+   {t:'Open notes and the Debug monitor now STACK under the tabs instead of being docked',k:'clipdock'},
+   {t:'Close one and the rest slide up to close the gap',k:'clipdock'},
+   {t:'The fixed dock is gone \u2014 nothing is moved out of the list any more',k:'clipdock'},
+   {t:'Roadmap contents links open the file at the right line',k:'uiver'}]},
  {v:'25.9',d:'2026-09-11',items:[
    {t:'Actions per minute moved to the TOP of Usage, and folds away',k:'perfapm'},
    {t:'The zero APM band now reads \u201c0\u201d \u2014 it was mislabelled \u201c0-5\u201d',k:'perfapm'},
@@ -4684,204 +4762,81 @@ function clipFitBox(ta){
    its placeholder, then re-docks what is open. renderClips() rebuilds
    #cliplist from scratch, so anything left in the dock would otherwise be
    orphaned -- a note visible on screen that no longer exists in the list. */
-function clipDock(){
-  let d=$('clipdockbar');
-  if(!d){d=document.createElement('div');d.id='clipdockbar';
-         document.body.appendChild(d);}
-  return d;}
+/* ============ 25.9.1: stacked sticky headers ============================
+   Replaces the fixed dock of 25.3/25.5. See the CSS above for the method,
+   the three conditions it needs, and the limit it inherits.
 
-function placeClipDock(){
-  const d=$('clipdockbar'),host=$('cliplist');
-  if(!d||d.style.display==='none')return;
-  const cs=getComputedStyle(document.documentElement);
-  const band=n=>parseFloat(cs.getPropertyValue(n))||0;
-  d.style.top=(band('--topbar-h')+band('--tabs-h'))+'px';
-  // Line up with the Copy/Paste column so it reads as that section lifted to
-  // the top, not as a floating panel from somewhere else. The list itself may
-  // be empty while everything is docked, so fall back to its parent.
-  const ref=(host&&host.getBoundingClientRect().width)?host
-           :(host&&host.parentElement)||document.body;
-  const r=ref.getBoundingClientRect();
-  d.style.left=Math.round(r.left)+'px';
-  d.style.width=Math.round(r.width)+'px';}
-
-/* 25.5: the Debug monitor docks in the SAME bar, not one of its own.
-   Josh asked for it alongside the notes on 2026-09-02, and 25.3 deliberately
-   left it out because "docking a second tall panel needs a decision about how
-   two docks share the viewport". This is that decision: they do not share it,
-   they share a dock. Two fixed bands under the tab strip would compete for
-   the same top edge and between them eat the screen -- which is the exact
-   failure the 38vh cap above exists to prevent, arrived at from the other
-   direction. One bar, one height, one grip. */
-function dockables(){
-  const out=[],host=$('cliplist');
-  if(host)for(const el of [...host.children])
-    if(el.tagName==='DETAILS'&&el.dataset.clipkey)
-      out.push({el,key:el.dataset.clipkey,
-                label:(clips[el.dataset.clipkey]||{}).name
-                      ||el.dataset.clipkey});
+   Josh: "I think I want both Copy/Paste, and Debug to be sticky." Both are
+   here, in ONE list, so their offsets stack against each other rather than
+   each panel pinning to the same top edge and hiding the other. */
+function stickables(){
+  // 25.9.2: the SECTIONS stick, with their content. Only two, and both are
+  // direct children of <body> -- which is the whole point: their containing
+  // block is the page, so they stay on screen wherever he scrolls.
+  const out=[];
+  // 25.9.1: the Copy/Paste SECTION is in the pile, not just the notes inside
+  // it. Josh named "both Copy/Paste, and Debug", and #debugmon is a section
+  // header -- so its counterpart is #clipdock, the section, with the note
+  // headers stacking underneath it.
+  //
+  // This overturns a 25.3 decision ("the Copy/Paste section heading itself
+  // deliberately does NOT stick ... pinning it would cost a line without
+  // telling you which item you are looking at"). That reasoning was sound for
+  // ONE pinned line; with a stack it is wrong, because the section heading and
+  // the note heading are now visible together and the pair says more than
+  // either alone.
+  const sect=$('clipdock');
+  if(sect)out.push(sect);
   const dbg=$('debugmon');
-  if(dbg)out.push({el:dbg,key:'__debugmon__',label:'Debug monitors'});
-  return out;}
+  if(dbg)out.push(dbg);
+  // Document order: the offsets describe a vertical pile, so they have to be
+  // assigned in the order the reader meets them.
+  return out.sort((a,b)=>
+    (a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)?-1:1);}
 
-/* Everything currently docked goes home. The placeholder is found
-   DOCUMENT-WIDE, not inside #cliplist: the Debug monitor's home is nowhere
-   near the Copy/Paste list, and scoping that search is what made this
-   specific to notes in the first place.
+function stickSync(){
+  const open=stickables().filter(el=>{
+    el.dataset.open=el.open?'true':'false';
+    if(!el.open){el.style.removeProperty('--stick-top');
+                 el.style.removeProperty('--stick-max');}
+    return el.open;});
+  if(!open.length)return;
+  /* Share the viewport between the open panels rather than letting each take
+     38vh: two at 38vh is 76% of the screen for panels you are scrolling PAST.
+     The cap is per panel and shrinks as more open, which is the decision 25.5
+     deferred ("docking a second tall panel needs a decision about how two
+     docks share the viewport") -- answered here, and by division. */
+  const share=Math.max(18,Math.floor(60/open.length));
+  let cumulative=0;
+  for(const el of open){
+    el.style.setProperty('--stick-top',cumulative+'px');
+    el.style.setProperty('--stick-max',share+'vh');
+    // Measured, not assumed: the panels are not a uniform height, and the
+    // next one must start below whatever this one actually occupies.
+    cumulative+=Math.round(
+      Math.min(el.getBoundingClientRect().height, innerHeight*share/100));}}
 
-   Separated from syncClipDock in 25.5 so renderClips can call it alone --
-   it must empty the dock WITHOUT destroying what is in it. */
-function undockAll(){
-  const d=$('clipdockbar');if(!d)return;
-  for(const el of [...d.children]){
-    if(el.classList.contains('dockgrip')){el.remove();continue;}
-    const k=el.dataset.clipkey||'';
-    const ph=k&&document.querySelector('.clipph[data-clipkey="'
-      +CSS.escape(k)+'"]');
-    if(ph)ph.replaceWith(el);
-    else{const host=$('cliplist');if(host)host.appendChild(el);}}
-  d.style.display='none';}
-
-function syncClipDock(){
-  const d=clipDock();
-  // 1. everything currently docked goes home first
-  undockAll();
-  // 2. then dock whatever is open. Only OPEN ones -- Josh: "Remember this
-  //    should only happen with OPEN Notes."
-  let n=0;
-  for(const it of dockables()){
-    if(!it.el.open)continue;
-    it.el.dataset.clipkey=it.key;
-    const ph=document.createElement('div');
-    ph.className='clipph muted';
-    ph.dataset.clipkey=it.key;
-    ph.textContent='📌 '+it.label+' — pinned under the tabs while it is open';
-    it.el.replaceWith(ph);
-    d.appendChild(it.el);n++;}
-  if(n)d.appendChild(dockGrip());
-  d.style.display=n?'block':'none';
-  placeClipDock();}
-
-/* The grip. The dock is position:fixed and grows downward from a fixed top,
-   so the platform's own `resize` would size it from the wrong edge -- hence a
-   real handle rather than one line of CSS. The log panes inside it DO use
-   native resize, because they are ordinary blocks. */
-const DOCK_H_KEY='hidcfg.dockH';
-function dockGrip(){
-  let g=$('dockgrip');
-  if(!g){
-    g=document.createElement('div');
-    g.id='dockgrip';g.className='dockgrip';g.tabIndex=0;
-    g.title='Drag to resize — double-click to reset';
-    g.addEventListener('pointerdown',e=>{
-      e.preventDefault();
-      const d=clipDock(),top=d.getBoundingClientRect().top;
-      const move=ev=>setDockH(ev.clientY-top);
-      const up=()=>{document.removeEventListener('pointermove',move);
-                    document.removeEventListener('pointerup',up);};
-      document.addEventListener('pointermove',move);
-      document.addEventListener('pointerup',up);});
-    g.addEventListener('dblclick',()=>setDockH(null));
-    // Keyboard, for the same reason :focus-visible exists: a drag handle
-    // reachable only by mouse is not reachable at all for part of the time.
-    g.addEventListener('keydown',e=>{
-      const step=e.shiftKey?64:16;
-      if(e.key==='ArrowDown')setDockH(clipDock().offsetHeight+step);
-      else if(e.key==='ArrowUp')setDockH(clipDock().offsetHeight-step);
-      else return;
-      e.preventDefault();});}
-  return g;}
-
-function setDockH(px){
-  const r=document.documentElement;
-  if(px==null){r.style.removeProperty('--dock-h');
-               try{localStorage.removeItem(DOCK_H_KEY);}catch(_){}
-               return;}
-  // Bounded at both ends: below ~4rem there is no content left to see and the
-  // grip is all that remains, and above 85vh the dock IS the page.
-  const h=Math.max(64,Math.min(px,Math.round(innerHeight*0.85)));
-  r.style.setProperty('--dock-h',h+'px');
-  try{localStorage.setItem(DOCK_H_KEY,String(h));}catch(_){}}
-
-// Restore on load. try/catch because a private window throws on the ACCESS,
-// not just on the value -- and a dock that cannot size is still a dock.
-try{const _h=localStorage.getItem(DOCK_H_KEY);
-    if(_h)document.documentElement.style.setProperty('--dock-h',_h+'px');
-}catch(_){}
-
-// 25.5: every .logbox remembers its own height, so a tall RAW pane set while
-// reading a capture is still tall next time. Delegated, because the panes are
-// rebuilt and a listener per box would be lost with them.
-const LOG_H_KEY='hidcfg.logH';
-function logHeights(){
-  try{return JSON.parse(localStorage.getItem(LOG_H_KEY)||'{}');}
-  catch(_){return {};}}
-function applyLogHeights(){
-  const m=logHeights();
-  for(const [id,h] of Object.entries(m)){
-    const el=document.getElementById(id);
-    if(el)el.style.height=h;}}
-// Saved on pointerup rather than through a ResizeObserver. The panes are
-// rebuilt by renders, so an observer would have to be re-attached each time
-// and would silently stop recording the first time that was forgotten. The
-// native resize handle writes el.style.height, so reading it after the drag
-// ends needs nothing attached to the element at all.
-document.addEventListener('pointerup',()=>{
-  let m=null,dirty=false;
-  for(const el of document.querySelectorAll('.logbox[id]')){
-    if(!el.style.height)continue;
-    m=m||logHeights();
-    if(m[el.id]!==el.style.height){m[el.id]=el.style.height;dirty=true;}}
-  if(dirty){try{localStorage.setItem(LOG_H_KEY,JSON.stringify(m));}catch(_){}}
-});
-window.addEventListener('DOMContentLoaded',applyLogHeights);
-
-window.addEventListener('resize',placeClipDock);
-// The notes get their `toggle` listener in renderClips, because they are
-// rebuilt. #debugmon is markup in the page and is never rebuilt, so it is
-// wired once -- and after DOMContentLoaded, since this script block runs
-// while the document is still parsing and $('debugmon') can be null here.
+// Toggle only -- never on scroll. That is the whole point of the technique:
+// the browser does the sticking, JS only says where each header stops.
+window.addEventListener('resize',stickSync);
 window.addEventListener('DOMContentLoaded',()=>{
   const dbg=$('debugmon');
-  if(dbg)dbg.addEventListener('toggle',syncClipDock);});
+  if(dbg)dbg.addEventListener('toggle',stickSync);
+  stickSync();});
 
-/* 25.5: RE-DOCKING IS GUARANTEED, not written at the bottom and hoped for.
-   `_renderClipsInner` empties the dock near the top and then has FOUR early
-   returns — no #cliplist, not connected, no clips, nothing to show — none of
-   which reached the `syncClipDock()` at its end.
-
-   That was harmless while the dock only held notes: the notes were gone in
-   those cases anyway. It stopped being harmless the moment the Debug monitor
-   docked in the same bar, because "not connected yet" is the NORMAL state on
-   load, so an open Debug monitor silently un-docked itself as soon as the
-   Copy/Paste list rendered its empty message. Caught by re-rendering while
-   docked in the browser -- nothing load-time would have seen it, and the
-   three-renders-in-a-row check that found 25.3's duplication passed here.
-
-   A finally block is the fix rather than a fourth copy of the call: the next
-   early return someone adds is covered without them knowing this exists. */
 function renderClips(){
-  try{_renderClipsInner();}finally{syncClipDock();}}
+  try{_renderClipsInner();}finally{stickSync();}}
 
 function _renderClipsInner(){
   const host=$('cliplist');if(!host)return;
   const _noteClips=noteClipNames();
-  // 25.3: EMPTY THE DOCK BEFORE THE REBUILD, not after.
-  //
-  // host.innerHTML='' destroys the placeholders but NOT the docked elements,
-  // which live in #clipdockbar. syncClipDock() at the end then found no
-  // placeholder to return them to, appended the stale copies to the list, and
-  // docked both those and the freshly built ones -- two notes became four.
-  // Caught by re-rendering while docked in the browser; nothing load-time
-  // would have seen it, since the page is perfectly valid either way.
-  // 25.5: RETURN the dock's contents, do not delete them. `innerHTML=''` was
-  // safe while the dock only ever held notes, which this function is about to
-  // rebuild from `clips` anyway. The Debug monitor is not rebuilt by anything
-  // -- it is markup in the page -- so deleting it here would remove it for
-  // the rest of the session, and a re-render happens on every save.
-  // undockAll() puts each panel back at its placeholder first; the notes then
-  // die with host.innerHTML='' as before, and #debugmon survives outside it.
-  undockAll();
+  // 25.9.1: nothing to empty first any more. The dock (25.3) MOVED elements
+  // out of this list, so a rebuild had to return them or it orphaned them --
+  // two notes became four in 25.3, and in 25.5 the same line would have
+  // deleted the Debug monitor outright. Sticky headers move nothing: every
+  // note stays exactly where the list puts it, so the rebuild is once again
+  // just a rebuild. Losing that whole class of bug is most of the reason
+  // Josh's approach is better, not only that it looks more seamless.
   host.innerHTML='';
   // 22.0 #5: note targets pinned to the top. The keyboard writes to these
   // from anywhere, so they are the entries you come to this section to read;
@@ -4918,7 +4873,7 @@ function _renderClipsInner(){
     // must never collapse another, and saving keeps the item open.
     if(_clipOpen[key]===undefined)_clipOpen[key]=editing;
     box.open=!!_clipOpen[key]||editing;
-    box.addEventListener('toggle',()=>{_clipOpen[key]=box.open;syncClipDock();});
+    box.addEventListener('toggle',()=>{_clipOpen[key]=box.open;stickSync();});
     box.style.cssText='margin:.35rem 0;border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem';
     const sum=document.createElement('summary');
     sum.style.cssText='cursor:pointer;font-weight:600';
@@ -5034,7 +4989,7 @@ function _renderClipsInner(){
   // the END of this function deliberately: my first attempt searched forward
   // for "\nfunction " and landed inside an unrelated async handler, which is
   // exactly the blind-block edit rule 1 of the ui-change skill warns about.
-  syncClipDock();}
+  stickSync();}
 window.addClip=()=>{
   const nm=prompt('Name this item (letters, numbers, spaces):','snippet '+(Object.keys(clips).length+1));
   if(nm===null)return;
@@ -5507,6 +5462,29 @@ function typingChar(id){
   if(pc.mods!==modsToEngine(0x02))return null;   // Shift and nothing else
   return heldCenter(pc.canon,pc.mods);}
 
+/* 26.1: which devices produced a chord.
+
+   Josh: "organize it so that any given key can be opened up to show
+   disambiguation between where the chord came from (if multiple devices were
+   involved, you can do "[Device 1]+[Device 2]+...")".
+
+   The engine records these under their own kind, keyed "<chord>\t<devs>", so
+   the `shortcuts` rows he already has are untouched. This reads them back and
+   groups by chord. Device IDS are turned into device NAMES here and not in
+   the engine: the name is a config fact the UI already holds, and an id
+   burned into an hourly bucket could never be renamed afterwards. */
+function chordDevs(id){
+  const src=(typeof usageData!=='undefined'&&usageData
+             &&usageData.chord_devs)||null;
+  if(!src)return null;                    // not loaded != none recorded
+  const out=[];
+  for(const[k,v]of Object.entries(src)){
+    const t=k.indexOf('\t');
+    if(t<0||k.slice(0,t)!==id)continue;
+    out.push({devs:k.slice(t+1).split('+').map(d=>devName(d)||d),
+              count:v.count,per_week:v.per_week});}
+  return out.sort((a,b)=>(b.count||0)-(a.count||0));}
+
 function usageRows(kind){
   if(!usageData) return [];
   const src = usageData[kind] || {};
@@ -5596,7 +5574,8 @@ function renderUsage(){
           }">${r.chars ? fmtChars(r.chars) : '—'}</td>` : ''}
           <td class="muted">${esc(r.os)}</td>
           <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
-          <td><a class="mlink" data-ugo="${kind}" data-uid="${esc(r.id)}"
+          <td>${kind==='shortcuts'?devCellHTML(r.id):''}<a class="mlink"
+                 data-ugo="${kind}" data-uid="${esc(r.id)}"
                  title="Go to where this is defined">✎</a></td>
         </tr>`).join('')}</table>`
         : '<p class="muted">Nothing recorded yet.</p>'}
@@ -5629,6 +5608,21 @@ function renderUsage(){
       They are simply not shortcuts.</p>
     </details>`;
   };
+  /* 26.1: the disclosure. One row can be opened to show where it came from,
+     which is his wording exactly -- not a permanent extra column, because for
+     a one-keyboard chord the answer is never interesting. */
+  const devCellHTML = (id) => {
+    const d = chordDevs(id);
+    if(d === null)
+      return `<span class="muted" title="Open the Usage tab once to fetch it"
+        style="font-size:.7rem">·</span> `;
+    if(!d.length) return '';
+    const many = d.length > 1 || (d[0] && d[0].devs.length > 1);
+    return `<a class="mlink udev" data-udev="${esc(id)}"
+      title="${esc(d.map(x => x.devs.join(' + ') + '  ×' + x.count).join('\n'))}"
+      style="${many ? 'color:var(--hi);font-weight:600' : ''}"
+      >⌨${many ? d.reduce((a, x) => Math.max(a, x.devs.length), 0) : ''}</a> `;
+  };
   el.innerHTML = `
     <div class="bar">
       <input type="text" id="usagefilter" placeholder="filter…"
@@ -5655,6 +5649,23 @@ function renderUsage(){
   $('usagereload').onclick = () => loadUsage();
   el.querySelectorAll('[data-ugo]').forEach(a =>
     a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
+  // 26.1: open the row's device breakdown in place.
+  el.querySelectorAll('[data-udev]').forEach(a => a.onclick = ev => {
+    ev.stopPropagation();
+    const tr = a.closest('tr'); if(!tr) return;
+    const nxt = tr.nextElementSibling;
+    if(nxt && nxt.classList.contains('udevrow')){ nxt.remove(); return; }
+    const d = chordDevs(a.dataset.udev) || [];
+    const cells = tr.children.length;
+    const row = document.createElement('tr');
+    row.className = 'udevrow';
+    row.innerHTML = `<td colspan="${cells}" class="muted"
+      style="font-size:.76rem;padding:.2rem .4rem .5rem 1.2rem">
+      ${d.map(x => `<div><b>${esc(x.devs.join(' + '))}</b>
+        <span class="muted">· ${x.count}× · ${x.per_week}/week</span></div>`)
+        .join('') || '<i>nothing recorded for this chord yet</i>'}</td>`;
+    tr.after(row);
+  });
   // 24.4: the ✎ inside a "Does what" cell edits the description; the ✎ in the
   // last column still jumps to where the thing is defined. Two different
   // pencils doing two different jobs, so they are bound by different
@@ -5859,6 +5870,23 @@ function renderTraining(){
     </details>`;
   el.querySelectorAll('[data-ugo]').forEach(a =>
     a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
+  // 26.1: open the row's device breakdown in place.
+  el.querySelectorAll('[data-udev]').forEach(a => a.onclick = ev => {
+    ev.stopPropagation();
+    const tr = a.closest('tr'); if(!tr) return;
+    const nxt = tr.nextElementSibling;
+    if(nxt && nxt.classList.contains('udevrow')){ nxt.remove(); return; }
+    const d = chordDevs(a.dataset.udev) || [];
+    const cells = tr.children.length;
+    const row = document.createElement('tr');
+    row.className = 'udevrow';
+    row.innerHTML = `<td colspan="${cells}" class="muted"
+      style="font-size:.76rem;padding:.2rem .4rem .5rem 1.2rem">
+      ${d.map(x => `<div><b>${esc(x.devs.join(' + '))}</b>
+        <span class="muted">· ${x.count}× · ${x.per_week}/week</span></div>`)
+        .join('') || '<i>nothing recorded for this chord yet</i>'}</td>`;
+    tr.after(row);
+  });
 }
 
 window.showBackups=()=>{
@@ -6788,6 +6816,34 @@ function moveChordTarget(cur,inp){
 // so a trigger near the right edge opened a panel running off the page --
 // with the part you needed to click on the invisible side. Flips above the
 // trigger when there is no room below, which is the same problem vertically.
+/* 26.0: the legend, on demand, from the ONE copy of it.
+   Reads #legendbody rather than holding its own text: the wireframe's
+   vocabulary grows most releases (25.6 added three entries by itself) and two
+   legends drifting apart is exactly the confusion a legend exists to end.
+   Clicking the chip must not also toggle the <details> it sits in, hence the
+   stopPropagation and preventDefault -- a summary swallows clicks by default,
+   and without this the legend opened and the wireframes collapsed. */
+function legendPop(e,el){
+  e.stopPropagation();e.preventDefault();
+  const p=$('popover'),src=$('legendbody');
+  if(!p||!src)return;
+  if(p.dataset.kind==='legend'&&p.style.display==='block'){
+    p.style.display='none';p.dataset.kind='';return;}
+  p.dataset.kind='legend';
+  p.innerHTML='<div class="legendpop">'+src.innerHTML+'</div>';
+  placePopover(p,el.getBoundingClientRect(),6);
+  // Close on the next click anywhere else, and on Escape. Deferred by a tick
+  // so the click that OPENED it does not immediately close it.
+  setTimeout(()=>{
+    const close=ev=>{
+      if(p.contains(ev.target))return;
+      p.style.display='none';p.dataset.kind='';
+      document.removeEventListener('click',close);
+      document.removeEventListener('keydown',esc);};
+    const esc=ev=>{if(ev.key==='Escape')close(ev);};
+    document.addEventListener('click',close);
+    document.addEventListener('keydown',esc);},50);}
+
 function placePopover(p,r,gap){
   gap=gap||4;
   p.style.display='block';              // must be laid out before it measures
