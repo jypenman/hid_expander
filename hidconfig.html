@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.5</title>
+<title>HID Config 25.6</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -206,6 +206,18 @@ font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12)
 .key.mapped{border-color:var(--ok);border-width:2px}
 .key.layerkey{background:rgba(184,134,11,.45)}
 .key.chordhl{outline:2px dashed var(--warn);outline-offset:1px}
+/* 25.6: what a key would DO while something is held. The chip sits at the
+   bottom of the cap, where the existing .chip lives, so a key never has two
+   competing labels in the same place. Colours are Josh's: "Make in-use
+   green, want to learn...yellow"; neutral for his own mappings and chords,
+   which were never colour-coded and should not start meaning something new. */
+.heldchip{display:block;font-size:.55rem;line-height:1.1;margin-top:1px;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--mut)}
+.heldchip.inuse{color:var(--ok);font-weight:600}
+.heldchip.learn{color:var(--warn);font-weight:600}
+/* The centre reads the RESULT, not the key, so it must not look like the
+   key's own label -- otherwise you cannot tell a preview from the truth. */
+.kcenter.heldcenter{color:var(--hi);font-weight:700}
 .key.held,.key.flash-red{background:rgba(239,68,68,.55)!important;position:relative;z-index:3}
 svg .region.held{fill:rgba(239,68,68,.55)!important}
 /* SENT = a thick yellow INSET ring (box-shadow), so it sits on top of a red
@@ -696,6 +708,9 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       </details>
     </div>
   </details>
+  <div id="heldbar" class="muted" style="display:none;font-size:.8rem;
+    margin:.3rem 0;padding:.35rem .6rem;border:1px solid var(--line);
+    border-radius:8px"></div>
   <details id="legend" data-uikey="legend" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
     <div style="padding:.4rem;font-size:.8rem;line-height:1.7">
       <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
@@ -1444,6 +1459,12 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'25.6',d:'2026-09-11',items:[
+   {t:'Click a key and the wireframes show what it reaches — chords, combos, layers',k:'wireframes'},
+   {t:'Hold Shift and the keycaps read \u201c!\u201d and \u201c@\u201d, not \u201c1\u201d and \u201c2\u201d',k:'wireframes'},
+   {t:'OS and app shortcuts labelled: green = you use it, yellow = learning it',k:'usage-track'},
+   {t:'\u201cmultiple\u201d where two apps claim the same chord, instead of a guess',k:'wireframes'},
+   {t:'A bar saying what is held — and when the shortcut corpus isn\u2019t loaded',k:'legend'}]},
  {v:'25.5',d:'2026-09-11',items:[
    {t:'The Debug monitor docks under the tabs too — the same bar as open notes',k:'debug'},
    {t:'Drag the dock\u2019s bottom edge to resize it; it remembers the height',k:'clipdock'},
@@ -3319,11 +3340,17 @@ function editableLayout(d){
 /* ============ rendering ============ */
 function render(){
   if(!cfg)return;
+  // 25.6: the held-effects cache lives for exactly one render. Anything
+  // longer and a mapping edit repaints keycaps from the config as it was
+  // before the edit -- a wrong answer about his keyboard, which is the one
+  // kind of stale this UI must never show.
+  heldPaintReset();
   const L=$('layers');L.innerHTML='';
   LAYER_NAMES.forEach((n,i)=>{const p=document.createElement('div');
   p.className='pill'+(i===layer?' on':'');p.textContent=n;
   p.onclick=()=>{layer=i;render();};L.appendChild(p);});
   renderStage();renderMacros();renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
+  renderHeldBar();
   requestAnimationFrame(drawChords);
 }
 /* E9 wireframe: right btn / wheel + 10,11 / left btn / thumb rows 7-8-9, 4-5-6, 0-3 */
@@ -3538,8 +3565,9 @@ function renderLayoutKbd(d,w){
       // A rebased button says so on the wireframe, so you are never looking
       // at a key whose mappings belong to a number printed nowhere on it.
       const _isSel=sel&&sel.type==='btn'&&sel.id===b&&(sel.dev||'')===d.id;
+      const _hpb=heldPaint(b,'btn',d.id);
       el.innerHTML=(_isSel?`<span class="edcorner" title="Edit this mapping">✎</span>`:'')
-        +(k.label||btnLabel(b))
+        +(k.label||btnLabel(b))+_hpb.chip
         +(b===0?`<span class="chip" title="Baseline: this physical button is disabled">∅</span>`
           :b!==bPhys?`<span class="chip" title="Baseline: this physical button reports as ${esc(btnLabel(b))}">≡${b}</span>`:'')
         +(eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
@@ -3620,9 +3648,14 @@ function renderLayoutKbd(d,w){
     const seqIdx=seqSel.findIndex(x=>x.dev===d.id&&x.u===u);
     const _isSelK=sel&&((sel.type==='key'&&sel.id===u&&(sel.dev||'')===d.id)
                      ||(sel.type==='btn'&&sel.p2usage===u&&(sel.dev||'')===d.id));
+    // 25.6 (ii/iii/iv): while something is held, this key shows what it would
+    // DO, not what it is. heldPaint() returns both halves so the centre and
+    // the label can never disagree about the same key.
+    const _hp=heldPaint(eff.canon,'key',d.id);
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
       +(_isSelK?`<span class="edcorner" title="Edit this mapping">✎</span>`:'')
-      +baseChip+`<span class="kcenter">${centerName}</span>`
+      +baseChip+`<span class="kcenter${_hp.center?' heldcenter':''}">${
+          _hp.center?esc(_hp.center):centerName}</span>`+_hp.chip
       +(_p2b?`<span class="chip" title="Baseline: this key acts as mouse button ${_p2b} (${esc(btnLabel(_p2b))}) and follows that button's mappings on every layer">≡btn ${_p2b}</span>`
             :(custChip||gestChip))
       +chordChip+(_p2b?elLayerBadge('btn',_p2b,d.id):elLayerBadge('key',eff.canon,d.id));
@@ -5599,13 +5632,15 @@ function setTracked(file, chord, on){
   e.off = e.off || [];
   const i = e.off.indexOf(chord);
   if(on && i >= 0) e.off.splice(i, 1);
-  if(!on && i < 0) e.off.push(chord);}
+  if(!on && i < 0) e.off.push(chord);
+  profileTouched();}
 
 function setTrained(chord, on){
   trackState();
   const i = cfg.kbd_train.indexOf(chord);
   if(on && i < 0) cfg.kbd_train.push(chord);
-  if(!on && i >= 0) cfg.kbd_train.splice(i, 1);}
+  if(!on && i >= 0) cfg.kbd_train.splice(i, 1);
+  profileTouched();}
 
 function renderTrack(){
   const el = $('trackbody'); if(!el) return;
@@ -5642,6 +5677,10 @@ function renderTrack(){
     const f = cb.dataset.trackset;
     const e = cfg.kbd_track[f] = cfg.kbd_track[f] || {on:false, off:[]};
     e.on = cb.checked;
+    // Writes cfg directly rather than through setTracked(), so it needs the
+    // call of its own. The choke point below is what stops the NEXT handler
+    // having the same hole.
+    profileTouched();
     renderTrack();
     toast(cb.checked ? 'tracking ' + f : 'no longer tracking ' + f);});
   el.querySelectorAll('[data-trackone]').forEach(cb => cb.onchange = () =>
@@ -6162,6 +6201,337 @@ window.importAddition=obj=>{
     (skipped.length?` · ${skipped.length} skipped`:'')+' — ⬆ Save to device');
   if(skipped.length)console.warn('addition skipped:',skipped);};
 
+/* ============ 25.6: WHAT DOES THIS KEY DO? ============================
+   Josh, 2026-09-11 11:19:01: "When I click on a key (or combination of keys),
+   I want to see how they modify other keys, or what shortcuts are available.
+   Ensure you have a clear picture of the ways in which this can be identified
+   (as well as the remappings, chords, layer work, and macros, there should be
+   the selected 'I use this' sections in the Usage Keyboard Shortcuts."
+
+   ONE SWEEP, FOUR READERS. The lines (i), the keycap centres (ii), the
+   shortcut labels (iii) and the "multiple" marker (iv) are four views of the
+   same question, so they must not each answer it their own way -- that is how
+   the wireframe ends up disagreeing with itself. heldEffects() answers it
+   once; drawChords and the keycap builder read the result.
+
+   WHAT COUNTS AS "HELD" is whatever is selected, including the multi-select
+   Josh named: shift-clicking a second key produces sel.type 'modchord' (with
+   .keys) or 'combo' (whose keys live in cfg.combos). Both are read here.
+
+   WHAT WAS MISSING BEFORE: drawChords swept cfg.mouse_mappings and
+   cfg.kbd_mappings only -- the SHARED tables, at a layer. Not the _by_device
+   twins, not mod_chords, not combos, not the shortcut corpus. So the lines
+   showed a fraction of what a key actually does, and nothing at all for a
+   modifier, which is the case he opened with. */
+
+// The canonical usages currently held, and any held BUTTON.
+// Returns {keys:[canon], btns:[id], dev:'<device or empty>'}.
+function heldInputs(){
+  const out={keys:[],btns:[],dev:''};
+  if(!sel)return out;
+  out.dev=sel.dev||'';
+  if(sel.type==='modchord'&&Array.isArray(sel.keys))out.keys=sel.keys.slice();
+  else if(sel.type==='combo'){
+    const c=(cfg.combos||{})[sel.id];
+    if(c&&Array.isArray(c.keys))out.keys=c.keys.slice();}
+  else if(sel.type==='key')out.keys=[baselineOf(out.dev,sel.id)];
+  else if(sel.type==='btn')out.btns=[sel.id];
+  return out;}
+
+function usageIsMod(u){return u>=0xe0&&u<=0xe7;}
+
+/* 25.6 (ii): "if I click shift, the middle grey/white part of the keys will
+   change to their 'uppercase' etc. values".
+
+   US layout, which is what every wireframe in this profile uses. Written out
+   rather than derived: there is no rule that turns ';' into ':' -- it is a
+   property of the physical layout, and a "clever" derivation would be right
+   for the letters and wrong for everything else, which is the half-correct
+   table that gets trusted.
+
+   Letters are handled separately below (they are just upper-cased), so this
+   covers only the keys where Shift produces a DIFFERENT character. He also
+   asks for Alt/Option characters "in the future"; the reader is written to
+   take any modifier, so that is a second table here, not a second mechanism
+   somewhere else. */
+const SHIFT_CHARS={
+  0x1e:'!',0x1f:'@',0x20:'#',0x21:'$',0x22:'%',0x23:'^',0x24:'&',0x25:'*',
+  0x26:'(',0x27:')',0x2d:'_',0x2e:'+',0x2f:'{',0x30:'}',0x31:'|',0x33:':',
+  0x34:'"',0x35:'~',0x36:'<',0x37:'>',0x38:'?'};
+
+/* What this key's centre should read while `held` is down. null = unchanged,
+   which is the honest answer for every key Shift does nothing to. */
+function heldCenter(canon,bits){
+  if(!bits)return null;
+  if(usageIsMod(canon))return null;
+  // Shift ALONE. With Ctrl or Alt in the mix the result is a command, not a
+  // character, and printing "!" on a key that is really Ctrl+Shift+1 would be
+  // a confident lie about what the key produces.
+  if(bits!==modsToEngine(0x02))return null;
+  if(SHIFT_CHARS[canon]!==undefined)return SHIFT_CHARS[canon];
+  const n=KEYS[canon];
+  if(n&&n.length===1&&/[a-z]/i.test(n))return n.toUpperCase();
+  return null;}
+
+// The modifier BITS the held set represents, in the engine's space -- the
+// space stored chords are compared against. splitMods already does this
+// conversion and documents the one case it cannot see through.
+function heldModBits(held){
+  const {mods}=splitMods(held.keys||[]);
+  return mods;}
+
+/* The shortcut corpus, if it has been fetched.
+   It arrives with the Usage payload, so on a page where Usage has not been
+   opened there is none. Return null rather than [] -- "no corpus loaded" and
+   "no shortcuts match" are different facts, and a confident "nothing here"
+   built on the first is exactly the wrong number that gets acted on (the same
+   distinction 24.3 drew for the expansions "Used" column). */
+function shortcutCorpus(){
+  const c=(typeof usageData!=='undefined'&&usageData&&usageData.corpus)||null;
+  return (c&&c.length)?c:null;}
+
+// "Cmd+Shift+K" -> {mods:<engine bits>, canon:<usage>} or null.
+// Corpus chords are written for humans; this is the only place that shape is
+// interpreted, so a corpus in a different dialect fails HERE and visibly
+// rather than half-matching everywhere.
+function parseCorpusChord(s){
+  const parts=String(s||'').split('+').map(x=>x.trim()).filter(Boolean);
+  if(!parts.length)return null;
+  let mods=0,canon=null;
+  for(const p of parts){
+    const lm=NAME2MOD[p.toLowerCase()];
+    if(lm!==undefined){mods|=modsToEngine(MODUSAGE2BIT[lm]||0);continue;}
+    const u=NAME2KEY[p.toLowerCase()];
+    if(u===undefined)return null;       // unknown token: do not guess
+    if(canon!==null)return null;        // two plain keys: not a mod-chord
+    canon=u;}
+  return canon===null?null:{mods,canon};}
+
+/* 25.6 (iii/iv): the label a key carries while something is held.
+
+   Josh: "add the keyboard shortcut, macro, etc. ... for any keys that would
+   fire something if pressed after the selected keys. (Make in-use green, want
+   to learn...yellow)" and "iv) if multiple shortcuts ... share the same key,
+   write 'multiple' at the bottom."
+
+   Cached per render: heldEffects() sweeps four tables and the corpus, and a
+   keyboard wireframe asks about ~100 keys. Computing it per key turned one
+   sweep into a hundred. The cache is invalidated by render(), not by a timer
+   -- a stale answer here is a wrong answer about his keyboard. */
+let _heldCache=null,_heldCacheDev=null;
+function heldPaintReset(){_heldCache=null;_heldCacheDev=null;}
+function heldPaint(id,kind,dev){
+  const blank={center:null,chip:''};
+  if(!sel)return blank;
+  if(_heldCacheDev!==dev||!_heldCache){
+    _heldCache=heldEffects(dev);_heldCacheDev=dev;}
+  const list=_heldCache.get(kind+':'+id)||[];
+  const bits=heldModBits(heldInputs());
+  const center=kind==='key'?heldCenter(id,bits):null;
+  if(!list.length)return {center,chip:''};
+  // iv) more than one claim on this key: say so rather than picking one.
+  // The alternative is showing the first match, which is a guess wearing the
+  // costume of an answer -- and 26.1's disambiguation dataset is the thing
+  // that will eventually be able to choose. Until it exists, say "multiple".
+  const tone=(list.some(x=>x.tone==='inuse')&&'inuse')
+           ||(list.some(x=>x.tone==='learn')&&'learn')||'';
+  const txt=list.length>1?'multiple':list[0].label;
+  const tip=list.map(x=>`${x.label}${x.detail?'  ('+x.detail+')':''}`).join('\n');
+  return {center,
+          chip:`<span class="heldchip${tone?' '+tone:''}" title="${esc(tip)}"
+                >${esc(String(txt).slice(0,22))}</span>`};}
+
+/* THE SWEEP. Returns a Map keyed 'key:<canon>' / 'btn:<id>' -> [effect],
+   where an effect is {kind, label, tone, detail}.
+     kind  'mapping' | 'chord' | 'combo' | 'shortcut'
+     tone  'inuse' (green) | 'learn' (yellow) | '' (neutral)
+   Josh: "Make in-use green, want to learn...yellow". */
+function heldEffects(dev){
+  const out=new Map();
+  const add=(k,eff)=>{const a=out.get(k)||[];a.push(eff);out.set(k,a);};
+  const held=heldInputs();
+  if(!held.keys.length&&!held.btns.length)return out;
+  const d=dev||held.dev||'';
+
+  // ---- 1. LAYERS. A held key or button that opens a layer shows every
+  //         mapping on that layer -- shared AND per-device, which the old
+  //         sweep never looked at.
+  let L=null;
+  if(held.keys.length===1)L=layerOfSource('key',held.keys[0],d);
+  if(L==null&&held.btns.length===1)L=layerOfSource('btn',held.btns[0],d);
+  if(L!=null){
+    const seen=new Set();
+    const sweep=(tbl,pre)=>{for(const k of Object.keys(tbl||{})){
+      const[l,id]=k.split(',').map(Number);
+      if(l!==L)continue;
+      const tag=pre+':'+id;if(seen.has(tag))continue;seen.add(tag);
+      const v=tbl[k];if(v===undefined||v===null)continue;
+      add(tag,{kind:'mapping',tone:'',
+               label:actShort(pre==='btn'?v:(Array.isArray(v)?v:['key',v])),
+               detail:'layer '+L});}};
+    // device first so its entry wins the `seen` slot -- specificity, the same
+    // order the engine resolves in (CLAUDE.md §2).
+    if(d){sweep((cfg.kbd_mappings_by_device||{})[d],'key');
+          sweep((cfg.mouse_mappings_by_device||{})[d],'btn');}
+    sweep(cfg.kbd_mappings,'key');
+    sweep(cfg.mouse_mappings,'btn');}
+
+  // ---- 2. MOD-CHORDS. The case Josh opened with: hold Shift, or Cmd, and
+  //         see what it does to everything else.
+  const bits=heldModBits(held);
+  if(bits){
+    const os=cfg.active_os||'win';
+    const tbls=[['',cfg.mod_chords||{}]];
+    const p=(cfg.os_profiles||{})[os];
+    if(p&&p.mod_chords)tbls.push([os,p.mod_chords]);
+    for(const[o,tbl]of tbls)for(const[k,act]of Object.entries(tbl)){
+      const[,m,u]=k.split(',').map(Number);
+      if(m!==bits)continue;
+      add('key:'+u,{kind:'chord',tone:'',label:actShort(act)||'∅',
+                    detail:modsName(bits)+(o?' ['+o+' only]':'')});}}
+
+  // ---- 3. COMBOS whose members INCLUDE everything held: the remaining
+  //         members are the keys that would complete one.
+  for(const[id,c]of Object.entries(cfg.combos||{})){
+    if(!c||!Array.isArray(c.keys))continue;
+    if(c.dev&&d&&c.dev!==d)continue;
+    if(!held.keys.every(u=>c.keys.includes(u)))continue;
+    for(const u of c.keys){
+      if(held.keys.includes(u))continue;
+      add('key:'+u,{kind:'combo',tone:'',label:actShort(c.action)||'∅',
+                    detail:'combo '+id});}}
+
+  // ---- 4. SHORTCUTS the OS or an app owns -- not ours, which is exactly why
+  //         they are worth showing: nothing else in this UI knows about them.
+  const corpus=shortcutCorpus();
+  if(corpus&&bits)for(const c of corpus){
+    for(const[chord,desc]of Object.entries(c.shortcuts||{})){
+      const pc=parseCorpusChord(chord);
+      if(!pc||pc.mods!==bits)continue;
+      add('key:'+pc.canon,{
+        kind:'shortcut',
+        tone:isTracked(c.file,chord)?'inuse':(isTrained(chord)?'learn':''),
+        label:desc,
+        detail:(c.name||c.file)+(c.os?' · '+c.os:'')});}}
+  return out;}
+
+/* 25.7 (v/vi): what this key ALREADY does, outside HIDConfig.
+
+   Josh, 2026-09-11 11:19:01: "v) for all shortcuts that aren't defined by
+   HIDConfig (i.e. keyboard shortcuts controlled by the OS or application), in
+   addition to the dialogue for assigning a remapping/macro etc., have a
+   little panel to the right of that dialogue where it gives the short
+   description of what the keyboard shortcuts does and its context. vi) have
+   context (like the App and OS combination) in bold, and then the short
+   description of what the shortcut does in regular text."
+
+   Why this belongs next to the assign dialogue and not in Usage: it is the
+   thing you need at the moment you are about to take the key. Remapping
+   Cmd+K without being told OneNote already uses it for a hyperlink is how a
+   profile quietly breaks an app, and this UI had no way to say so.
+
+   Corpus rows only, which IS the "not defined by HIDConfig" filter he asked
+   for: everything in cfg is ours, everything in the corpus is the OS's or an
+   app's. Sorted so the ones he has opinions about come first -- in use,
+   then learning, then the rest.
+
+   The order of the two lines is his: CONTEXT in bold, then the description
+   in regular text. It reads as a label and its meaning rather than a
+   sentence, which is what makes a list of twenty scannable. */
+function shortcutPanelHTML(canon){
+  if(canon==null||canon===0)return '';
+  const box=inner=>`<div style="flex:1 1 13rem;min-width:11rem;max-width:20rem;
+    border:1px solid var(--line);border-radius:8px;padding:.45rem .6rem;
+    align-self:flex-start"><div class="muted" style="font-size:.72rem;
+    font-weight:600;margin-bottom:.3rem">⌨ Already does something</div>
+    ${inner}</div>`;
+  const corpus=shortcutCorpus();
+  // Not loaded is not the same as nothing here, and this panel is read at the
+  // moment of deciding whether a key is free. Saying nothing would answer
+  // "is it free?" with a confident yes. (Same rule as 24.3's "Used" column.)
+  if(!corpus)return box(`<div class="muted" style="font-size:.75rem">OS and
+    app shortcuts have not been fetched — open the <b>Usage</b> tab once, then
+    come back. Until then this panel cannot tell you whether this key is
+    already taken.</div>`);
+  const rows=[];
+  for(const c of corpus)
+    for(const[chord,desc]of Object.entries(c.shortcuts||{})){
+      const pc=parseCorpusChord(chord);
+      if(!pc||pc.canon!==canon)continue;
+      rows.push({chord,desc,
+        ctx:(c.app||c.name||c.file)+(c.os?' · '+c.os:''),
+        tone:isTracked(c.file,chord)?'inuse':(isTrained(chord)?'learn':'')});}
+  if(!rows.length)return box(`<div class="muted" style="font-size:.75rem">
+    Nothing in the shortcut corpus uses this key. It is free as far as the
+    sets you have loaded know.</div>`);
+  const rank={inuse:0,learn:1,'':2};
+  rows.sort((a,b)=>rank[a.tone]-rank[b.tone]||a.chord.localeCompare(b.chord));
+  return box(rows.map(r=>`<div style="margin:.3rem 0;font-size:.75rem">
+    <div style="font-family:ui-monospace,monospace${
+      r.tone?';color:var(--'+(r.tone==='inuse'?'ok':'warn')+')':''}">${
+      esc(r.chord)}${r.tone==='inuse'?' ✓':r.tone==='learn'?' ◐':''}</div>
+    <div><b>${esc(r.ctx)}</b></div>
+    <div class="muted">${esc(r.desc)}</div></div>`).join(''))
+    +'';}
+
+/* 25.7: THE WIREFRAME FOLLOWS THE PROFILE, NOT A SNAPSHOT OF IT.
+
+   Josh, 2026-09-11: "ensure that any time I add or remove mappings (or
+   shortcuts), or enable or disable shortcuts from the 'learning' section,
+   that the UI automatically changes the dashed lines (i.e. that the dashes
+   are based on the profile or something, rather than hard coded to a specific
+   profile)."
+
+   He is describing a real hole. MAPPING edits were already covered -- every
+   path through the editor ends in render(), which resets the held cache. The
+   SHORTCUT side was not: the three learning toggles called renderTrack() and
+   renderTraining() and nothing else, so the wireframe kept showing the green
+   and yellow labels from before the toggle, on a page where he had just
+   changed exactly that.
+
+   Fixed at the CHOKE POINT rather than at the call sites. setTracked() and
+   setTrained() are the only two functions that change this state, so a
+   handler cannot forget -- which is the failure mode the call-site approach
+   guarantees eventually, and which 25.5's renderClips early-return bug had
+   already demonstrated in this file this week.
+
+   It repaints the stage rather than calling render(): render() also rebuilds
+   the editor, and rebuilding the editor under a click that landed in the
+   Usage tab is a change he did not ask for. */
+function profileTouched(){
+  heldPaintReset();
+  if(typeof renderStage==='function')renderStage();
+  // Directly, not through requestAnimationFrame: rAF does not fire while the
+  // pane is hidden, and the Usage tab is a hidden pane as far as the Mapping
+  // stage is concerned. (ui-change skill, "two traps".)
+  if(typeof drawChords==='function')drawChords();}
+
+/* 25.6: say what is held, and be honest about what is NOT loaded.
+
+   The shortcut corpus arrives with the Usage payload, so on a page where the
+   Usage tab has not been opened there is none -- and a wireframe that then
+   showed no shortcut labels would read as "this key does nothing", which is a
+   confident wrong answer rather than a missing one. Same distinction 24.3
+   drew for the expansions "Used" column: "never used" and "not loaded" are
+   different facts and must not look alike. */
+function renderHeldBar(){
+  const bar=$('heldbar');if(!bar)return;
+  const held=heldInputs();
+  if(!held.keys.length&&!held.btns.length){bar.style.display='none';return;}
+  const names=held.keys.map(u=>KEYS[u]||MODS[u]||('0x'+u.toString(16)))
+    .concat(held.btns.map(b=>btnLabel(b)));
+  const eff=heldEffects(held.dev);
+  let n=0;for(const v of eff.values())n+=v.length;
+  const bits=heldModBits(held);
+  bar.style.display='block';
+  bar.innerHTML=`Holding <b>${esc(names.join(' + '))}</b> — `
+    +(n?`${n} thing${n===1?'':'s'} it reaches, shown on the wireframes`
+       :'nothing in this profile responds to it')
+    +(bits&&!shortcutCorpus()
+      ? ` · <span style="color:var(--warn)">OS and app shortcuts are not `
+        +`included: open the <b>Usage</b> tab once to fetch the corpus.</span>`
+      : '');}
+
 /* ============ chord lines ============ */
 function elsFor(t){
   if(t.type==='btn')return[...document.querySelectorAll(`#mousesvg [data-btn="${t.id}"]`)];
@@ -6175,6 +6545,13 @@ function drawChords(){
   svg.setAttribute('width',st.clientWidth);svg.setAttribute('height',st.clientHeight);
   svg.innerHTML='';
   if(!sel&&!chordSel)return;   // lines appear only when something is clicked
+  // 25.6 (i): "Have dotted lines to the keys affected (just like is currently
+  // done with layers)". The layer sweep below is unchanged -- it is the case
+  // that already worked and the one he named as the model. What is added is
+  // everything ELSE a held key reaches: mod-chords, combos, per-device
+  // mappings and the OS/app shortcut corpus, none of which this function
+  // could see. heldEffects() is the single enumeration; this draws it.
+  if(!chordSel&&sel)drawHeldLines(svg);
   const srcs=layerSources();
   const wanted=t=>{
     if(chordSel)return t.type===chordSel.tgt.type&&t.id===chordSel.tgt.id;
@@ -6200,6 +6577,48 @@ function drawChords(){
       draw(t);}
   }
 }
+/* 25.6 (i): lines for everything heldEffects() found, on every wireframe that
+   has both ends. Colour carries Josh's green/yellow (iii) so the line and the
+   label agree; a line with no tone stays the existing gold, because those are
+   HIS mappings and recolouring them would make the wireframe mean something
+   different than it did yesterday. */
+const _TONE={inuse:'var(--ok)',learn:'var(--warn)'};
+function drawHeldLines(svg){
+  const held=heldInputs();
+  if(!held.keys.length&&!held.btns.length)return;
+  // Per device, because a mapping can be device-scoped and because the line
+  // must stay on the card it belongs to.
+  for(const dv of (cfg.devices||[])){
+    const eff=heldEffects(dv.id);
+    if(!eff.size)continue;
+    // The source end: whichever held input exists on THIS card.
+    const srcEls=[];
+    for(const u of held.keys)srcEls.push(...elsFor({type:'key',id:u}));
+    for(const b of held.btns)srcEls.push(...elsFor({type:'btn',id:b}));
+    const mine=srcEls.filter(e=>e.closest('.devcard')
+      &&e.closest('.devcard').dataset.dev===dv.id);
+    if(!mine.length)continue;
+    for(const[k,list]of eff){
+      const[kind,idS]=k.split(':');
+      const tgt={type:kind==='btn'?'btn':'key',id:+idS};
+      for(const tgtEl of elsFor(tgt)){
+        const card=tgtEl.closest('.devcard');
+        if(!card||card.dataset.dev!==dv.id)continue;
+        if(mine.includes(tgtEl))continue;     // a key does not point at itself
+        const tone=(list.find(x=>x.tone==='inuse')&&'inuse')
+                 ||(list.find(x=>x.tone==='learn')&&'learn')||'';
+        addHeldLine(svg,mine[0],tgtEl,tone);}}}}
+function addHeldLine(svg,a,b,tone){
+  const[x1,y1]=center(a),[x2,y2]=center(b);
+  const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+  ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);
+  ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+  ln.setAttribute('stroke',_TONE[tone]||'rgba(120,120,140,.45)');
+  ln.setAttribute('stroke-width',tone?2:1.2);
+  ln.setAttribute('stroke-dasharray','3 4');
+  ln.setAttribute('pointer-events','none');
+  svg.appendChild(ln);}
+
 function addLine(svg,a,b,L,tgt){
   const[x1,y1]=center(a),[x2,y2]=center(b);
   const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
@@ -7304,7 +7723,7 @@ function renderEditor(){
     ${devScoped?'':osScopeHTML('osscope',scopeOf(isBtn?'mouse_mappings':'kbd_mappings',key))}
     ${noteFieldHTML(noteKey(isBtn?'mouse':'kbd',layer,isBtn?sel.id:canon))}
     ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
-  </div></div>`;
+  </div>${shortcutPanelHTML(isBtn?null:canon)}</div>`;
   if(identRef)bindIdentity(selDev,identRef,scope);
   // 24.8: this function used to write cfg.layer_keys and cfg.tap_hold
   // unconditionally, whatever the scope picker said. That is the whole bug:
