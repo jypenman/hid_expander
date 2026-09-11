@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 25.4</title>
+<title>HID Config 25.5</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -39,6 +39,58 @@ button{padding:.45rem .9rem;cursor:pointer;border-radius:8px;border:1px solid va
 background:var(--panel);color:inherit;font-size:.88rem}
 button.primary{background:var(--hi);border-color:var(--hi);color:#fff;font-weight:600}
 button:disabled{opacity:.4;cursor:default}
+/* 25.5: EVERY CLICKABLE THING CONFIRMS THE CLICK.
+   Josh, 2026-09-11: "I've said this before: Make sure that all buttons in the
+   UI show a different state on click so I know when I'm clicking them!"
+
+   He is right that nothing had been done. Before this rule the stylesheet had
+   18 `cursor:pointer` declarations and 11 `:hover` rules and NOT ONE
+   `:active` -- so the pointer promised the element was clickable and the
+   element never confirmed the click landed. On anything that waits for the Pi
+   that is indistinguishable from a dead control, and this UI has shipped
+   genuinely dead controls (24.1's whole page below one line, 24.2's missing
+   showTab). "Did that do anything?" should never be a question the UI leaves
+   open.
+
+   Listed by class rather than `[onclick]:active`, deliberately: several large
+   containers carry onclick for delegation, and flashing a whole panel on
+   every click inside it is noise, not feedback.
+
+   :focus-visible is the same question asked from the keyboard, and on a
+   keyboard-remapping tool that is not an optional nicety. It fires only for
+   keyboard focus, so it costs mouse users nothing. */
+button:not(:disabled):active,
+.pill:active,.tab:active,.key:active,summary:active,
+.chip a:active,a[href]:active,.clipph:active,.dockgrip:active{
+  transform:translateY(1px);
+  filter:brightness(.86) saturate(1.15);
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.3)}
+/* .key sits in an absolutely-positioned grid on the wireframes; translateY is
+   safe there (it does not re-flow) where a margin shift would not be. */
+button:not(:disabled),.pill,.tab,.key,summary{
+  transition:filter .06s linear,transform .06s linear}
+button:focus-visible,.pill:focus-visible,.tab:focus-visible,.key:focus-visible,
+summary:focus-visible,a:focus-visible,select:focus-visible,
+input:focus-visible,textarea:focus-visible,.dockgrip:focus-visible{
+  outline:2px solid var(--hi);outline-offset:2px}
+/* A pill or tab already coloured by .on must still visibly move: brightness
+   alone on a saturated fill reads as almost nothing. */
+.pill.on:active,.tab.on:active{filter:brightness(.78)}
+/* 25.5: RESIZE. Josh: "make sure I can resize the vertical size of both Debug
+   Monitor and the Copy/Paste notes". The log panes use the platform's own
+   handle -- no drag code to get wrong, and it survives a re-render because
+   the height lands in style. min-height stops it being dragged to nothing,
+   which is a state with no handle left to drag back. */
+.logbox{resize:vertical;min-height:5rem}
+/* The dock's own grip. The dock is position:fixed, so `resize` would size it
+   from the wrong edge -- it grows DOWNWARD from a fixed top, which is what a
+   bottom grip means here. */
+.dockgrip{height:12px;margin:.25rem -.6rem -.3rem;cursor:ns-resize;
+  display:flex;align-items:center;justify-content:center;
+  border-top:1px solid var(--line);background:var(--panel)}
+.dockgrip::before{content:'';width:2.4rem;height:3px;border-radius:3px;
+  background:var(--line)}
+.dockgrip:hover::before{background:var(--hi)}
 .bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0}
 /* 20.2 #2: the top row follows you down the page. Connect, Read and Save are
    the controls you reach for after scrolling to look at something, and having
@@ -102,7 +154,11 @@ button:disabled{opacity:.4;cursor:default}
 #clipdockbar{position:fixed;z-index:45;display:none;
   background:Canvas;border:1px solid var(--line);border-top:none;
   border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,.18);
-  max-height:38vh;overflow:auto;padding:.3rem .6rem}
+  overflow:auto;padding:.3rem .6rem}
+/* 25.5: height is a variable so the grip can set it and localStorage can
+   remember it. 38vh remains the default -- a band that eats the viewport is
+   the failure mode the note above is already about. */
+#clipdockbar{max-height:var(--dock-h,38vh)}
 #clipdockbar details{margin:.25rem 0}
 .clipph{border:1px dashed var(--line);border-radius:8px;
   padding:.35rem .6rem;margin:.35rem 0;font-size:.78rem}
@@ -1347,6 +1403,23 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
 // engine 23.6, and treating a bugfix suffix as a mismatch would put the false
 // warning straight back.
 const _verNum=v=>String(v||'').match(/^[\d.]+/)?.[0]||String(v||'');
+// 25.5: compare two versions NUMERICALLY, part by part. String compare puts
+// '25.10' below '25.4', and this is about to decide whether to warn.
+// Returns -1/0/1, or null if either side is not a version.
+function _verCmp(a,b){
+  const pa=_verNum(a).split('.'),pb=_verNum(b).split('.');
+  if(!pa[0]||!pb[0]||isNaN(+pa[0])||isNaN(+pb[0]))return null;
+  for(let i=0;i<Math.max(pa.length,pb.length);i++){
+    const x=+(pa[i]||0),y=+(pb[i]||0);
+    if(isNaN(x)||isNaN(y))return null;
+    if(x!==y)return x<y?-1:1;}
+  return 0;}
+// The engine's declared minimum UI, once it has said. null = not said, which
+// is either a pre-25.5 engine or no engine yet. Declared HERE, beside the
+// comparator that uses it, rather than beside showVersions 300 lines down:
+// that put a `let` after a hoisted function that reads it, which is the TDZ
+// shape tools/tdz_scan.js exists to catch.
+let _uiMin=null;
 // One source of truth for the version on screen: the <title>. A second
 // hard-coded string would drift from it the first time one of us forgot.
 const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?';
@@ -1371,6 +1444,17 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'25.5',d:'2026-09-11',items:[
+   {t:'The Debug monitor docks under the tabs too — the same bar as open notes',k:'debug'},
+   {t:'Drag the dock\u2019s bottom edge to resize it; it remembers the height',k:'clipdock'},
+   {t:'The RAW / SENT / LINK panes resize too, and remember theirs',k:'debug'},
+   {t:'Every button, pill, tab and key now visibly reacts to a click',k:'toptabs'},
+   {t:'\u2026and shows a focus ring when you reach it from the keyboard',k:'toptabs'},
+   {t:'No more version warning when the engine is ahead but the UI still works',k:'uiver'}]},
+ {v:'25.4.1',d:'2026-09-09',items:[
+   {t:'An E9 thumb digit set to a layer now OPENS that layer instead of typing its digit',k:'wireframes'},
+   {t:'…so a click on that layer reaches its mapping — Triple Click fires again',k:'remap'},
+   {t:'A key Baseline has disabled no longer accepts Custom mappings it cannot key',k:'remap'}]},
  {v:'25.4',d:'2026-09-09',items:[
    {t:'A calculation that cannot be worked out now types nothing at all',k:'exptable'},
    {t:'…and no longer eats the “=” signs you typed around it',k:'exptable'}]},
@@ -1633,7 +1717,15 @@ function vhOpen(all){
 function showVersions(engine){
   const el=document.getElementById('uiver');if(!el)return;
   el.textContent='v'+UI_VERSION+(engine?'  ·  engine '+engine:'');
-  el.style.color=(engine&&_verNum(engine)!==_verNum(UI_VERSION))?'var(--warn,#b45309)':'';
+  // 25.5: amber means "this pairing is actually a problem", not "these two
+  // strings differ". Below the engine's floor is a problem; ahead of it is
+  // the normal state for the minutes between pushing the engine and
+  // reloading the page. With no floor declared (pre-25.5 engine) the old
+  // equality test stands, because nothing better is known.
+  const bad=engine&&(_uiMin
+    ? _verCmp(UI_VERSION,_uiMin)===-1
+    : _verNum(engine)!==_verNum(UI_VERSION));
+  el.style.color=bad?'var(--warn,#b45309)':'';
   // the badge is the affordance: it already names the version, so it is where
   // you would look for what that version changed
   el.style.cursor='pointer';
@@ -1819,10 +1911,32 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
         // while the Pi was demonstrably running 20.8.2.
         try{
           const ev=obj.engine_version||null;
+          _uiMin=obj.ui_min||null;
           showVersions(ev||'(pre-20.8.1)');
-          if(ev&&_verNum(ev)!==_verNum(UI_VERSION))
-            toast(`⚠ Pi engine is ${ev}, this UI expects ${_verNum(UI_VERSION)}`
-                  +` — re-deploy the .py files`,true);
+          // 25.5: THE MINIMUM-UI FLOOR. Josh, 2026-09-09 10:48:29: "silence
+          // warnings in the UI if the engine is higher than the current UI
+          // version but the UI still meets the engine's minimum UI
+          // requirement."
+          //
+          // The floor is the engine's claim about what an older UI would get
+          // WRONG -- see UI_MIN in s6_orchestrator.py, which spells out the
+          // narrow test for moving it. A plain version difference is not a
+          // fault: pushing the engine and reloading the page a moment later
+          // is the normal order of a deploy, and warning about it is the
+          // crying-wolf failure this file already carries a scar from.
+          if(ev){
+            const below=_uiMin&&_verCmp(UI_VERSION,_uiMin)===-1;
+            if(below)
+              toast(`⚠ This UI (${_verNum(UI_VERSION)}) is older than engine `
+                    +`${ev} requires (needs ${_uiMin}+). Saving from here can `
+                    +`write config this engine reads differently — re-deploy `
+                    +`ui/hidconfig.html before you save.`,true);
+            else if(!_uiMin&&_verNum(ev)!==_verNum(UI_VERSION))
+              // No floor declared: a pre-25.5 engine. Fall back to the old
+              // equality test rather than assume compatibility.
+              toast(`⚠ Pi engine is ${ev}, this UI expects `
+                    +`${_verNum(UI_VERSION)} — re-deploy the .py files`,true);
+          }
         }catch(e){}
         if(typeof pfAdoptStats==='function')pfAdoptStats(obj);
         updateOsBtn();   // 3.1: refresh the OS-mismatch badge once the engine's
@@ -4515,33 +4629,165 @@ function placeClipDock(){
   d.style.left=Math.round(r.left)+'px';
   d.style.width=Math.round(r.width)+'px';}
 
-function syncClipDock(){
-  const host=$('cliplist');
-  const d=clipDock();
-  if(!host){d.style.display='none';return;}
-  // 1. everything currently docked goes home first
+/* 25.5: the Debug monitor docks in the SAME bar, not one of its own.
+   Josh asked for it alongside the notes on 2026-09-02, and 25.3 deliberately
+   left it out because "docking a second tall panel needs a decision about how
+   two docks share the viewport". This is that decision: they do not share it,
+   they share a dock. Two fixed bands under the tab strip would compete for
+   the same top edge and between them eat the screen -- which is the exact
+   failure the 38vh cap above exists to prevent, arrived at from the other
+   direction. One bar, one height, one grip. */
+function dockables(){
+  const out=[],host=$('cliplist');
+  if(host)for(const el of [...host.children])
+    if(el.tagName==='DETAILS'&&el.dataset.clipkey)
+      out.push({el,key:el.dataset.clipkey,
+                label:(clips[el.dataset.clipkey]||{}).name
+                      ||el.dataset.clipkey});
+  const dbg=$('debugmon');
+  if(dbg)out.push({el:dbg,key:'__debugmon__',label:'Debug monitors'});
+  return out;}
+
+/* Everything currently docked goes home. The placeholder is found
+   DOCUMENT-WIDE, not inside #cliplist: the Debug monitor's home is nowhere
+   near the Copy/Paste list, and scoping that search is what made this
+   specific to notes in the first place.
+
+   Separated from syncClipDock in 25.5 so renderClips can call it alone --
+   it must empty the dock WITHOUT destroying what is in it. */
+function undockAll(){
+  const d=$('clipdockbar');if(!d)return;
   for(const el of [...d.children]){
-    const ph=host.querySelector('.clipph[data-clipkey="'
-      +CSS.escape(el.dataset.clipkey||'')+'"]');
-    if(ph)ph.replaceWith(el); else host.appendChild(el);}
+    if(el.classList.contains('dockgrip')){el.remove();continue;}
+    const k=el.dataset.clipkey||'';
+    const ph=k&&document.querySelector('.clipph[data-clipkey="'
+      +CSS.escape(k)+'"]');
+    if(ph)ph.replaceWith(el);
+    else{const host=$('cliplist');if(host)host.appendChild(el);}}
+  d.style.display='none';}
+
+function syncClipDock(){
+  const d=clipDock();
+  // 1. everything currently docked goes home first
+  undockAll();
   // 2. then dock whatever is open. Only OPEN ones -- Josh: "Remember this
   //    should only happen with OPEN Notes."
   let n=0;
-  for(const el of [...host.children]){
-    if(el.tagName!=='DETAILS'||!el.open||!el.dataset.clipkey)continue;
+  for(const it of dockables()){
+    if(!it.el.open)continue;
+    it.el.dataset.clipkey=it.key;
     const ph=document.createElement('div');
     ph.className='clipph muted';
-    ph.dataset.clipkey=el.dataset.clipkey;
-    const nm=(clips[el.dataset.clipkey]||{}).name||el.dataset.clipkey;
-    ph.textContent='📌 '+nm+' — pinned under the tabs while it is open';
-    el.replaceWith(ph);
-    d.appendChild(el);n++;}
+    ph.dataset.clipkey=it.key;
+    ph.textContent='📌 '+it.label+' — pinned under the tabs while it is open';
+    it.el.replaceWith(ph);
+    d.appendChild(it.el);n++;}
+  if(n)d.appendChild(dockGrip());
   d.style.display=n?'block':'none';
   placeClipDock();}
 
-window.addEventListener('resize',placeClipDock);
+/* The grip. The dock is position:fixed and grows downward from a fixed top,
+   so the platform's own `resize` would size it from the wrong edge -- hence a
+   real handle rather than one line of CSS. The log panes inside it DO use
+   native resize, because they are ordinary blocks. */
+const DOCK_H_KEY='hidcfg.dockH';
+function dockGrip(){
+  let g=$('dockgrip');
+  if(!g){
+    g=document.createElement('div');
+    g.id='dockgrip';g.className='dockgrip';g.tabIndex=0;
+    g.title='Drag to resize — double-click to reset';
+    g.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      const d=clipDock(),top=d.getBoundingClientRect().top;
+      const move=ev=>setDockH(ev.clientY-top);
+      const up=()=>{document.removeEventListener('pointermove',move);
+                    document.removeEventListener('pointerup',up);};
+      document.addEventListener('pointermove',move);
+      document.addEventListener('pointerup',up);});
+    g.addEventListener('dblclick',()=>setDockH(null));
+    // Keyboard, for the same reason :focus-visible exists: a drag handle
+    // reachable only by mouse is not reachable at all for part of the time.
+    g.addEventListener('keydown',e=>{
+      const step=e.shiftKey?64:16;
+      if(e.key==='ArrowDown')setDockH(clipDock().offsetHeight+step);
+      else if(e.key==='ArrowUp')setDockH(clipDock().offsetHeight-step);
+      else return;
+      e.preventDefault();});}
+  return g;}
 
+function setDockH(px){
+  const r=document.documentElement;
+  if(px==null){r.style.removeProperty('--dock-h');
+               try{localStorage.removeItem(DOCK_H_KEY);}catch(_){}
+               return;}
+  // Bounded at both ends: below ~4rem there is no content left to see and the
+  // grip is all that remains, and above 85vh the dock IS the page.
+  const h=Math.max(64,Math.min(px,Math.round(innerHeight*0.85)));
+  r.style.setProperty('--dock-h',h+'px');
+  try{localStorage.setItem(DOCK_H_KEY,String(h));}catch(_){}}
+
+// Restore on load. try/catch because a private window throws on the ACCESS,
+// not just on the value -- and a dock that cannot size is still a dock.
+try{const _h=localStorage.getItem(DOCK_H_KEY);
+    if(_h)document.documentElement.style.setProperty('--dock-h',_h+'px');
+}catch(_){}
+
+// 25.5: every .logbox remembers its own height, so a tall RAW pane set while
+// reading a capture is still tall next time. Delegated, because the panes are
+// rebuilt and a listener per box would be lost with them.
+const LOG_H_KEY='hidcfg.logH';
+function logHeights(){
+  try{return JSON.parse(localStorage.getItem(LOG_H_KEY)||'{}');}
+  catch(_){return {};}}
+function applyLogHeights(){
+  const m=logHeights();
+  for(const [id,h] of Object.entries(m)){
+    const el=document.getElementById(id);
+    if(el)el.style.height=h;}}
+// Saved on pointerup rather than through a ResizeObserver. The panes are
+// rebuilt by renders, so an observer would have to be re-attached each time
+// and would silently stop recording the first time that was forgotten. The
+// native resize handle writes el.style.height, so reading it after the drag
+// ends needs nothing attached to the element at all.
+document.addEventListener('pointerup',()=>{
+  let m=null,dirty=false;
+  for(const el of document.querySelectorAll('.logbox[id]')){
+    if(!el.style.height)continue;
+    m=m||logHeights();
+    if(m[el.id]!==el.style.height){m[el.id]=el.style.height;dirty=true;}}
+  if(dirty){try{localStorage.setItem(LOG_H_KEY,JSON.stringify(m));}catch(_){}}
+});
+window.addEventListener('DOMContentLoaded',applyLogHeights);
+
+window.addEventListener('resize',placeClipDock);
+// The notes get their `toggle` listener in renderClips, because they are
+// rebuilt. #debugmon is markup in the page and is never rebuilt, so it is
+// wired once -- and after DOMContentLoaded, since this script block runs
+// while the document is still parsing and $('debugmon') can be null here.
+window.addEventListener('DOMContentLoaded',()=>{
+  const dbg=$('debugmon');
+  if(dbg)dbg.addEventListener('toggle',syncClipDock);});
+
+/* 25.5: RE-DOCKING IS GUARANTEED, not written at the bottom and hoped for.
+   `_renderClipsInner` empties the dock near the top and then has FOUR early
+   returns — no #cliplist, not connected, no clips, nothing to show — none of
+   which reached the `syncClipDock()` at its end.
+
+   That was harmless while the dock only held notes: the notes were gone in
+   those cases anyway. It stopped being harmless the moment the Debug monitor
+   docked in the same bar, because "not connected yet" is the NORMAL state on
+   load, so an open Debug monitor silently un-docked itself as soon as the
+   Copy/Paste list rendered its empty message. Caught by re-rendering while
+   docked in the browser -- nothing load-time would have seen it, and the
+   three-renders-in-a-row check that found 25.3's duplication passed here.
+
+   A finally block is the fix rather than a fourth copy of the call: the next
+   early return someone adds is covered without them knowing this exists. */
 function renderClips(){
+  try{_renderClipsInner();}finally{syncClipDock();}}
+
+function _renderClipsInner(){
   const host=$('cliplist');if(!host)return;
   const _noteClips=noteClipNames();
   // 25.3: EMPTY THE DOCK BEFORE THE REBUILD, not after.
@@ -4552,8 +4798,14 @@ function renderClips(){
   // docked both those and the freshly built ones -- two notes became four.
   // Caught by re-rendering while docked in the browser; nothing load-time
   // would have seen it, since the page is perfectly valid either way.
-  const _dock=$('clipdockbar');
-  if(_dock){_dock.innerHTML='';_dock.style.display='none';}
+  // 25.5: RETURN the dock's contents, do not delete them. `innerHTML=''` was
+  // safe while the dock only ever held notes, which this function is about to
+  // rebuild from `clips` anyway. The Debug monitor is not rebuilt by anything
+  // -- it is markup in the page -- so deleting it here would remove it for
+  // the rest of the session, and a re-render happens on every save.
+  // undockAll() puts each panel back at its placeholder first; the notes then
+  // die with host.innerHTML='' as before, and #debugmon survives outside it.
+  undockAll();
   host.innerHTML='';
   // 22.0 #5: note targets pinned to the top. The keyboard writes to these
   // from anywhere, so they are the entries you come to this section to read;
@@ -6922,6 +7174,31 @@ function renderEditor(){
         else cfg.baseline[selDev][sel.id]=+v;}
       render();toast('baseline updated — ⬆ Save to device to apply');};
     bindGroupAssign(`kbd:${layer},${canon}`);
+    return;}
+  // ---- 25.4.1: canon 0 IS NOT A KEY. -------------------------------------
+  // baselineOf() returns the Baseline target, and a Baseline of 0 means
+  // "∅ Disabled" -- a sentinel, not a usage. Everything below keys its record
+  // on canon, so a disabled key wrote `layer_keys_by_device[dev]["0"]` and
+  // `kbd_mappings_by_device[dev]["<layer>,0"]`, which EVERY disabled key on
+  // that device shares. Josh's live profile carries both, orphaned:
+  // `{"mouse":{"0":5,"30":5}}` and `"5,0":0`, from setting the E9's "1" to
+  // layer 5 while it was briefly baseline-disabled (history deltas 41-43,
+  // 2026-09-09 16:39-16:42). The engine returns early on canon 0, so they
+  // did nothing -- they were silent, which is worse.
+  //
+  // Refuse, and say where the setting actually lives. CLAUDE.md §2:
+  // unrecognised state fails LOUDLY and NON-DESTRUCTIVELY.
+  if(!isBtn&&canon===0){
+    ed.innerHTML=`<h2 style="font-size:1rem">${
+      esc(KEYS[sel.id]||MODS[sel.id]||('usage '+sel.id))} — disabled by Baseline</h2>
+    ${selDev?scopeTabsHTML(selDev,'baseline'):''}
+    <p class="muted" style="font-size:.78rem">Baseline on
+    <b>${esc(devName(selDev))}</b> sets this key to <b>∅ Disabled</b>, so it
+    produces nothing for a Custom mapping, a layer role or a group to act on.
+    There is no canonical key here to key a record against.</p>
+    <p class="muted" style="font-size:.78rem">Open the <b>Baseline</b> tab
+    above and give it a target first — itself, another key, or a mouse button
+    — then map it here.</p>`;
     return;}
   // ---- Custom scope: keyed on the CANONICAL key. Port-scoped custom
   // writes kbd_mappings_by_device[device]; shared writes kbd_mappings. ----
