@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 26.1</title>
+<title>HID Config 26.1.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1338,6 +1338,15 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </div></div>
 
 <div id="page-os" style="display:none">
+  <!-- 26.2: the disambiguation page. Josh, 2026-09-11 11:19:01 (vii): "ensure
+       that there is a disambiguation dataset (and a page for this in the UI,
+       probably under the OS tab)". And (viii): "For the logic surrounding
+       this, write it up on the disambiguation page." -->
+  <details class="panel" id="disamb" data-uikey="disamb" style="margin-bottom:.5rem">
+    <summary style="cursor:pointer;font-weight:600;font-size:1rem">🔗 Disambiguation
+      <span class="muted" id="disambcount" style="font-weight:400;font-size:.8rem"></span></summary>
+    <div id="disambbody"></div>
+  </details>
   <div class="panel">
     <div class="bar">
       <b>Active OS:</b> <span id="osactive" class="status on">win</span>
@@ -1530,6 +1539,13 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'26.1.2',d:'2026-09-11',items:[
+   {t:'Saving Copy/Paste can no longer overwrite notes that changed on the Pi since you loaded the page',k:'clipdock'},
+   {t:'\u2026which is what silently undid a completed notes drain',k:'clipdock'}]},
+ {v:'26.1.1',d:'2026-09-11',items:[
+   {t:'Shortcut sets can say \u201cthese two chords are one command\u201d, and when a chord applies',k:'usage-track'},
+   {t:'\u201cNo shortcut\u201d is an absence now, not a key you could press',k:'usage-track'},
+   {t:'The RStudio set you sent \u2014 187 Windows and 185 Mac chords',k:'usage-track'}]},
  {v:'26.1',d:'2026-09-11',items:[
    {t:'A \u2328 marker on a Usage row \u2014 click it to see which devices produced that chord',k:'page-usage'},
    {t:'Shift on one keyboard and the key on another now reads as \u201cA + B\u201d',k:'page-usage'},
@@ -1867,6 +1883,8 @@ let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let editMulti=new Set();   // 19.1 #6: marquee-selected key indices in the layout editor
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
+// 26.4: the clip revision this page was served, echoed back on save.
+let _clipsRev=null;
 let additions={},_addsChannelOk=false;   // 19.6: packs living in additions/ on the Pi
 let _showGroups=false,_groupsCollapsed=true;   // 19.2 BF2 #4iii: off by default   // 6.9 master highlight toggle + collapse
 const _heldKeys=new Set(),_heldBtns=new Set();  // 6.10 keys/buttons currently held down
@@ -2077,6 +2095,10 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
       }
       else if(curFile===6){
         clips=(obj&&obj.clips&&typeof obj.clips==='object')?obj.clips:{};
+        // 26.4: the revision this copy was served at. Echoed back on save so
+        // the Pi can refuse a write built on a stale read -- see _write_clips.
+        // Same idea as _cfgSnap for the config (21.4).
+        _clipsRev=(obj&&obj.rev)||null;
       // 23.8: this copy is current AS OF NOW. Record the engine's note-write
       // count at this moment; anything beyond it means the keyboard has
       // written since, and what is on screen is behind.
@@ -5059,11 +5081,33 @@ window.saveClips=async()=>{
   if(b>CLIP_TOTAL_MAX){
     toast(`${(b/1024).toFixed(1)} KB is over the ${(CLIP_TOTAL_MAX/1024)|0} KB budget — delete or trim an item`,true);
     return;}
+  if(!_clipsRev){
+    // Nothing was read, so there is nothing to base a replace on. Saving here
+    // would write whatever this page happens to hold over everything on the
+    // Pi -- which is the 26.4 failure exactly.
+    toast('read your Copy/Paste items from the Pi before saving over them',
+          true);
+    return;}
   try{
-    await putFile(6,{clips});
+    // 26.4: `base` is the revision this page was served. The Pi refuses the
+    // write if the notes changed since -- a drain, or another tab. Josh lost
+    // a completed 237-line transfer to exactly that on 2026-09-11.
+    await putFile(6,{clips,base:_clipsRev});
+    await getFile(6);          // re-read, so the next save has a fresh base
     renderClips();
     toast(`saved to the Pi (${(b/1024).toFixed(1)} KB)`);
-  }catch(err){toast('save failed: '+err.message,true);}};
+  }catch(err){
+    const m=String(err.message||err);
+    if(/changed since this page loaded|too old to protect/.test(m)){
+      toast('NOT saved — '+m,true);
+      // Offer the way out rather than leaving him to work it out: re-reading
+      // discards this page's edits, which is the honest cost, so it is his
+      // choice and not automatic.
+      if(confirm(m+'\n\nRe-read the Pi\'s copy now? Your unsaved changes '
+                 +'on this page will be lost.')){
+        await getFile(6);renderClips();}
+      return;}
+    toast('save failed: '+m,true);}};
 /* 19.6 #1.1: browse the timestamped backups the Pi already writes on every
    save, and restore one.  Reuses the existing profile command channel, so no
    new transport.  Restoring stages the file into bridge_config.json on the Pi;
@@ -6593,7 +6637,12 @@ function shortcutPanelHTML(canon){
     for(const[chord,desc]of Object.entries(c.shortcuts||{})){
       const pc=parseCorpusChord(chord);
       if(!pc||pc.canon!==canon)continue;
-      rows.push({chord,desc,
+      // 26.1.1: a corpus entry may now be structured. Read `does` when it is,
+    // and carry the two new facts through rather than dropping them here --
+    // the panel is the one place they are worth reading.
+    const dd=(desc&&typeof desc==='object')?desc:{does:desc};
+    rows.push({chord,desc:dd.does||'',
+        alts:dd.alts||[],when:dd.when||'',
         ctx:(c.app||c.name||c.file)+(c.os?' · '+c.os:''),
         tone:isTracked(c.file,chord)?'inuse':(isTrained(chord)?'learn':'')});}
   if(!rows.length)return box(`<div class="muted" style="font-size:.75rem">
@@ -6606,7 +6655,11 @@ function shortcutPanelHTML(canon){
       r.tone?';color:var(--'+(r.tone==='inuse'?'ok':'warn')+')':''}">${
       esc(r.chord)}${r.tone==='inuse'?' ✓':r.tone==='learn'?' ◐':''}</div>
     <div><b>${esc(r.ctx)}</b></div>
-    <div class="muted">${esc(r.desc)}</div></div>`).join(''))
+    <div class="muted">${esc(r.desc)}</div>
+    ${r.alts.length?`<div class="muted" style="font-size:.7rem">or ${
+      r.alts.map(a=>esc(a)).join(', ')}</div>`:''}
+    ${r.when?`<div class="muted" style="font-size:.7rem;font-style:italic"
+      >${esc(r.when)}</div>`:''}</div>`).join(''))
     +'';}
 
 /* 25.7: THE WIREFRAME FOLLOWS THE PROFILE, NOT A SNAPSHOT OF IT.
@@ -9921,8 +9974,92 @@ let osView=null;
 function setActiveOs(os){cfg.active_os=os;cfg.os_pinned=true;updateOsBtn();renderOsTab();
   toast('active OS = '+os+' — ⬆ Save to device to apply');}
 window.setActiveOs=setActiveOs;
+/* 26.2: the disambiguation page, and the write-up he asked for beside it.
+
+   The logic is ON the page rather than only in this comment, deliberately:
+   (viii) asks for it there, and the reason is sound -- a claim about what two
+   shortcuts have in common is worth nothing without the reasoning, which is
+   the same principle as `source_url` on a reference set (CLAUDE.md §2). */
+function renderDisamb(){
+  const el=$('disambbody');if(!el)return;
+  const d=(typeof usageData!=='undefined'&&usageData&&usageData.disamb)||null;
+  const groups=(typeof usageData!=='undefined'&&usageData&&usageData.equiv)||[];
+  const cnt=$('disambcount');
+  const LOGIC=`
+    <details style="margin:.4rem 0"><summary style="cursor:pointer;font-weight:600"
+      >How this works, and what it deliberately does not do</summary>
+    <div class="muted" style="font-size:.8rem;line-height:1.6;padding:.3rem .2rem">
+    <p><b>A relation is about a PAIR, not about a shortcut.</b> "These are the
+    same command" and "these are almost but not quite the same" both need to
+    name the other side. Stored on an entry, the second one cannot — which is
+    why this is a list of edges rather than a label on each shortcut.</p>
+    <p><b>Only <code>same</code> is transitive.</b> If A=B and B=C then A, B
+    and C are one command. <code>similar</code> and <code>differs</code> are
+    notes about one pair and never merge groups: one honest caveat must not
+    quietly join two commands into one.</p>
+    <p><b>The corpus is never edited.</b> Relations live in their own files
+    under <code>kbd_shortcuts/disambiguation/</code>. Adding the model did not
+    require annotating the shortcuts already recorded, and a new factor you
+    think of later is a new field on an edge — it changes nothing already
+    written.</p>
+    <p><b>A reference that does not resolve is reported, not dropped.</b> A
+    dangling edge means a set was renamed or an entry removed. Silence there
+    leaves a dataset that is quietly a little wrong, which is worse than one
+    that is visibly incomplete.</p>
+    <p><b>Your remaps are NOT stored here.</b> "Ctrl+C is Copy on Windows, and
+    also where Cmd+C sits on a Mac <i>because you swapped Ctrl</i>" is two
+    different facts. The first is in this dataset; the second is computed live
+    from your modifier remap, which the engine already knows. Baking your
+    current remap into stored data would make the dataset wrong the moment you
+    changed it.</p>
+    </div></details>`;
+  if(!d){
+    if(cnt)cnt.textContent='';
+    el.innerHTML='<p class="muted">Open the <b>Usage</b> tab once to fetch the '
+      +'shortcut corpus — the relations are read alongside it.</p>'+LOGIC;
+    return;}
+  const rel=d.relations||[],warn=d.warnings||[];
+  if(cnt)cnt.textContent='· '+rel.length+' relation'+(rel.length===1?'':'s')
+    +' · '+groups.length+' command'+(groups.length===1?'':'s');
+  const label=ref=>{
+    const i=ref.lastIndexOf(':');
+    return `<span class="muted">${esc(ref.slice(0,i))}</span>
+      <b style="font-family:ui-monospace,monospace">${esc(ref.slice(i+1))}</b>`;};
+  const byKind=k=>rel.filter(r=>r.rel===k);
+  const table=(k,title,note)=>{
+    const rows=byKind(k);
+    if(!rows.length)return '';
+    return `<details ${k==='same'?'':'open'} style="margin:.3rem 0">
+      <summary style="cursor:pointer"><b>${title}</b>
+        <span class="muted">· ${rows.length}</span></summary>
+      <p class="muted" style="font-size:.76rem;margin:.2rem 0">${note}</p>
+      <table style="width:100%;font-size:.78rem">
+      ${rows.map(r=>`<tr><td>${label(r.a)}</td><td>${label(r.b)}</td>
+        <td class="muted">${esc(r.note||'')}</td></tr>`).join('')}
+      </table></details>`;};
+  el.innerHTML=
+    (warn.length?`<p class="muted" style="color:var(--warn);font-size:.78rem">
+       ⚠ ${warn.length} problem(s): ${esc(warn.slice(0,3).join(' · '))}</p>`:'')
+    +table('same','The same command',
+      'Read from a source that states it, not inferred here. Transitive: '
+      +'these fold into the command groups below.')
+    +table('similar','Almost the same',
+      'Close enough to reach for interchangeably, different enough that the '
+      +'difference is worth stating.')
+    +table('differs','The same chord, a different result',
+      'The ones that will catch you out.')
+    +`<details open style="margin:.3rem 0"><summary style="cursor:pointer">
+       <b>Commands</b> <span class="muted">· ${groups.length}</span></summary>
+       <p class="muted" style="font-size:.76rem;margin:.2rem 0">Every chord
+       that reaches the same command, folded together.</p>
+       <table style="width:100%;font-size:.78rem">${groups.map(g=>
+         `<tr><td>${g.map(x=>label(x)).join(' <span class="muted">=</span> ')}</td></tr>`
+       ).join('')}</table></details>`
+    +LOGIC;}
+
 function renderOsTab(){
   if(!cfg)return;
+  renderDisamb();
   const oses=osKnown();
   if(!osView||!oses.includes(osView))osView=(cfg.active_os&&oses.includes(cfg.active_os))?cfg.active_os:oses[0];
   $('osactive').textContent=cfg.active_os||'win';
