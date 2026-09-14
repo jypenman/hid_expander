@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 26.7.1</title>
+<title>HID Config 26.8</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -160,6 +160,27 @@ input:focus-visible,textarea:focus-visible,.dockgrip:focus-visible{
 
    --stick-top stacks them so the two sections never cover each other, set on
    toggle only -- never on scroll. */
+/* 26.8: CLOSED, the two bars stick too, so either can be opened from
+   anywhere on the page. Josh, 2026-09-11 15:41: "when Copy/Paste or Debug
+   are CLOSED, then DO freeze them at top when scrolled down, so that I can
+   access them no matter where I am on the page." A closed <details> is its
+   summary and nothing else, and it is a direct child of <body>, so sticking
+   the element IS sticking the bar. */
+#clipdock:not([open]),
+#debugmon:not([open]){position:sticky;
+  top:calc(var(--topbar-h,0px) + var(--tabs-h,0px) + var(--stick-top,0px));
+  z-index:39;background:Canvas}
+/* 26.8: OPEN with a note open, the dock shows ONLY the open note -- not the
+   heading, the explanatory text, the buttons or the closed notes. Josh:
+   "ONLY FREEZE THE OPEN NOTE, instead of the whole frame (I don't need to
+   see all the unopen notes, and all the text explaining what Copy/Paste is,
+   etc". Nothing is moved: the dock stays the sticky element (its containing
+   block is the page, which is what lets it stay on screen at all), and the
+   rest of its content is hidden while a note is open. */
+#clipdock[data-open="true"][data-noteopen="true"] .panel>h2,
+#clipdock[data-open="true"][data-noteopen="true"] .panel>p,
+#clipdock[data-open="true"][data-noteopen="true"] .panel>.bar,
+#clipdock[data-open="true"][data-noteopen="true"] #cliplist details:not([open]){display:none}
 #clipdock[data-open="true"],
 #debugmon[data-open="true"]{position:sticky;
   top:calc(var(--topbar-h,0px) + var(--tabs-h,0px) + var(--stick-top,0px));
@@ -1617,6 +1638,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'26.8',d:'2026-09-14',items:[
+   {t:'Copy/Paste: with a note open, only that note stays on screen; closed, the Copy/Paste and Debug bars stick at the top so either opens from anywhere',k:'clipdock'},
+   {t:'Usage: “Does what” is the first column; an expansion with no note of yours shows its set’s own description',k:'usage-notes'},
+   {t:'Usage: note captures are their own table (“Notes captured”), no longer rows in Text expansions',k:'usage-notes'}]},
  {v:'26.7.1',d:'2026-09-14',items:[
    {t:'The “Pi was doing” ring no longer fills with the 2-second expansions mtime check; only a real reload is recorded',k:'test-hist'}]},
  {v:'26.7',d:'2026-09-14',items:[
@@ -4953,11 +4978,21 @@ function stickables(){
     (a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)?-1:1);}
 
 function stickSync(){
-  const open=stickables().filter(el=>{
+  const all=stickables();
+  const open=all.filter(el=>{
     el.dataset.open=el.open?'true':'false';
-    if(!el.open){el.style.removeProperty('--stick-top');
-                 el.style.removeProperty('--stick-max');}
+    if(!el.open){el.style.removeProperty('--stick-max');}
     return el.open;});
+  // 26.8: a note open inside the dock -> the dock shows only that note.
+  const cd=$('clipdock');
+  if(cd)cd.dataset.noteopen=(cd.open&&cd.querySelector('#cliplist details[open]'))?'true':'false';
+  // 26.8: closed bars stack too. Offsets are assigned in document order over
+  // ALL of them, open or closed, so a closed bar under an open panel sits
+  // below it rather than on top of it.
+  let top=0;
+  for(const el of all){
+    if(!el.open){el.style.setProperty('--stick-top',top+'px');
+      top+=Math.round(el.getBoundingClientRect().height);}}
   if(!open.length)return;
   /* Share the viewport between the open panels rather than letting each take
      38vh: two at 38vh is 76% of the screen for panels you are scrolling PAST.
@@ -4966,7 +5001,8 @@ function stickSync(){
      docks share the viewport") -- answered here, and by division. */
   const share=Math.max(18,Math.floor(60/open.length));
   let cumulative=0;
-  for(const el of open){
+  for(const el of all){
+    if(!el.open){cumulative+=Math.round(el.getBoundingClientRect().height);continue;}
     el.style.setProperty('--stick-top',cumulative+'px');
     el.style.setProperty('--stick-max',share+'vh');
     // Measured, not assumed: the panels are not a uniform height, and the
@@ -4980,6 +5016,8 @@ window.addEventListener('resize',stickSync);
 window.addEventListener('DOMContentLoaded',()=>{
   const dbg=$('debugmon');
   if(dbg)dbg.addEventListener('toggle',stickSync);
+  const cd=$('clipdock');
+  if(cd)cd.addEventListener('toggle',stickSync);
   stickSync();});
 
 function renderClips(){
@@ -5566,6 +5604,11 @@ function fmtChars(n){
    what CLAUDE.md §2 forbids -- "an undated scrape presented as fact is worse
    than no list". So his note is shown as his, and where a cited description
    also exists, both are visible with the source link intact. */
+function expSetNote(trigger){
+  for(const s of Object.values(expSets||{})){
+    for(const it of ((s&&s.items)||[])){
+      if(it&&it.trigger===trigger&&it.note)return String(it.note);}}
+  return '';}
 function usageDescHTML(r){
   const cited = r.desc ? esc(r.desc.text)
       + (r.desc.url ? ` <a class="mlink" href="${esc(r.desc.url)}"
@@ -5574,9 +5617,11 @@ function usageDescHTML(r){
       : '';
   const mine = r.note
     ? `<span title="your own note">${esc(r.note)}</span>` : '';
+  const fromset = (!mine && !cited && r.setnote)
+    ? `<span class="muted" title="from the expansion set that defines it">${esc(r.setnote)}</span>` : '';
   const body = mine && cited ? mine + `<div class="muted"
        style="font-size:.76rem">reference: ${cited}</div>`
-    : (mine || cited || '<span class="muted">—</span>');
+    : (mine || cited || fromset || '<span class="muted">—</span>');
   return body + ` <a class="mlink udescedit" data-uid="${esc(r.id)}"
       title="Write what this does" style="margin-left:.3rem">✎</a>`;
 }
@@ -5682,6 +5727,10 @@ function usageRows(kind){
     // typed-in note inherit a source it does not have, and CLAUDE.md §2 is
     // explicit that an uncited claim presented as fact is worse than no list.
     note: ((cfg && cfg.usage_notes) || {})[id] || '',
+    // 26.8: an expansion set's own `note` for the item -- the author's one-
+    // line "what this does" -- when Josh has not written his own. Shown as
+    // what it is (the set's text), never as a citation.
+    setnote: kind === 'expansions' ? expSetNote(id) : '',
   }));
   const q = usageFilter.trim().toLowerCase();
   const filtered = q ? rows.filter(r =>
@@ -5742,18 +5791,18 @@ function renderUsage(){
         <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}${
           totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span></summary>
       ${rows.length ? `<table style="width:100%">
-        <tr><td><b>What you press</b></td><td><b>Per week</b></td>
+        <tr><td><b>Does what</b></td><td><b>What you press</b></td><td><b>Per week</b></td>
             <td><b>Total</b></td>${saved ? '<td><b>Chars saved</b></td>' : ''}
-            <td><b>OS</b></td><td><b>Does what</b></td><td></td></tr>
+            <td><b>OS</b></td><td></td></tr>
         ${rows.map(r => `<tr>
-          <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
+          <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
+          <td style="font-family:ui-monospace,monospace;max-width:18rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.id)}">${esc(r.id)}</td>
           <td>${r.per_week}</td><td class="muted">${r.count}</td>
           ${saved ? `<td class="muted" title="${
             r.chars ? 'the text produced, less the trigger you typed'
                     : 'recorded before 24.3, when this was not counted'
           }">${r.chars ? fmtChars(r.chars) : '—'}</td>` : ''}
           <td class="muted">${esc(r.os)}</td>
-          <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
           <td>${kind==='shortcuts'?devCellHTML(r.id):''}<a class="mlink"
                  data-ugo="${kind}" data-uid="${esc(r.id)}"
                  title="Go to where this is defined">✎</a></td>
@@ -5765,6 +5814,20 @@ function renderUsage(){
      fourth argument to table(): it has a different column ("Produces") and a
      different point, and bending the shared renderer to carry both is how one
      table ends up meaning two things. */
+  // 26.8: note captures, by clip. They were rows in the expansions table
+  // under their closing tag; nothing was expanded, something was saved.
+  const notesTableHTML = () => {
+    const rows = usageRows('notes');
+    return `<details data-uikey="usage-notes">
+      <summary style="cursor:pointer"><b>Notes captured</b>
+        <span class="muted">· ${rows.length} clip${rows.length===1?'':'s'}</span></summary>
+      ${rows.length ? `<table style="width:100%">
+        <tr><td><b>Clip</b></td><td><b>Per week</b></td><td><b>Total</b></td><td><b>OS</b></td></tr>
+        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td>${r.per_week}</td>
+          <td class="muted">${r.count}</td><td class="muted">${esc(r.os)}</td></tr>`).join('')}</table>`
+        : '<p class="muted">no notes captured yet — older captures were counted in the expansions table until 26.8; <code>fix_usage_ids.py --prune-expansions</code> moves them here</p>'}
+    </details>`;
+  };
   const typingTableHTML = () => {
     const rows = usageRows('shortcuts')
       .map(r => ({r, ch: typingChar(r.id)})).filter(x => x.ch);
@@ -5822,6 +5885,7 @@ function renderUsage(){
             r=>!typingChar(r.id))}
     ${typingTableHTML()}
     ${table('expansions', 'Text expansions', true)}
+    ${notesTableHTML()}
     ${usageSetsHTML()}`;
   $('usagefilter').oninput = e => { usageFilter = e.target.value; renderUsage();
     const b = $('usagefilter'); if(b){ b.focus(); b.setSelectionRange(b.value.length, b.value.length); } };
