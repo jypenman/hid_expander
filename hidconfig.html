@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 26.5</title>
+<title>HID Config 26.7.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1101,11 +1101,17 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem">
       <label style="font-size:.8rem">Keyboard under test
         <select id="testkdev"></select></label>
+      <label style="font-size:.8rem">Test
+        <select id="testksuite"></select></label>
       <button id="testkstart" class="txmini">▶ Start</button>
       <button id="testkfinish" class="txmini" disabled>■ Finish</button>
       <button id="testkreset" class="txmini">↺ Reset</button>
       <span id="testkstate" class="muted" style="font-size:.78rem"></span>
     </div>
+    <div class="muted" style="font-size:.72rem;margin:.2rem 0 .1rem">Type this:</div>
+    <div id="testpassageref" style="font-family:ui-monospace,monospace;font-size:.9rem;line-height:1.6;
+      padding:.5rem .6rem;border:1px solid var(--line,#ccc);border-radius:6px;white-space:pre-wrap;word-break:break-word"></div>
+    <div class="muted" style="font-size:.72rem;margin:.4rem 0 .1rem">Your progress (green = matched so far, red = first divergence):</div>
     <div id="testpassage" style="font-family:ui-monospace,monospace;font-size:.9rem;line-height:1.6;
       padding:.5rem .6rem;border:1px solid var(--line,#ccc);border-radius:6px;white-space:pre-wrap;word-break:break-word"></div>
     <textarea id="testkinput" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off"
@@ -1123,7 +1129,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem">
       <label style="font-size:.8rem">Mouse under test
         <select id="testmdev"></select></label>
-      <button id="testmstart" class="txmini">▶ Start</button>
+      <button id="testmstart" class="txmini">▶ Targets</button>
+      <button id="testfstart" class="txmini" title="sweep left and right; the tab counts sweeps that came up short or paused, and the Pi says what it was doing at the time">▶ Fidget</button>
       <span id="testmstate" class="muted" style="font-size:.78rem"></span>
     </div>
     <div id="testarena" style="position:relative;height:300px;border:1px solid var(--line,#ccc);
@@ -1610,6 +1617,22 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'26.7.1',d:'2026-09-14',items:[
+   {t:'The “Pi was doing” ring no longer fills with the 2-second expansions mtime check; only a real reload is recorded',k:'test-hist'}]},
+ {v:'26.7',d:'2026-09-14',items:[
+   {t:'Test tab: the passage you are typing stays visible above your live progress',k:'test-typing'},
+   {t:'Breakout tests — plain keys, a shifted run, numbers & symbols, inline calculation, expansion trigger — or the full passage',k:'test-typing'},
+   {t:'Fidget test: sweep left ↔ right; the tab counts short sweeps and mid-sweep pauses',k:'test-mouse'},
+   {t:'The engine names the device that was actually used during a run and flags a mismatch with what you picked; each row shows what the Pi was doing during the run',k:'test-hist'}]},
+ {v:'26.6.3',d:'2026-09-14',items:[
+   {t:'URGENT: expansions stopped because a lost key-up left a modifier “held” in the engine; when the kernel reports it dropped events (SYN_DROPPED) the engine now releases everything that device had down, so nothing can stick',k:'benchstrip'}]},
+ {v:'26.6.2',d:'2026-09-14',items:[
+   {t:'Connect no longer slows the mouse: the config sidecar runs at nice +10 and the Feather receiver at −10, so a burst of reads for this page can’t take the core from a frame in flight',k:'benchstrip'}]},
+ {v:'26.6.1',d:'2026-09-14',items:[
+   {t:'Feather receiver: the frame parser skips SPI fill bytes in one C call instead of stepping through them in Python — 314 → 122 µs per chunk on Pi1; it was costing more of the core than the engine while you moused',k:'benchstrip'}]},
+ {v:'26.6',d:'2026-09-14',items:[
+   {t:'Engine: the 6-second status snapshot waits until input has been quiet — it was holding the Pi Zero’s only core for 170–310 ms while the mouse moved, which is where the dropped motion and the pauses came from',k:'benchstrip'},
+   {t:'Engine: mouse motion takes no lock and the reader thread sits above housekeeping in the scheduler; the status file is compact and its expensive blocks are cached',k:'benchstrip'}]},
  {v:'26.5',d:'2026-09-12',items:[
    {t:'A Test tab: type a passage (with an inline calculation and an expansion) and see missing, extra and late keys',k:'test-typing'},
    {t:'A mousing task: targets, misses, distance from centre, path efficiency, then a scroll step',k:'test-mouse'},
@@ -12830,9 +12853,22 @@ const TEST_PASSAGE=[
   {typed:'//element',expect:'∈',name:'set-theory expansion'},
   {t:' A means x is an element of A. Numbers: 1 2 3 4 5 6 7 8 9 0; symbols: () [] {} <> @#$%^&*.'}
 ];
-let testRuns=[],testHistMeta={},testK=null,testM=null;
-function testExpected(){return TEST_PASSAGE.map(p=>(p.t||'')+(p.expect||'')).join('');}
-function testShown(){return TEST_PASSAGE.map(p=>{
+// 26.7: breakout tests. Josh: "create breakout boxes for the different
+// testing tasks so I can do specific ones instead of the whole long typing
+// test". One passage per kind of typing; 'full' is the original.
+const TEST_SUITES={
+  full:{label:'Everything (the full passage)',passage:TEST_PASSAGE},
+  plain:{label:'Plain keys',passage:[{t:'the quick brown fox jumps over the lazy dog and then runs all the way back again. '}]},
+  shift:{label:'Shifted run',passage:[{t:'PACK MY BOX WITH FIVE DOZEN LIQUOR JUGS. Then Some Mixed Case Words Here. '}]},
+  sym:{label:'Numbers & symbols',passage:[{t:'1 2 3 4 5 6 7 8 9 0 () [] {} <> @#$%^&* ; : , . / ? ! - _ = + '}]},
+  calc:{label:'Inline calculation',passage:[{t:'Twelve squared is '},{typed:'=12*12=',expect:'144',name:'inline calculation'},{t:', seven times eight is '},{typed:'=7*8=',expect:'56',name:'inline calculation'},{t:'.'}]},
+  exp:{label:'Expansion trigger',passage:[{t:'x '},{typed:'//element',expect:'∈',name:'set-theory expansion'},{t:' A, and again y '},{typed:'//element',expect:'∈',name:'set-theory expansion'},{t:' B.'}]},
+};
+let testSuite='full';
+function testPassage(){return (TEST_SUITES[testSuite]||TEST_SUITES.full).passage;}
+let testRuns=[],testHistMeta={},testK=null,testM=null,testF=null;
+function testExpected(){return testPassage().map(p=>(p.t||'')+(p.expect||'')).join('');}
+function testShown(){return testPassage().map(p=>{
   const seg=p.typed?`<span class="exp" title="${esc(p.name)}: type ${esc(p.typed)} — expect ${esc(p.expect)}">${esc(p.typed)}</span>`:'';
   return esc(p.t||'')+seg;}).join('');}
 // Fresh engine status, or the last one if the Pi does not answer in time.
@@ -12858,8 +12894,16 @@ function testFillDevs(){
     sel.innerHTML=opts.map(([id,n])=>`<option value="${esc(id)}">${esc(n)}</option>`).join('')||'<option value="">(no devices known)</option>';
     if(opts.some(o=>o[0]===cur))sel.value=cur;
     sel.onchange=()=>{try{localStorage.setItem(ls,sel.value);}catch(_){}};}}
+function testFillSuites(){
+  const sel=$('testksuite');if(!sel)return;
+  if(!sel.options.length){sel.innerHTML=Object.entries(TEST_SUITES).map(([k,v])=>`<option value="${k}">${esc(v.label)}</option>`).join('');
+    try{const s=localStorage.getItem('test.suite');if(s&&TEST_SUITES[s])testSuite=s;}catch(_){}
+    sel.value=testSuite;
+    sel.onchange=()=>{testSuite=sel.value;try{localStorage.setItem('test.suite',testSuite);}catch(_){}
+      if(testK&&!testK.done)testKReset();$('testpassageref').innerHTML=testShown();$('testpassage').innerHTML=testShown();};}}
 function renderTest(){
-  testFillDevs();
+  testFillDevs();testFillSuites();
+  if($('testpassageref')&&!$('testpassageref').innerHTML)$('testpassageref').innerHTML=testShown();
   if($('testpassage')&&!$('testpassage').innerHTML)$('testpassage').innerHTML=testShown();
   if(!testRuns.length&&device&&!window._testHistAsked){window._testHistAsked=true;getFile(TESTS_FID);}
   renderTestHistory();}
@@ -12873,13 +12917,14 @@ function pct(arr,p){if(!arr.length)return null;const s=[...arr].sort((x,y)=>x-y)
 function testKReset(){
   testK=null;const ta=$('testkinput');ta.value='';ta.disabled=false;
   $('testkstart').disabled=false;$('testkfinish').disabled=true;
-  $('testkstate').textContent='';$('testkstats').innerHTML='';$('testpassage').innerHTML=testShown();}
+  $('testkstate').textContent='';$('testkstats').innerHTML='';$('testpassage').innerHTML=testShown();$('testpassageref').innerHTML=testShown();}
 async function testKStart(){
   const dev=$('testkdev').value;
   $('testkstart').disabled=true;$('testkstate').textContent='reading engine…';
   const eng=await testFreshEng();
-  testK={dev,os:(lastEng&&lastEng.effective&&lastEng.effective.active_os)||(cfg&&cfg.active_os)||'',
-    before:testSvcSnap(eng),t0:null,last:null,keys:0,gaps:[],backspaces:0,started:performance.now()};
+  testK={dev,suite:testSuite,os:(lastEng&&lastEng.effective&&lastEng.effective.active_os)||(cfg&&cfg.active_os)||'',
+    before:testSvcSnap(eng),before_ts:eng&&eng.ts,t0:null,last:null,keys:0,gaps:[],backspaces:0,started:performance.now()};
+  $('testpassageref').innerHTML=testShown();
   const ta=$('testkinput');ta.value='';ta.disabled=false;ta.focus();
   $('testkfinish').disabled=false;$('testkstate').textContent='go — type the passage';}
 function testKKey(e){
@@ -12906,13 +12951,13 @@ async function testKFinish(){
   const d=lcsDiff(exp,got);
   const secs=testK.t0!=null&&testK.last!=null?(testK.last-testK.t0)/1000:0;
   const gaps=testK.gaps;
-  const r={kind:'typing',device:testK.dev,os:testK.os,ui:UI_VERSION,
+  const r={kind:'typing',device:testK.dev,suite:testK.suite,os:testK.os,ui:UI_VERSION,engine_before_ts:testK.before_ts,
     expected_chars:exp.length,typed_chars:got.length,keys:testK.keys,backspaces:testK.backspaces,
     seconds:+secs.toFixed(2),wpm:secs>0?+((got.length/5)/(secs/60)).toFixed(1):0,
     missing:d.missing,extra:d.extra,matched:d.matched,
     gap_ms:{median:pct(gaps,.5),p95:pct(gaps,.95),max:gaps.length?Math.max(...gaps):null,
       stalls_400:gaps.filter(g=>g>400).length},
-    expansions:TEST_PASSAGE.filter(p=>p.typed).map(p=>({name:p.name,typed:p.typed,expect:p.expect,found:got.includes(p.expect),raw_left:got.includes(p.typed)})),
+    expansions:testPassage().filter(p=>p.typed).map(p=>({name:p.name,typed:p.typed,expect:p.expect,found:got.includes(p.expect),raw_left:got.includes(p.typed)})),
     engine_before:testK.before};
   // give the engine's status writer a moment to include the last keystrokes
   await new Promise(res=>setTimeout(res,1500));
@@ -12932,7 +12977,8 @@ async function testMStart(){
   const dev=$('testmdev').value;const ar=$('testarena');
   $('testmstart').disabled=true;$('testmstate').textContent='reading engine…';
   const eng=await testFreshEng();
-  testM={dev,before:testSvcSnap(eng),i:0,hits:[],misses:0,path:0,lastPt:null,appear:0,tgt:null,
+  testF=null;
+  testM={dev,before:testSvcSnap(eng),before_ts:eng&&eng.ts,i:0,hits:[],misses:0,path:0,lastPt:null,appear:0,tgt:null,
     os:(lastEng&&lastEng.effective&&lastEng.effective.active_os)||(cfg&&cfg.active_os)||''};
   ar.innerHTML='';$('testscrollwrap').style.display='none';$('testmstats').innerHTML='';
   $('testmstate').textContent='click the targets';
@@ -12971,7 +13017,7 @@ async function testMFinish(){
   const scrollMs=+(performance.now()-testM.scrollT0).toFixed(0);
   $('testmstate').textContent='reading engine…';
   const h=testM.hits,ms=h.map(x=>x.ms),eff=h.map(x=>x.efficiency).filter(x=>x!=null);
-  const r={kind:'mouse',device:testM.dev,os:testM.os,ui:UI_VERSION,targets:h.length,misses:testM.misses,
+  const r={kind:'mouse',device:testM.dev,os:testM.os,ui:UI_VERSION,engine_before_ts:testM.before_ts,targets:h.length,misses:testM.misses,
     click_ms:{mean:ms.length?+(ms.reduce((a,b)=>a+b,0)/ms.length).toFixed(1):null,median:pct(ms,.5),p95:pct(ms,.95),max:ms.length?Math.max(...ms):null},
     small_ms:{median:pct(h.filter(x=>x.small).map(x=>x.ms),.5)},
     miss_px:{mean:h.length?+(h.reduce((a,b)=>a+b.dist,0)/h.length).toFixed(1):null},
@@ -12985,6 +13031,59 @@ function testShowMouse(r){
   $('testmstats').innerHTML=`<b>${c.median!=null?c.median.toFixed(0):'–'}ms</b> median to click (p95 ${c.p95!=null?c.p95.toFixed(0):'–'}, max ${c.max!=null?c.max.toFixed(0):'–'})`+
     ` · small targets ${r.small_ms&&r.small_ms.median!=null?r.small_ms.median.toFixed(0)+'ms':'–'} · ${r.misses} misses · ${r.miss_px.mean!=null?r.miss_px.mean+'px':'–'} from centre`+
     ` · path efficiency ${r.efficiency.mean!=null?(r.efficiency.mean*100).toFixed(0)+'%':'–'} · scroll ${r.scroll_ms}ms in ${r.wheel_events} wheel events`;
+  $('testmstate').textContent='done';}
+/* ---- fidget (26.7) ---------------------------------------------------------- */
+// Josh, 2026-09-14 07:52:34: "the user mouses from left to right in a 'fidget'
+// style movement, with about the same magnitude and speed for each one ...
+// and the engine i) looks at whether there's a 'slowdown' in what is emitted
+// sometimes; ii) looks for what could be causing that slowdown". A sweep is
+// the pointer between two direction reversals. A short sweep is lost motion
+// (the same hand movement moved the pointer less); a pause is a gap of more
+// than 80 ms between pointer events mid-sweep. What the Pi was doing at the
+// time comes back from the engine's housekeeping ring with the history row.
+const TEST_FIDGET_SWEEPS=12,TEST_FIDGET_PAUSE_MS=80,TEST_FIDGET_MIN_PX=40;
+async function testFStart(){
+  const dev=$('testmdev').value;const ar=$('testarena');
+  $('testfstart').disabled=true;$('testmstart').disabled=true;$('testmstate').textContent='reading engine…';
+  const eng=await testFreshEng();
+  testM=null;
+  testF={dev,before:testSvcSnap(eng),before_ts:eng&&eng.ts,pts:[],
+    os:(lastEng&&lastEng.effective&&lastEng.effective.active_os)||(cfg&&cfg.active_os)||''};
+  ar.innerHTML='<div class="muted" style="padding:1rem;font-size:.85rem;line-height:1.5">Sweep the pointer <b>left ↔ right</b> across this box, the same distance and speed each time — eyes closed if you like. It finishes itself after '+TEST_FIDGET_SWEEPS+' sweeps.</div>';
+  $('testscrollwrap').style.display='none';$('testmstats').innerHTML='';
+  $('testmstate').textContent='fidget: 0 / '+TEST_FIDGET_SWEEPS+' sweeps';}
+function testFSweeps(pts){
+  const sw=[];let dir=0,start=0;
+  for(let i=1;i<pts.length;i++){const d=Math.sign(pts[i].x-pts[i-1].x);if(!d)continue;
+    if(dir&&d!==dir){sw.push(testFSweep(pts,start,i-1));start=i-1;}dir=d;}
+  return sw.filter(s=>s.amp>=TEST_FIDGET_MIN_PX);}
+function testFSweep(pts,a,b){
+  const pauses=[];for(let i=a+1;i<=b;i++){const g=pts[i].t-pts[i-1].t;if(g>TEST_FIDGET_PAUSE_MS)pauses.push(+g.toFixed(0));}
+  return{amp:+Math.abs(pts[b].x-pts[a].x).toFixed(0),ms:+(pts[b].t-pts[a].t).toFixed(0),pauses};}
+function testFMove(e){
+  if(!testF||testF.done)return;
+  const r=$('testarena').getBoundingClientRect();testF.pts.push({t:performance.now(),x:e.clientX-r.left});
+  const n=testFSweeps(testF.pts).length;
+  if(n>=TEST_FIDGET_SWEEPS)testFFinish();else $('testmstate').textContent=`fidget: ${n} / ${TEST_FIDGET_SWEEPS} sweeps`;}
+async function testFFinish(){
+  if(!testF||testF.done)return;testF.done=true;
+  const sw=testFSweeps(testF.pts),amps=sw.map(s=>s.amp),mean=amps.reduce((a,b)=>a+b,0)/(amps.length||1);
+  const sd=Math.sqrt(amps.reduce((a,b)=>a+(b-mean)**2,0)/(amps.length||1)),pauses=sw.flatMap(s=>s.pauses);
+  const r={kind:'fidget',device:testF.dev,os:testF.os,ui:UI_VERSION,engine_before_ts:testF.before_ts,sweeps:sw.length,
+    amp_px:{mean:+mean.toFixed(0),cv:mean?+(sd/mean).toFixed(3):null,min:amps.length?Math.min(...amps):null,max:amps.length?Math.max(...amps):null},
+    sweep_ms:{median:pct(sw.map(s=>s.ms),.5),max:sw.length?Math.max(...sw.map(s=>s.ms)):null},
+    pauses:{n:pauses.length,longest:pauses.length?Math.max(...pauses):null,per_sweep:sw.map(s=>s.pauses.length)},
+    engine_before:testF.before};
+  $('testmstate').textContent='reading engine…';
+  await new Promise(res=>setTimeout(res,1500));
+  const eng=await testFreshEng();r.engine_after=testSvcSnap(eng);
+  testShowFidget(r);await testSend(r);$('testfstart').disabled=false;$('testmstart').disabled=false;}
+function testShowFidget(r){
+  const a=r.amp_px||{},p=r.pauses||{};
+  $('testmstats').innerHTML=`<b>${r.sweeps} sweeps</b> · amplitude ${a.mean}px ±${a.cv!=null?(a.cv*100).toFixed(0)+'%':'–'} (${a.min}–${a.max}px)`+
+    ` · <b style="color:${p.n?'var(--hi,#d33)':'inherit'}">${p.n} pauses</b>${p.longest?` (longest ${p.longest}ms)`:''}`+
+    ` · sweep median ${r.sweep_ms&&r.sweep_ms.median!=null?r.sweep_ms.median.toFixed(0):'–'}ms`+
+    `<br><span class="muted">a short sweep is lost motion; a pause is the pointer at rest mid-sweep. What the Pi was doing at the time arrives with the history row once the run is filed.</span>`;
   $('testmstate').textContent='done';}
 /* ---- ledger --------------------------------------------------------------- */
 async function testSend(r){
@@ -13002,16 +13101,22 @@ function renderTestHistory(){
     const runs=byDev[dev].slice(-12).reverse();
     const nm=((cfg&&cfg.devices)||[]).find(d=>d.id===dev);
     h+=`<h3 style="font-size:.88rem;margin:.6rem 0 .2rem">${esc(nm?nm.name:dev)} <span class="muted">(${byDev[dev].length} runs)</span></h3>`;
-    h+='<div style="overflow-x:auto"><table class="testtbl"><tr><th>when</th><th>kind</th><th>result</th><th>gaps / clicks</th><th>engine ms (n) for this device</th><th>other devices during run</th></tr>';
+    h+='<div style="overflow-x:auto"><table class="testtbl"><tr><th>when</th><th>kind</th><th>result</th><th>gaps / clicks</th><th>engine ms (n) for this device</th><th>engine says</th><th>Pi was doing</th><th>other devices during run</th></tr>';
     for(const r of runs){
       const when=r.ts?new Date(r.ts*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'–';
       const d=(r.engine_delta||{}),mine=d[dev],others=Object.keys(d).filter(k=>k!==dev).map(k=>`${esc(k)} ${fmt(d[k].mean)}ms (${d[k].n})`).join(', ');
       let res,gaps;
       if(r.kind==='typing'){res=`${fmt(r.wpm)} wpm · <b${r.missing?' style="color:var(--hi,#d33)"':''}>${r.missing} missing</b> / ${r.extra} extra`;
         const g=r.gap_ms||{};gaps=`median ${fmt(g.median)} · p95 ${fmt(g.p95)} · ${g.stalls_400||0} stalls`;}
+      else if(r.kind==='fidget'){const a=r.amp_px||{},p=r.pauses||{};res=`${r.sweeps} sweeps · ${a.mean}px ±${a.cv!=null?(a.cv*100).toFixed(0)+'%':'–'} · <b${p.n?' style="color:var(--hi,#d33)"':''}>${p.n} pauses</b>`;
+        gaps=`longest pause ${fmt(p.longest)}ms · sweep ${fmt(r.sweep_ms&&r.sweep_ms.median)}ms`;}
       else{const c=r.click_ms||{};res=`${fmt(c.median)}ms median · ${r.misses} misses · eff ${r.efficiency&&r.efficiency.mean!=null?(r.efficiency.mean*100).toFixed(0)+'%':'–'}`;
         gaps=`p95 ${fmt(c.p95)} · scroll ${fmt(r.scroll_ms)}ms`;}
-      h+=`<tr><td>${when}</td><td>${esc(r.kind||'')}</td><td>${res}</td><td>${gaps}</td><td>${mine?`<b>${fmt(mine.mean)}</b> ±${fmt(mine.sd)} (${mine.n})${mine.reset?' <span class="muted">engine restarted</span>':''}`:'<span class="muted">none — did you name the right device?</span>'}</td><td class="muted">${others||'–'}</td></tr>`;}
+      // 26.7: the engine's verdict on which device was actually used, and a
+      // flag when it disagrees with what was picked.
+      const det=r.device_detected?`${esc(r.device_detected)}${r.device_mismatch?' <b style="color:var(--hi,#d33)" title="the device with the most samples during this run is not the one named">≠ named</b>':' ✓'}`:'<span class="muted">–</span>';
+      const hk=(r.housekeeping||[]).map(e=>`${esc(e.what)} ${fmt(e.ms)}ms`).join(', ');
+      h+=`<tr><td>${when}</td><td>${esc(r.kind||'')}${r.suite&&r.suite!=='full'?` <span class="muted">${esc(r.suite)}</span>`:''}</td><td>${res}</td><td>${gaps}</td><td>${mine?`<b>${fmt(mine.mean)}</b> ±${fmt(mine.sd)} (${mine.n})${mine.reset?' <span class="muted">engine restarted</span>':''}`:'<span class="muted">none — did you name the right device?</span>'}</td><td>${det}</td><td class="muted" title="engine housekeeping that ran during the run, from the Pi's own clock">${hk||'nothing'}</td><td class="muted">${others||'–'}</td></tr>`;}
     h+='</table></div>';}
   if(testHistMeta.bad_lines)h+=`<p class="muted">${testHistMeta.bad_lines} unreadable line(s) in the ledger were skipped.</p>`;
   el.innerHTML=h;}
@@ -13019,7 +13124,8 @@ function renderTestHistory(){
   const on=(id,ev,fn)=>{const e=$(id);if(e)e.addEventListener(ev,fn);};
   on('testkstart','click',testKStart);on('testkfinish','click',testKFinish);on('testkreset','click',testKReset);
   on('testkinput','keydown',testKKey);on('testkinput','input',()=>{if(testK&&!testK.done)testKLive();});
-  on('testmstart','click',testMStart);on('testarena','pointermove',testMMove);on('testarena','click',testMClick);
+  on('testmstart','click',testMStart);on('testfstart','click',testFStart);
+  on('testarena','pointermove',e=>{testMMove(e);testFMove(e);});on('testarena','click',testMClick);
   on('testhistload','click',()=>{if(device)getFile(TESTS_FID);else toast('connect first',true);});
 })();
 function switchTab(t){
