@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 26.1.2</title>
+<title>HID Config 26.5</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -296,6 +296,14 @@ label{display:block;margin:.45rem 0 .1rem;font-size:.84rem;opacity:.85}
 /* labels that sit on the same line as their control (checkbox + caption) */
 label.inl{display:inline-flex;align-items:center;gap:.3rem;margin:.3rem 0 0;cursor:pointer}
 label.inl input{margin:0}
+/* --- Test tab (26.5) --- */
+.tgt{position:absolute;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;
+  background:var(--hi,#d33);border:2px solid #fff;box-shadow:0 0 0 2px var(--hi,#d33);cursor:crosshair}
+.tgt.small{width:22px;height:22px;margin:-11px 0 0 -11px}
+#testpassage .ok{color:var(--ok,#2a2)}#testpassage .bad{color:var(--hi,#d33);text-decoration:underline}
+#testpassage .exp{background:rgba(120,120,255,.15);border-radius:3px;padding:0 .15em}
+.testtbl{border-collapse:collapse;font-size:.78rem}.testtbl td,.testtbl th{padding:.15rem .5rem;border-bottom:1px solid var(--line,#ddd);text-align:right}
+.testtbl th:first-child,.testtbl td:first-child{text-align:left}
 /* --- benchmark strip + preferences (20.7.3) --- */
 .benchstrip{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;
   margin:.15rem 0 .5rem;font-size:.8rem;min-height:1.4rem}
@@ -617,6 +625,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="log">Changes</div>
   <div class="tab" data-t="usage">Usage</div>
   <div class="tab" data-t="perf">Performance</div>
+  <div class="tab" data-t="test">Test</div>
 </div>
 
 <div class="bar" id="profbar">
@@ -1071,6 +1080,68 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="panel" id="trainpane" style="display:none">
     <h2 style="font-size:1rem">Training</h2>
     <div id="trainbody"></div>
+  </div>
+</div>
+<!-- 26.5: Test. Josh, 2026-09-12: "a 'Test' section in the UI that lets me
+     type and mouse to try to check the performance of the engine (and the
+     stack) - looking for dropped keys, etc." Two tasks, each attributed to a
+     device you name, with the engine's per-device service time read before
+     and after so its share of the run is a number beside the browser's.
+     The two clocks are never subtracted from one another (CLAUDE.md §3). -->
+<div id="page-test" style="display:none">
+  <div class="panel" id="testtyping" data-uikey="test-typing">
+    <h2 style="font-size:1rem;margin:0 0 .3rem">⌨ Typing</h2>
+    <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Type the
+      passage into the box exactly as shown, expansions included. The box
+      counts every key it receives and times the gaps between them; at the end
+      the text is diffed against what was expected, so a dropped, doubled or
+      late key is counted where it happened. The engine's service time for
+      the device you name is read before and after, and the difference is
+      the engine's share of the run.</p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem">
+      <label style="font-size:.8rem">Keyboard under test
+        <select id="testkdev"></select></label>
+      <button id="testkstart" class="txmini">▶ Start</button>
+      <button id="testkfinish" class="txmini" disabled>■ Finish</button>
+      <button id="testkreset" class="txmini">↺ Reset</button>
+      <span id="testkstate" class="muted" style="font-size:.78rem"></span>
+    </div>
+    <div id="testpassage" style="font-family:ui-monospace,monospace;font-size:.9rem;line-height:1.6;
+      padding:.5rem .6rem;border:1px solid var(--line,#ccc);border-radius:6px;white-space:pre-wrap;word-break:break-word"></div>
+    <textarea id="testkinput" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off"
+      placeholder="click here, then type the passage above" style="width:100%;margin-top:.4rem;
+      font-family:ui-monospace,monospace;font-size:.9rem;box-sizing:border-box"></textarea>
+    <div id="testkstats" style="font-size:.8rem;margin-top:.4rem"></div>
+  </div>
+  <div class="panel" id="testmouse" data-uikey="test-mouse" style="margin-top:.6rem">
+    <h2 style="font-size:1rem;margin:0 0 .3rem">🖱 Mousing</h2>
+    <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Targets appear
+      one at a time; click each. Time to reach it, how far from centre you
+      landed, clicks that missed, and how much further than a straight line the
+      pointer travelled (a floaty mouse overshoots) — then one scroll step,
+      because the wheel is its own path through the engine.</p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem">
+      <label style="font-size:.8rem">Mouse under test
+        <select id="testmdev"></select></label>
+      <button id="testmstart" class="txmini">▶ Start</button>
+      <span id="testmstate" class="muted" style="font-size:.78rem"></span>
+    </div>
+    <div id="testarena" style="position:relative;height:300px;border:1px solid var(--line,#ccc);
+      border-radius:6px;overflow:hidden;user-select:none;background:var(--panel2,transparent)"></div>
+    <div id="testscrollwrap" style="display:none;margin-top:.4rem">
+      <div class="muted" style="font-size:.78rem">Now scroll this box to the bottom with the wheel.</div>
+      <div id="testscroll" style="height:90px;overflow-y:auto;border:1px solid var(--line,#ccc);border-radius:6px;padding:.3rem .5rem;font-size:.8rem"></div>
+    </div>
+    <div id="testmstats" style="font-size:.8rem;margin-top:.4rem"></div>
+  </div>
+  <div class="panel" id="testhist" data-uikey="test-hist" style="margin-top:.6rem">
+    <h2 style="font-size:1rem;margin:0 0 .3rem">History, per device
+      <button id="testhistload" class="txmini" style="margin-left:.5rem">↻ load</button></h2>
+    <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Every run is
+      a line in <code>usage/tests.jsonl</code> on the Pi, written by the engine
+      with its own numbers attached. Over time this is where “floaty” becomes a
+      trend rather than a feeling.</p>
+    <div id="testhistbody" class="muted" style="font-size:.8rem">not loaded</div>
   </div>
 </div>
 <!-- 24.5: Performance. The tab exists so a new observational feature can be
@@ -1539,6 +1610,22 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'26.5',d:'2026-09-12',items:[
+   {t:'A Test tab: type a passage (with an inline calculation and an expansion) and see missing, extra and late keys',k:'test-typing'},
+   {t:'A mousing task: targets, misses, distance from centre, path efficiency, then a scroll step',k:'test-mouse'},
+   {t:'Every run is filed on the Pi with the engine’s per-device service time for that run',k:'test-hist'}]},
+ {v:'26.4',d:'2026-09-12',items:[
+   {t:'Media keys (♪ Vol+, Brightness, Mission Control…) are keys: baseline, layer, chord and remap them, per device',k:'wireframes'},
+   {t:'Any key can be mapped TO a media usage; the engine sends it as a consumer tap',k:'wireframes'},
+   {t:'Feather→Pi1 on the benchmark strip, measured on one clock',k:'benchstrip'},
+   {t:'Service time per device in the engine status — the number behind “floaty”',k:'benchstrip'}]},
+ {v:'26.3',d:'2026-09-12',items:[
+   {t:'The RAW pane names Delete, Home, PgUp, the F-row and the keypad instead of [?]',k:'debug'}]},
+ {v:'26.2',d:'2026-09-11',items:[
+   {t:'A Disambiguation page under the OS tab \u2014 which chords are the same command across systems',k:'disamb'},
+   {t:'135 RStudio Windows\u2194Mac relations, read out of your own paste',k:'disamb'},
+   {t:'\u201cAlmost the same\u201d and \u201csame chord, different result\u201d are recordable now',k:'disamb'},
+   {t:'The logic is written up on the page itself',k:'disamb'}]},
  {v:'26.1.2',d:'2026-09-11',items:[
    {t:'Saving Copy/Paste can no longer overwrite notes that changed on the Pi since you loaded the page',k:'clipdock'},
    {t:'\u2026which is what silently undid a completed notes drain',k:'clipdock'}]},
@@ -2036,8 +2123,12 @@ function onReport(e){
 normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
         $('svcwarn').style.display='none';}
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
+      else if(curFile===8){testRuns=(obj&&obj.runs)||[];testHistMeta=obj||{};renderTestHistory();}
       else if(curFile===3){
         lastEng=obj;adoptEffective(obj);updateConStat();
+        // 26.5: the Test tab asks for a FRESH status at the start and end of
+        // a run; resolve anyone waiting on this read.
+        try{const w=window._engWaiters||[];window._engWaiters=[];w.forEach(r=>r(obj));}catch(_){}
         // 24.7: refresh the APM readout on each status poll, but only while
         // its tab is actually on screen -- rebuilding two tables every ten
         // seconds behind a hidden panel is work nobody asked for.
@@ -2644,10 +2735,32 @@ const EV2HID={30:0x04,48:0x05,46:0x06,32:0x07,18:0x08,33:0x09,34:0x0a,35:0x0b,23
 27:0x30,43:0x31,39:0x33,40:0x34,41:0x35,51:0x36,52:0x37,53:0x38,58:0x39,105:0x50,106:0x4f,
 103:0x52,108:0x51,29:0xe0,42:0xe1,56:0xe2,125:0xe3,97:0xe4,54:0xe5,100:0xe6,126:0xe7,
 99:0x46,70:0x47,119:0x48,
-127:0x65,134:0x76,128:0x78,129:0x79,131:0x7a,137:0x7b,133:0x7c,135:0x7d,136:0x7e};
-// consumer-page keys the keyboard gadget can't emit (shown in RAW so they're not invisible)
+127:0x65,134:0x76,128:0x78,129:0x79,131:0x7a,137:0x7b,133:0x7c,135:0x7d,136:0x7e,
+// 26.3: the "common subset" above stopped at the letters and arrows, so the
+// RAW pane printed [?] for Delete (111), Home, PgUp, the F-row and the whole
+// keypad -- keys the engine's own keymap has always known. Josh, 2026-09-10:
+// "key code=111 shows as [?] in the RAW pane while the SENT pane resolves the
+// same press as 0x4c [Del]". The rest of the standard evdev->usage table:
+102:0x4a,104:0x4b,107:0x4d,109:0x4e,110:0x49,111:0x4c,
+59:0x3a,60:0x3b,61:0x3c,62:0x3d,63:0x3e,64:0x3f,65:0x40,66:0x41,67:0x42,68:0x43,87:0x44,88:0x45,
+183:0x68,184:0x69,185:0x6a,186:0x6b,187:0x6c,188:0x6d,189:0x6e,190:0x6f,191:0x70,192:0x71,193:0x72,194:0x73,
+69:0x53,98:0x54,55:0x55,74:0x56,78:0x57,96:0x58,79:0x59,80:0x5a,81:0x5b,75:0x5c,76:0x5d,77:0x5e,
+71:0x5f,72:0x60,73:0x61,82:0x62,83:0x63,86:0x64,117:0x67,116:0x66,121:0x85,138:0x75,139:0x76};
+// consumer-page keys. 26.4: these are mappable KEYS now -- the engine tags
+// their usage with the page, (0x0C<<16)|usage, and KEYS carries the same
+// values so every picker can offer them and every label can name them.
 const CONSUMER_NAMES={158:'Web Back',159:'Web Forward',113:'Mute',114:'Vol−',115:'Vol+',
-163:'Next Track',164:'Play/Pause',165:'Prev Track',172:'Home Page',217:'Search',142:'Sleep'};
+163:'Next Track',164:'Play/Pause',165:'Prev Track',172:'Home Page',217:'Search',142:'Sleep',
+166:'Stop Media',161:'Eject',168:'Rewind',208:'Fast Fwd',225:'Brightness+',224:'Brightness−',
+230:'Kbd Light+',229:'Kbd Light−',228:'Kbd Light',173:'Refresh',156:'Bookmarks',155:'Mail',
+140:'Calculator',150:'Browser',144:'Files',171:'Settings',152:'Lock Screen',204:'All Apps',
+120:'Mission Control',582:'Voice',418:'Zoom In',419:'Zoom Out',420:'Zoom Reset',372:'Full Screen'};
+// evdev code -> consumer USAGE id, the same table as s2_mapping.CONSUMER_KEYS
+const CONSUMER_USAGE={158:0x224,159:0x225,113:0xe2,114:0xea,115:0xe9,163:0xb5,164:0xcd,165:0xb6,
+166:0xb7,161:0xb8,168:0xb4,208:0xb3,225:0x6f,224:0x70,230:0x79,229:0x7a,228:0x7c,172:0x223,217:0x221,
+173:0x227,156:0x22a,155:0x18a,140:0x192,150:0x196,144:0x194,171:0x183,152:0x19e,204:0x1a2,120:0x29f,
+142:0x182,582:0xcf,418:0x22d,419:0x22e,420:0x22f,372:0x232};
+for(const[c,u]of Object.entries(CONSUMER_USAGE))KEYS[(0x0c<<16)|u]='♪ '+CONSUMER_NAMES[c];
 const EVBTN={272:1,273:2,274:3,275:4,276:5,277:6,278:7,279:8,256:9,257:10,258:11,259:12,260:13,261:14,262:15};
 function ev2name(code){const u=EV2HID[code];
 if(u!==undefined)return MODS[u]||KEYS[u]||('0x'+u.toString(16));
@@ -8232,7 +8345,9 @@ function renderStepperEd(ed){
 /* ============ macros tab ============ */
 function usageName(u){const p=u>>>16,x=u&0xffff;
 if(p===9)return'btn'+x;if(u===0x00010038)return'wheel';
-if(p===7)return(MODS[x]||KEYS[x]||'0x'+x.toString(16)).toLowerCase();return'0x'+u.toString(16);}
+if(p===7)return(MODS[x]||KEYS[x]||'0x'+x.toString(16)).toLowerCase();
+if(p===12&&KEYS[u])return KEYS[u].toLowerCase();   // 26.4: consumer-page steps
+return'0x'+u.toString(16);}
 function macroToText(s){return s.map(x=>x.length?x.map(usageName).join('+'):'.').join('\n');}
 function textToMacro(t){const steps=[];
 for(let line of t.split('\n')){line=line.trim().toLowerCase();if(!line)continue;
@@ -12679,9 +12794,238 @@ function renderPerf(){
 }
 
 /* ============ tabs ============ */
+/* ===== 26.5: the Test tab ==================================================
+   Josh: "lets me type and mouse to try to check the performance of the engine
+   (and the stack) - looking for dropped keys, etc." with per-device metrics.
+
+   HOW A RUN IS ATTRIBUTED
+     You name the device. The engine cannot tell the browser which uinput node
+     a keystroke came from -- by the time it is a character here it is a
+     gadget report -- so the run reads the engine's per-device service time
+     (status.service_by_device, 26.4) BEFORE and AFTER, and the engine files
+     the delta per device with the run. If you named the Kinesis and typed on
+     the Targus, the delta says so.
+
+   WHAT IS AND IS NOT MEASURED
+     The browser sees keydown events and clicks on its own clock; the engine
+     sees evdev->report on its own. They are reported side by side and never
+     subtracted (CLAUDE.md §3: comparing Pi and browser timestamps measures
+     clock offset, not the path). "Dropped" here means: expected in the
+     passage, absent from the final text, by LCS diff -- not "seen leaving
+     the Pi and not arriving", which nothing can see from here.
+
+   THE PASSAGE
+     Plain text, a shifted run, an inline calculation and a set-theory
+     expansion from Josh's own active sets. The expansions replace what was
+     typed, so the EXPECTED text carries their outputs and the passage shows
+     what to type. If a set is off, the diff shows the trigger text where the
+     symbol should be -- which is itself a finding.
+   ========================================================================== */
+const TEST_CMD=0x70,TEST_CMD_X=0x71,TESTS_FID=8;
+const TEST_PASSAGE=[
+  {t:'The quick brown fox jumps over the lazy dog; '},
+  {t:'PACK MY BOX with five dozen liquor jugs. '},
+  {t:'Twelve squared is ',typed:'=12*12=',expect:'144',name:'inline calculation'},
+  {t:', and x '},
+  {typed:'//element',expect:'∈',name:'set-theory expansion'},
+  {t:' A means x is an element of A. Numbers: 1 2 3 4 5 6 7 8 9 0; symbols: () [] {} <> @#$%^&*.'}
+];
+let testRuns=[],testHistMeta={},testK=null,testM=null;
+function testExpected(){return TEST_PASSAGE.map(p=>(p.t||'')+(p.expect||'')).join('');}
+function testShown(){return TEST_PASSAGE.map(p=>{
+  const seg=p.typed?`<span class="exp" title="${esc(p.name)}: type ${esc(p.typed)} — expect ${esc(p.expect)}">${esc(p.typed)}</span>`:'';
+  return esc(p.t||'')+seg;}).join('');}
+// Fresh engine status, or the last one if the Pi does not answer in time.
+function testFreshEng(){
+  return new Promise(res=>{
+    if(!device){res(lastEng);return;}
+    window._engWaiters=window._engWaiters||[];window._engWaiters.push(res);
+    getFile(3);
+    setTimeout(()=>{const w=window._engWaiters||[];const i=w.indexOf(res);
+      if(i>=0){w.splice(i,1);res(lastEng);}},4000);});}
+function testSvcSnap(eng){return (eng&&eng.service_by_device)?JSON.parse(JSON.stringify(eng.service_by_device)):{};}
+function testDevOptions(kind){
+  const seen=new Set(),out=[];
+  for(const d of (cfg&&cfg.devices)||[]){if(kind&&d.kind&&d.kind!==kind&&!(kind==='kbd'&&d.kind==='kbd'))continue;
+    if(!seen.has(d.id)){seen.add(d.id);out.push([d.id,d.name||d.id]);}}
+  for(const d of (lastEng&&lastEng.devices)||[]){if(!seen.has(d.id)){seen.add(d.id);out.push([d.id,d.id]);}}
+  for(const id of Object.keys((lastEng&&lastEng.service_by_device)||{}))if(!seen.has(id)){seen.add(id);out.push([id,id]);}
+  return out;}
+function testFillDevs(){
+  for(const[sel,kind,ls]of[[$('testkdev'),'kbd','test.kdev'],[$('testmdev'),'mouse','test.mdev']]){
+    if(!sel)continue;const cur=sel.value||(function(){try{return localStorage.getItem(ls)||'';}catch(_){return'';}})();
+    const opts=testDevOptions(kind);
+    sel.innerHTML=opts.map(([id,n])=>`<option value="${esc(id)}">${esc(n)}</option>`).join('')||'<option value="">(no devices known)</option>';
+    if(opts.some(o=>o[0]===cur))sel.value=cur;
+    sel.onchange=()=>{try{localStorage.setItem(ls,sel.value);}catch(_){}};}}
+function renderTest(){
+  testFillDevs();
+  if($('testpassage')&&!$('testpassage').innerHTML)$('testpassage').innerHTML=testShown();
+  if(!testRuns.length&&device&&!window._testHistAsked){window._testHistAsked=true;getFile(TESTS_FID);}
+  renderTestHistory();}
+/* ---- typing --------------------------------------------------------------- */
+function lcsDiff(a,b){   // expected a, typed b -> {missing, extra, matched}
+  const n=a.length,m=b.length;if(n*m>400000)return{missing:Math.max(0,n-m),extra:Math.max(0,m-n),matched:Math.min(n,m),approx:true};
+  let prev=new Uint16Array(m+1),cur=new Uint16Array(m+1);
+  for(let i=1;i<=n;i++){for(let j=1;j<=m;j++)cur[j]=a[i-1]===b[j-1]?prev[j-1]+1:Math.max(prev[j],cur[j-1]);[prev,cur]=[cur,prev];}
+  const l=prev[m];return{missing:n-l,extra:m-l,matched:l};}
+function pct(arr,p){if(!arr.length)return null;const s=[...arr].sort((x,y)=>x-y);return s[Math.min(s.length-1,Math.floor(s.length*p))];}
+function testKReset(){
+  testK=null;const ta=$('testkinput');ta.value='';ta.disabled=false;
+  $('testkstart').disabled=false;$('testkfinish').disabled=true;
+  $('testkstate').textContent='';$('testkstats').innerHTML='';$('testpassage').innerHTML=testShown();}
+async function testKStart(){
+  const dev=$('testkdev').value;
+  $('testkstart').disabled=true;$('testkstate').textContent='reading engine…';
+  const eng=await testFreshEng();
+  testK={dev,os:(lastEng&&lastEng.effective&&lastEng.effective.active_os)||(cfg&&cfg.active_os)||'',
+    before:testSvcSnap(eng),t0:null,last:null,keys:0,gaps:[],backspaces:0,started:performance.now()};
+  const ta=$('testkinput');ta.value='';ta.disabled=false;ta.focus();
+  $('testkfinish').disabled=false;$('testkstate').textContent='go — type the passage';}
+function testKKey(e){
+  if(!testK||testK.done)return;
+  if(['Shift','Control','Alt','Meta','CapsLock'].includes(e.key))return;
+  const now=performance.now();
+  if(testK.t0==null)testK.t0=now;else testK.gaps.push(now-testK.last);
+  testK.last=now;testK.keys++;if(e.key==='Backspace')testK.backspaces++;
+  if(testK.keys%5===0)testKLive();}
+function testKLive(){
+  const exp=testExpected(),got=$('testkinput').value;
+  // live prefix check: mark the passage up to the first divergence
+  let i=0;while(i<got.length&&i<exp.length&&got[i]===exp[i])i++;
+  const okPart=esc(exp.slice(0,i)),rest=esc(exp.slice(i));
+  $('testpassage').innerHTML=`<span class="ok">${okPart}</span>${got.length>i?`<span class="bad">${rest.slice(0,1)}</span>${rest.slice(1)}`:rest}`;
+  const secs=testK.t0!=null?(performance.now()-testK.t0)/1000:0;
+  $('testkstats').textContent=`${testK.keys} keys · ${got.length}/${exp.length} chars · ${secs.toFixed(0)}s`+
+    (testK.gaps.length?` · max gap ${Math.max(...testK.gaps).toFixed(0)}ms`:'');}
+async function testKFinish(){
+  if(!testK||testK.done)return;
+  testK.done=true;$('testkfinish').disabled=true;$('testkinput').disabled=true;
+  $('testkstate').textContent='reading engine…';
+  const exp=testExpected(),got=$('testkinput').value;
+  const d=lcsDiff(exp,got);
+  const secs=testK.t0!=null&&testK.last!=null?(testK.last-testK.t0)/1000:0;
+  const gaps=testK.gaps;
+  const r={kind:'typing',device:testK.dev,os:testK.os,ui:UI_VERSION,
+    expected_chars:exp.length,typed_chars:got.length,keys:testK.keys,backspaces:testK.backspaces,
+    seconds:+secs.toFixed(2),wpm:secs>0?+((got.length/5)/(secs/60)).toFixed(1):0,
+    missing:d.missing,extra:d.extra,matched:d.matched,
+    gap_ms:{median:pct(gaps,.5),p95:pct(gaps,.95),max:gaps.length?Math.max(...gaps):null,
+      stalls_400:gaps.filter(g=>g>400).length},
+    expansions:TEST_PASSAGE.filter(p=>p.typed).map(p=>({name:p.name,typed:p.typed,expect:p.expect,found:got.includes(p.expect),raw_left:got.includes(p.typed)})),
+    engine_before:testK.before};
+  // give the engine's status writer a moment to include the last keystrokes
+  await new Promise(res=>setTimeout(res,1500));
+  const eng=await testFreshEng();r.engine_after=testSvcSnap(eng);
+  testShowTyping(r);await testSend(r);}
+function testShowTyping(r){
+  const g=r.gap_ms||{};
+  const ex=(r.expansions||[]).map(x=>`${esc(x.name)}: ${x.found?'✓':'✗ '+(x.raw_left?'(trigger text left behind — set off, or not fired)':'(missing)')}`).join(' · ');
+  $('testkstats').innerHTML=`<b>${r.wpm} wpm</b> over ${r.seconds}s · ${r.keys} keys for ${r.expected_chars} chars`+
+    ` · <b style="color:${r.missing?'var(--hi,#d33)':'inherit'}">${r.missing} missing</b>, ${r.extra} extra, ${r.backspaces} backspaces`+
+    ` · gaps median ${g.median!=null?g.median.toFixed(0):'–'}ms, p95 ${g.p95!=null?g.p95.toFixed(0):'–'}ms, max ${g.max!=null?g.max.toFixed(0):'–'}ms, ${g.stalls_400} over 400ms`+
+    (ex?`<br>${ex}`:'')+`<br><span class="muted">engine share (per device) arrives with the history row below once the Pi has filed the run</span>`;
+  $('testkstate').textContent='done';}
+/* ---- mousing -------------------------------------------------------------- */
+const TEST_TARGETS=12;
+async function testMStart(){
+  const dev=$('testmdev').value;const ar=$('testarena');
+  $('testmstart').disabled=true;$('testmstate').textContent='reading engine…';
+  const eng=await testFreshEng();
+  testM={dev,before:testSvcSnap(eng),i:0,hits:[],misses:0,path:0,lastPt:null,appear:0,tgt:null,
+    os:(lastEng&&lastEng.effective&&lastEng.effective.active_os)||(cfg&&cfg.active_os)||''};
+  ar.innerHTML='';$('testscrollwrap').style.display='none';$('testmstats').innerHTML='';
+  $('testmstate').textContent='click the targets';
+  testMNext();}
+function testMNext(){
+  const ar=$('testarena'),W=ar.clientWidth,H=ar.clientHeight;
+  if(testM.i>=TEST_TARGETS){testMScroll();return;}
+  let x,y,tries=0;
+  do{x=30+Math.random()*(W-60);y=30+Math.random()*(H-60);tries++;}
+  while(testM.tgt&&Math.hypot(x-testM.tgt.x,y-testM.tgt.y)<Math.min(W,H)*0.3&&tries<20);
+  const small=testM.i%3===2;
+  ar.innerHTML=`<div class="tgt${small?' small':''}" style="left:${x}px;top:${y}px"></div><div class="muted" style="position:absolute;right:.4rem;bottom:.2rem;font-size:.72rem">${testM.i+1} / ${TEST_TARGETS}</div>`;
+  testM.tgt={x,y,r:small?11:18,el:ar.firstChild};testM.appear=performance.now();testM.path=0;
+  testM.from=testM.lastPt;}
+function testMMove(e){if(!testM||testM.done||!testM.tgt)return;
+  const r=$('testarena').getBoundingClientRect(),p={x:e.clientX-r.left,y:e.clientY-r.top};
+  if(testM.lastPt)testM.path+=Math.hypot(p.x-testM.lastPt.x,p.y-testM.lastPt.y);testM.lastPt=p;}
+function testMClick(e){if(!testM||testM.done||!testM.tgt)return;
+  const r=$('testarena').getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  const t=testM.tgt,dist=Math.hypot(x-t.x,y-t.y);
+  if(dist>t.r+4){testM.misses++;return;}
+  const straight=testM.from?Math.hypot(t.x-testM.from.x,t.y-testM.from.y):null;
+  testM.hits.push({ms:+(performance.now()-testM.appear).toFixed(1),dist:+dist.toFixed(1),small:t.r<15,
+    efficiency:straight&&testM.path>0?+Math.min(1,straight/testM.path).toFixed(3):null});
+  testM.i++;testM.tgt=null;testMNext();}
+function testMScroll(){
+  const ar=$('testarena');ar.innerHTML='<div class="muted" style="padding:1rem;font-size:.8rem">targets done — now the wheel</div>';
+  const w=$('testscrollwrap'),box=$('testscroll');w.style.display='';
+  box.innerHTML=Array.from({length:40},(_,i)=>`<div>line ${i+1}${i===39?' — bottom, thank you':''}</div>`).join('');
+  box.scrollTop=0;testM.scrollT0=performance.now();testM.wheelEvents=0;
+  box.onwheel=()=>{testM.wheelEvents++;};
+  box.onscroll=()=>{if(testM.done)return;if(box.scrollTop+box.clientHeight>=box.scrollHeight-2){testMFinish();}};
+  $('testmstate').textContent='scroll the box to the bottom';}
+async function testMFinish(){
+  if(!testM||testM.done)return;testM.done=true;
+  const scrollMs=+(performance.now()-testM.scrollT0).toFixed(0);
+  $('testmstate').textContent='reading engine…';
+  const h=testM.hits,ms=h.map(x=>x.ms),eff=h.map(x=>x.efficiency).filter(x=>x!=null);
+  const r={kind:'mouse',device:testM.dev,os:testM.os,ui:UI_VERSION,targets:h.length,misses:testM.misses,
+    click_ms:{mean:ms.length?+(ms.reduce((a,b)=>a+b,0)/ms.length).toFixed(1):null,median:pct(ms,.5),p95:pct(ms,.95),max:ms.length?Math.max(...ms):null},
+    small_ms:{median:pct(h.filter(x=>x.small).map(x=>x.ms),.5)},
+    miss_px:{mean:h.length?+(h.reduce((a,b)=>a+b.dist,0)/h.length).toFixed(1):null},
+    efficiency:{mean:eff.length?+(eff.reduce((a,b)=>a+b,0)/eff.length).toFixed(3):null},
+    scroll_ms:scrollMs,wheel_events:testM.wheelEvents,engine_before:testM.before};
+  await new Promise(res=>setTimeout(res,1500));
+  const eng=await testFreshEng();r.engine_after=testSvcSnap(eng);
+  testShowMouse(r);await testSend(r);$('testmstart').disabled=false;}
+function testShowMouse(r){
+  const c=r.click_ms||{};
+  $('testmstats').innerHTML=`<b>${c.median!=null?c.median.toFixed(0):'–'}ms</b> median to click (p95 ${c.p95!=null?c.p95.toFixed(0):'–'}, max ${c.max!=null?c.max.toFixed(0):'–'})`+
+    ` · small targets ${r.small_ms&&r.small_ms.median!=null?r.small_ms.median.toFixed(0)+'ms':'–'} · ${r.misses} misses · ${r.miss_px.mean!=null?r.miss_px.mean+'px':'–'} from centre`+
+    ` · path efficiency ${r.efficiency.mean!=null?(r.efficiency.mean*100).toFixed(0)+'%':'–'} · scroll ${r.scroll_ms}ms in ${r.wheel_events} wheel events`;
+  $('testmstate').textContent='done';}
+/* ---- ledger --------------------------------------------------------------- */
+async function testSend(r){
+  if(!device){toast('not connected — run shown, not recorded',true);return;}
+  try{await sendCmd(TEST_CMD,TEST_CMD_X,JSON.stringify(r));toast('run filed on the Pi');
+    setTimeout(()=>getFile(TESTS_FID),1200);}
+  catch(e){toast('could not file the run: '+e,true);}}
+function renderTestHistory(){
+  const el=$('testhistbody');if(!el)return;
+  if(!testRuns.length){el.textContent=testHistMeta.error?('ledger error: '+testHistMeta.error):(device?'no runs yet':'connect to load');return;}
+  const byDev={};for(const r of testRuns){(byDev[r.device||'?']=byDev[r.device||'?']||[]).push(r);}
+  const fmt=v=>v==null?'–':(typeof v==='number'?(Math.abs(v)>=100?v.toFixed(0):v.toFixed(1)):esc(String(v)));
+  let h='';
+  for(const dev of Object.keys(byDev).sort()){
+    const runs=byDev[dev].slice(-12).reverse();
+    const nm=((cfg&&cfg.devices)||[]).find(d=>d.id===dev);
+    h+=`<h3 style="font-size:.88rem;margin:.6rem 0 .2rem">${esc(nm?nm.name:dev)} <span class="muted">(${byDev[dev].length} runs)</span></h3>`;
+    h+='<div style="overflow-x:auto"><table class="testtbl"><tr><th>when</th><th>kind</th><th>result</th><th>gaps / clicks</th><th>engine ms (n) for this device</th><th>other devices during run</th></tr>';
+    for(const r of runs){
+      const when=r.ts?new Date(r.ts*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'–';
+      const d=(r.engine_delta||{}),mine=d[dev],others=Object.keys(d).filter(k=>k!==dev).map(k=>`${esc(k)} ${fmt(d[k].mean)}ms (${d[k].n})`).join(', ');
+      let res,gaps;
+      if(r.kind==='typing'){res=`${fmt(r.wpm)} wpm · <b${r.missing?' style="color:var(--hi,#d33)"':''}>${r.missing} missing</b> / ${r.extra} extra`;
+        const g=r.gap_ms||{};gaps=`median ${fmt(g.median)} · p95 ${fmt(g.p95)} · ${g.stalls_400||0} stalls`;}
+      else{const c=r.click_ms||{};res=`${fmt(c.median)}ms median · ${r.misses} misses · eff ${r.efficiency&&r.efficiency.mean!=null?(r.efficiency.mean*100).toFixed(0)+'%':'–'}`;
+        gaps=`p95 ${fmt(c.p95)} · scroll ${fmt(r.scroll_ms)}ms`;}
+      h+=`<tr><td>${when}</td><td>${esc(r.kind||'')}</td><td>${res}</td><td>${gaps}</td><td>${mine?`<b>${fmt(mine.mean)}</b> ±${fmt(mine.sd)} (${mine.n})${mine.reset?' <span class="muted">engine restarted</span>':''}`:'<span class="muted">none — did you name the right device?</span>'}</td><td class="muted">${others||'–'}</td></tr>`;}
+    h+='</table></div>';}
+  if(testHistMeta.bad_lines)h+=`<p class="muted">${testHistMeta.bad_lines} unreadable line(s) in the ledger were skipped.</p>`;
+  el.innerHTML=h;}
+(function(){
+  const on=(id,ev,fn)=>{const e=$(id);if(e)e.addEventListener(ev,fn);};
+  on('testkstart','click',testKStart);on('testkfinish','click',testKFinish);on('testkreset','click',testKReset);
+  on('testkinput','keydown',testKKey);on('testkinput','input',()=>{if(testK&&!testK.done)testKLive();});
+  on('testmstart','click',testMStart);on('testarena','pointermove',testMMove);on('testarena','click',testMClick);
+  on('testhistload','click',()=>{if(device)getFile(TESTS_FID);else toast('connect first',true);});
+})();
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt','log','tx','usage','perf'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log','tx','usage','perf','test'])$('page-'+p).style.display=p===t?'':'none';
+  if(t==='test')renderTest();
   if(t==='tx')txInit();
   if(t==='os')renderOsTab();
   if(t==='log')renderChangelog();
