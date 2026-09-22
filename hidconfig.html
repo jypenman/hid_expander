@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 26.9.3</title>
+<title>HID Config 27.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -526,8 +526,23 @@ border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:.82rem
 .grouppill .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
 .devhead{display:flex;align-items:center;gap:.55rem;margin-bottom:.45rem}
 .devhead h2{font-size:1rem;margin:0}
-.constat{margin-left:auto;display:flex;align-items:center;gap:.4rem;font-size:.78rem;white-space:nowrap}
+.constat{margin-left:auto;display:flex;align-items:center;gap:.4rem;font-size:.78rem;white-space:nowrap;
+  cursor:pointer;border-radius:6px;padding:.1rem .3rem;border:1px solid transparent}
+.constat:hover{border-color:var(--line);background:var(--panel2,transparent)}
+.constat:active{border-color:var(--hi)}
 .constat button{padding:.15rem .6rem;font-size:.75rem}
+/* 27.0: the caret says "this whole chip is a menu". Without it the chip
+   looks like a read-out and nobody would think to click it -- which is the
+   state Josh was in, editing MACs in the Advanced table instead. */
+.constatcaret{opacity:.55;font-size:.72rem}
+.constat:hover .constatcaret{opacity:1;color:var(--hi)}
+.macpick{min-width:15rem;max-width:22rem;font-size:.8rem}
+.macpick .row{display:flex;align-items:center;gap:.45rem;padding:.3rem .45rem;
+  border-radius:6px;cursor:pointer}
+.macpick .row:hover{background:var(--panel2,rgba(127,127,127,.15))}
+.macpick .row.on{font-weight:600}
+.macpick .mac{font-family:ui-monospace,monospace;font-size:.72rem;opacity:.7}
+.macpick .hd{font-weight:600;padding:.2rem .45rem .35rem;opacity:.75}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--err)}
 .dot.on{background:var(--ok)}.dot.unk{background:var(--warn);animation:pulse 1.2s infinite}
 #devcards,#devcards .key,#mousesvg{user-select:none;-webkit-user-select:none}
@@ -1638,6 +1653,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'27.1',d:'2026-09-22',items:[
+   {t:'A layer you add now gets a tab: the strip is built from the layers your config actually uses, not from six hard-coded names',k:'remap'}]},
+ {v:'27.0',d:'2026-09-22',items:[
+   {t:'Click the Connected / Disconnected chip on any wireframe card to choose which Bluetooth device it is — no more hunting for the Bluetooth column in Devices › Advanced',k:'constat'},
+   {t:'“Not a Bluetooth device” is one of the choices, so a wrong pick is undone from the same menu',k:'constat'}]},
  {v:'26.9.3',d:'2026-09-22',items:[
    {t:'A Bluetooth channel number is no longer part of a device’s identity: switching the E9 Pro from BT1 to BT2 stopped its gesture node being recognised, which is why a key got stuck and its buttons went through the wrong pipeline',k:'devices'},
    {t:'A device behind a dead Feather link is removed, not left looking connected — no more “SOAI USB Gaming Mouse · 2 inputs” with the Feather unplugged',k:'devices'}]},
@@ -2641,6 +2661,84 @@ window.bindMac=(id,mac)=>{
   if(!dd)return;dd.mac=mac;render();
   btCmd('status '+mac,true);
   toast('bound '+mac+' — ⬆ Save to device to persist');};
+/* 27.0: bind a wireframe card to a Bluetooth device from the card itself.
+
+   Josh, 2026-09-22: "Improve the wireframe UI so that you can click the
+   'Connected/Disconnected' indicator at top right and select what bluetooth
+   device it should match up to (instead of having to do it in the
+   Devices/Advanced - device table under the 'Bluetooth Device' column)".
+
+   The binding already existed -- `macSelectHTML` in the Advanced table, and
+   the one-shot "bind <name>" button that appears only when a device's Pin
+   happens to match a known BT name. What was missing is the obvious place:
+   the chip that TELLS you it is disconnected is where you want to say what
+   it should be connected to.
+
+   The list is `btKnown`, which the Bluetooth tab fills from `bluetoothctl
+   devices`; a MAC already bound but not currently known is shown anyway,
+   the same courtesy macSelectHTML pays it, so a binding can never be
+   invisible in the one list that is supposed to explain it. */
+const CARET='<span class="constatcaret">⌄</span>';
+
+function constatPop(e,el,devId){
+  e.stopPropagation();e.preventDefault();
+  const p=$('popover');if(!p||!cfg)return;
+  if(p.dataset.kind==='macpick'&&p.dataset.dev===devId&&p.style.display==='block'){
+    p.style.display='none';p.dataset.kind='';return;}
+  const d=(allDevices()||[]).find(x=>x.id===devId);if(!d)return;
+  const cur=(d.mac||'').toUpperCase();
+  const known={...btKnown};
+  // Bound to something the Bluetooth tab has not listed (not scanned yet, or
+  // unpaired since): still show it, or the current binding would be missing
+  // from the list that exists to explain it.
+  if(cur&&!known[cur])known[cur]={name:'(not in the Bluetooth list)'};
+  const dot=m=>btStat[m]===true?'<span class="dot on"></span>'
+    :btStat[m]===false?'<span class="dot"></span>':'<span class="dot unk"></span>';
+  let rows=`<div class="hd">${esc(d.name||devId)} is…</div>`
+    +`<div class="row ${cur?'':'on'}" onclick="bindDevMac('${esc(devId)}','')">`
+    +`<span style="width:.6rem">${cur?'':'✓'}</span><span>Not a Bluetooth device</span>`
+    +`<span class="muted" style="margin-left:auto;font-size:.72rem">USB / via the Feather</span></div>`;
+  for(const[mac,info]of Object.entries(known))
+    rows+=`<div class="row ${mac===cur?'on':''}" onclick="bindDevMac('${esc(devId)}','${esc(mac)}')">`
+      +`<span style="width:.6rem">${mac===cur?'✓':''}</span>${dot(mac)}`
+      +`<span>${esc(info.name||mac)}</span>`
+      +`<span class="mac" style="margin-left:auto">${esc(mac)}</span></div>`;
+  if(!Object.keys(known).length)
+    rows+=`<div class="row muted" onclick="switchTab('bt')">`
+      +`No Bluetooth devices known yet — open the Bluetooth tab and press List/Scan.</div>`;
+  if(cur)rows+=`<div class="row" onclick="btDiag('${esc(cur)}')">`
+    +`<span style="width:.6rem"></span>ℹ Show this device in the Bluetooth log</div>`;
+  p.dataset.kind='macpick';p.dataset.dev=devId;
+  p.innerHTML=`<div class="macpick">${rows}</div>`;
+  placePopover(p,el.getBoundingClientRect(),6);
+  // Same close discipline as legendPop: deferred a tick so the opening click
+  // does not immediately close it.
+  setTimeout(()=>{
+    const close=ev=>{
+      if(p.contains(ev.target))return;
+      p.style.display='none';p.dataset.kind='';
+      document.removeEventListener('click',close);
+      document.removeEventListener('keydown',esc);};
+    const esc=ev=>{if(ev.key==='Escape')close(ev);};
+    document.addEventListener('click',close);
+    document.addEventListener('keydown',esc);},50);}
+
+/* Bind or UNBIND. `bindMac` (24.x) could only bind, because the only way to
+   reach it was a button that existed only when there was something to bind
+   to. From a menu, "this is not a Bluetooth device" is a real answer and has
+   to be expressible -- otherwise a mis-click is unfixable from here and you
+   are back in the Advanced table, which is what this replaces. */
+window.bindDevMac=(id,mac)=>{
+  const p=$('popover');if(p){p.style.display='none';p.dataset.kind='';}
+  const d=(cfg&&cfg.devices||[]).find(x=>x.id===id);
+  if(!d){toast('that device is not in the config — edit it in Devices › Advanced',true);return;}
+  if((d.mac||'')===(mac||''))return;                 // nothing changed
+  if(mac)d.mac=mac; else delete d.mac;
+  renderDevs();render();
+  if(mac)btCmd('status '+mac,true);
+  updateConStat();
+  toast((mac?'bound to '+mac:'unbound')+' — ⬆ Save to device to persist');};
+
 function updateConStat(){
   if(!cfg)return;
   for(const d of allDevices()){
@@ -2652,27 +2750,29 @@ function updateConStat(){
       // engine is actually reading its input node(s) instead of a BT warning.
       const claimed=((lastEng&&lastEng.all_nodes)||[]).filter(n=>n.device===d.id);
       if(claimed.length){
-        chip.innerHTML=`<span class="dot on"></span> ${claimed.length} input${claimed.length>1?'s':''} (USB)`;
+        chip.innerHTML=`<span class="dot on"></span> ${claimed.length} input${claimed.length>1?'s':''} (USB)`+CARET;
         card&&card.classList.remove('disconnected');continue;}
       // unclaimed & no MAC: offer to bind a matching Bluetooth device if one exists
       const cand=Object.entries(btKnown).find(([m,i])=>
         d.pin&&(i.name||'').toLowerCase().includes(d.pin.toLowerCase()));
       chip.innerHTML=(cand
-        ?`<span class="muted">not bound</span> <button onclick="bindMac('${d.id}','${cand[0]}')">bind ${esc(cand[1].name)}</button>`
-        :'<span style="color:var(--warn)">⚠ no input claimed</span>');
+        ?`<span class="muted">not bound</span> <button onclick="event.stopPropagation();bindMac('${d.id}','${cand[0]}')">bind ${esc(cand[1].name)}</button>`
+        :'<span style="color:var(--warn)">⚠ no input claimed</span>')+CARET;
       card&&card.classList.remove('disconnected');continue;}
     const st=btStat[d.mac];
     if(st===true){
       const claimed=!lastEng||!lastEng.nodes||lastEng.nodes.some(n=>n.device===d.id);
-      chip.innerHTML=`<span class="dot on" title="click for details" style="cursor:pointer" onclick="btDiag('${d.mac}')"></span> connected`
-        +(claimed?'':` <button onclick="$('engstat').click()"
+      chip.innerHTML=`<span class="dot on" title="click for details" style="cursor:pointer" onclick="event.stopPropagation();btDiag('${d.mac}')"></span> connected`
+        +(claimed?'':` <button onclick="event.stopPropagation();$('engstat').click()"
           title="Bluetooth is connected but the engine claimed no input nodes for this device — its Pin probably doesn't match the node names. Click to see the engine's node list.">⚠ no inputs</button>`);
+      chip.innerHTML+=CARET;
       card&&card.classList.remove('disconnected');}
     else if(st===false){
-      chip.innerHTML=`<span class="dot" title="click for details" style="cursor:pointer" onclick="btDiag('${d.mac}')"></span> disconnected
-        <button onclick="btConnectDev('${d.mac}')">Connect</button>`;
+      chip.innerHTML=`<span class="dot" title="click for details" style="cursor:pointer" onclick="event.stopPropagation();btDiag('${d.mac}')"></span> disconnected
+        <button onclick="event.stopPropagation();btConnectDev('${d.mac}')">Connect</button>`;
+      chip.innerHTML+=CARET;
       card&&card.classList.add('disconnected');}
-    else chip.innerHTML=`<span class="dot unk" title="click for details" style="cursor:pointer" onclick="btDiag('${d.mac}')"></span> checking…`;}
+    else chip.innerHTML=`<span class="dot unk" title="click for details" style="cursor:pointer" onclick="event.stopPropagation();btDiag('${d.mac}')"></span> checking…`+CARET;}
   // connected devices rise to the top: re-render when order changes
   const sig=allDevices().map(d=>d.id).join(',');
   if(sig!==lastOrder&&!editDev){lastOrder=sig;renderStage();}}
@@ -3640,9 +3740,27 @@ function render(){
   // before the edit -- a wrong answer about his keyboard, which is the one
   // kind of stale this UI must never show.
   heldPaintReset();
+  // 27.1: THE TAB STRIP IS THE CONFIG'S LAYERS, not a fixed list of six.
+  //
+  // Josh, 2026-09-22: "When I added a 6th layer key, no new layer tab
+  // appeared in the UI. I'm not sure how to assign new items on this
+  // layer..."
+  //
+  // `allLayers()` has derived the real set from layer_keys,
+  // layer_keys_by_device, tap_hold and tap_hold_by_device since 24.8 --
+  // every layer PICKER already offered layer 6. This strip did not: it was
+  // built from LAYER_NAMES, which is six hard-coded labels. So the layer
+  // existed, the engine honoured it (active_layer() is just max() over what
+  // is held -- it has never had a ceiling), the dropdown would set a key to
+  // it, and there was no tab to stand on to edit anything there.
+  //
+  // LAYER_NAMES is now what it should always have been: NAMES for the
+  // layers that have one, not the list of which layers exist.
   const L=$('layers');L.innerHTML='';
-  LAYER_NAMES.forEach((n,i)=>{const p=document.createElement('div');
-  p.className='pill'+(i===layer?' on':'');p.textContent=n;
+  allLayers().forEach(i=>{const p=document.createElement('div');
+  p.className='pill'+(i===layer?' on':'');
+  p.textContent=LAYER_NAMES[i]||(''+i);
+  p.title=LAYER_NAMES[i]?`layer ${i}`:`layer ${i} — no name yet`;
   p.onclick=()=>{layer=i;render();};L.appendChild(p);});
   renderStage();renderMacros();renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
   renderHeldBar();
@@ -3699,7 +3817,9 @@ function renderStage(){
         const hasPad=d.wireframe!=='e9'&&layoutFor(d).keys.some(k=>k.pad||k.btn||k.wheel);
         return hasPtr&&d.wireframe!=='e9'&&!hasPad?`<button onclick="addTrackpadTo('${d.id}')"
           title="the engine sees a trackpad/pointer node on this device — add it to the wireframe">＋ trackpad</button>`:'';})()}
-      <span class="constat" data-constat="${d.id}"></span></div>
+      <span class="constat" data-constat="${d.id}" data-uikey="constat"
+        title="Click to choose which Bluetooth device this is"
+        onclick="constatPop(event,this,'${esc(d.id)}')"></span></div>
       <div class="wfbody ${editing?'editing':''}" id="wrap-${d.id}"></div>`;
     (devIsConnected(d)?c:(cOff||c)).appendChild(card);
     renderLayoutKbd(d,$('wrap-'+d.id));}
