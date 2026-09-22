@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 26.8</title>
+<title>HID Config 26.9.3</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1638,6 +1638,17 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'26.9.3',d:'2026-09-22',items:[
+   {t:'A Bluetooth channel number is no longer part of a device’s identity: switching the E9 Pro from BT1 to BT2 stopped its gesture node being recognised, which is why a key got stuck and its buttons went through the wrong pipeline',k:'devices'},
+   {t:'A device behind a dead Feather link is removed, not left looking connected — no more “SOAI USB Gaming Mouse · 2 inputs” with the Feather unplugged',k:'devices'}]},
+ {v:'26.9.2',d:'2026-09-17',items:[
+   {t:'Stuck keys from a bad SPI link are fixed at the source: a key-up destroyed on the wire never reached the kernel, so 26.6.3 could not see it. The receiver now releases what a device holds once it knows a frame was lost, or the link went quiet',k:'benchstrip'},
+   {t:'A corrupt frame no longer tears down your keyboard and mouse: an identical device re-announcing keeps its node instead of being destroyed and rebuilt',k:'benchstrip'}]},
+ {v:'26.9.1',d:'2026-09-14',items:[
+   {t:'THE reason typo substitution never worked: a rule ending in \\b was only ever tried right after you typed the letter B. Every word-bounded rule was dead from the day it was written',k:'usage-sets'}]},
+ {v:'26.9',d:'2026-09-14',items:[
+   {t:'Engine: a ;;n;; note that reaches its 2,000-character limit saves itself, types “[saved, continue seamlessly]”, and you keep typing',k:'clipdock'},
+   {t:'Engine: a case-insensitive expansion follows the case you typed — Hte → The, HTE → THE; the Common Typos set now has 39 rules from your own notes',k:'usage-sets'}]},
  {v:'26.8',d:'2026-09-14',items:[
    {t:'Copy/Paste: with a note open, only that note stays on screen; closed, the Copy/Paste and Debug bars stick at the top so either opens from anywhere',k:'clipdock'},
    {t:'Usage: “Does what” is the first column; an expansion with no note of yours shows its set’s own description',k:'usage-notes'},
