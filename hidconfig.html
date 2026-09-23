@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 27.1</title>
+<title>HID Config 27.5</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1653,6 +1653,15 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'27.5',d:'2026-09-23',items:[
+   {t:'Engine: inline calculations chain from the result — 807/1319== then *100== gives 0.611827*100 = 61.1827; an “=” the engine typed no longer counts as the “=” you type to start a calculation',k:'usage-sets'}]},
+ {v:'27.4',d:'2026-09-23',items:[
+   {t:'The mapping editor stays fully on screen: it measures itself once its content is in and moves up into the room above instead of running off the bottom',k:'remap'}]},
+ {v:'27.3',d:'2026-09-23',items:[
+   {t:'Click a layer key (or a Hold→Layer button), then Shift-click any other key or button: the editor jumps to that layer with it selected, ready to map',k:'remap'}]},
+ {v:'27.2',d:'2026-09-22',items:[
+   {t:'Search actions finds expansions by trigger or output; a key or button then types just the output',k:'actsearch'},
+   {t:'A key or button mapped to text now types it (it was silently dropped)',k:'actsearch'}]},
  {v:'27.1',d:'2026-09-22',items:[
    {t:'A layer you add now gets a tab: the strip is built from the layers your config actually uses, not from six hard-coded names',k:'remap'}]},
  {v:'27.0',d:'2026-09-22',items:[
@@ -3402,7 +3411,30 @@ if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
 if(k==='macro')return macroLabel(a[1]);if(k==='macro_up')return macroLabel(a[1])+'↑';
 if(k==='macro_both')return macroLabel(a[1])+'/'+macroLabel(a[2])+'↑';
 if(k==='suppress')return'∅';if(k==='passthru')return'↷ as-is';
-if(k==='dpi_cycle')return'DPI';return k;}
+if(k==='dpi_cycle')return'DPI';
+// 27.2: expansion outputs bound to a key/button, and the plain-text action
+if(k==='expansion')return'\u270e '+a[2];
+if(k==='text')return'\u201c'+String(a[1]).slice(0,16)+'\u201d';
+return k;}
+/* 27.2: Expansions in the action search. Josh, 2026-09-22: match "either
+   trigger or the output, but of course, only output the output when clicked
+   (don't make it run the whole trigger input, that would be a waste)".
+   The action is a REFERENCE -- ["expansion", set file stem, trigger] -- so the
+   engine renders the value at press time (dates, calcs, {^}) and editing the
+   expansion later changes what the button types. Regex items are left out:
+   their output is built from what you typed ($1...), and a button has typed
+   nothing. expSets is the fid-4 bundle; asked for once if not loaded yet. */
+function expPreview(v){v=String(v??'').replace(/\s+/g,' ');return v.length>28?v.slice(0,27)+'\u2026':v;}
+function expSearchHits(q){
+  const out=[];q=(q||'').toLowerCase();if(!q)return out;
+  if(!expSets){if(device&&!window._expSetsAsked){window._expSetsAsked=true;getFile(4);}return out;}
+  for(const[stem,s]of Object.entries(expSets))
+    for(const it of (s&&s.items)||[]){
+      if(!it||!it.trigger||it.regex)continue;
+      const t=String(it.trigger),v=String(it.value??'');
+      if(t.toLowerCase().includes(q)||v.toLowerCase().includes(q))
+        out.push({label:'\u270e '+t+' \u2192 '+expPreview(v),act:['expansion',stem,t],title:stem});}
+  return out;}
 function actHTML(a){if(!a)return'';const k=a[0];
 const link=n=>`<a class="mlink" onclick="gotoMacro(${n})">${macroLabel(n).replace(/</g,'&lt;')}</a>`;
 if(k==='macro')return link(a[1]);
@@ -3989,6 +4021,8 @@ function renderLayoutKbd(d,w){
         +elLayerBadge('btn',b,d.id);
       if(editing)bindEditKey(el,d,idx);
       else el.onclick=e=>{
+        if(e.shiftKey&&!e.altKey&&layerJump({type:'btn',id:b,phys:bPhys,
+            label:k.label||'',dev:d.id})){e.preventDefault();return;}
         if(e.shiftKey||e.altKey){
           // 20.9.8 #1: combos and typed sequences are built from CANONICAL
           // KEYS -- the engine feeds only keys to the combo detector, so a
@@ -4078,11 +4112,13 @@ function renderLayoutKbd(d,w){
     else{
       el.onmousedown=e=>{if(e.shiftKey||e.altKey)e.preventDefault();};
       el.onclick=e=>{
-        if(e.shiftKey){e.preventDefault();addComboSel(d.id,u);return;}
-        if(e.altKey){e.preventDefault();addSeqSel(d.id,u);return;}
         const me=_p2b
           ?{type:'btn',id:_p2b,phys:null,p2usage:u,label:k.label||'',dev:d.id}
           :{type:'key',id:u,i:idx,p2:_isMouseDev,label:k.label||'',dev:d.id};
+        if(e.shiftKey){e.preventDefault();
+          if(layerJump(me))return;          // 27.3: layer key + key
+          addComboSel(d.id,u);return;}
+        if(e.altKey){e.preventDefault();addSeqSel(d.id,u);return;}
         if(swapPick)return doSwapPick(d.id,me);
         if(e.target&&e.target.classList.contains('edcorner')){
           sel=Object.assign({},me,{edit:true});render();return;}
@@ -4478,6 +4514,49 @@ function findModChord(mods,canon){
     for(const[os,p]of Object.entries(cfg.os_profiles||{}))
       if(p&&p.mod_chords&&p.mod_chords[k]!==undefined)return{key:k,os,action:p.mod_chords[k]};}
   return null;}
+/* 27.3: ONE SELECTION GESTURE, DISPATCHED ON WHAT WAS PICKED.
+
+   Josh, 2026-09-22: "selecting the key, then selecting shift doesn't work.
+   And I would kind of like it to work that way, even for layers - the logic
+   can be that if the first button selected is a layer, and the second
+   button/key selected is not a layer, then use the layer functionality."
+
+   Click a key or button, Shift-click another:
+     modifier  + key        -> a mod-chord rule          (addComboSel, as ever)
+     key       + key        -> a combo                   (addComboSel, as ever)
+     LAYER KEY + non-layer  -> the target, ON THAT LAYER (here)
+
+   The layer case WRITES NOTHING. It moves the editor to layer L with the
+   target selected -- exactly what clicking the layer tab and then the key
+   would do -- and the mapping is made in the editor as usual. That keeps
+   MAPPING_MODEL §2.5 rule 2 intact (one control, one record): the only
+   thing this gesture touches is where you are looking. Two layer triggers
+   together are still a combo, as before; nothing already possible changes.
+
+   Returns true if it handled the click. */
+function layerOfSel(s){
+  if(!s||!cfg)return null;
+  if(s.type==='key'){
+    const L=_lkLookup(baselineOf(s.dev||'',s.id),s.dev||'');
+    return L>0?L:null;}
+  if(s.type==='btn'){
+    const th=_thLookup(s.id,s.dev||'');
+    return th&&th[1]>0?th[1]:null;}
+  return null;}
+function layerJump(target){
+  if(!sel||!target||seqSel.length)return false;
+  if(sel.type!=='key'&&sel.type!=='btn')return false;   // extending a rule
+  const L=layerOfSel(sel);
+  if(L==null)return false;                               // first is not a layer
+  if(layerOfSel(target)!=null)return false;              // both layers: combo
+  const from=sel.label||(sel.type==='btn'?btnLabel(sel.id):(KEYS[sel.id]||'key'));
+  // Open the editor straight away: "use the layer functionality" means
+  // being ready to assign, not one more click away from it.
+  layer=L;sel=Object.assign({},target,{edit:true});render();
+  toast(`holding ${from} → layer ${L}: set what ${target.label||(target.type==='btn'
+    ?btnLabel(target.id):(KEYS[target.id]||'this key'))} does there, then ⬆ Save`);
+  return true;}
+
 function addComboSel(dev,u){
   if(seqSel.length){toast('finish or cancel the sequence first',true);return;}
   const canon=baselineOf(dev,u);
@@ -4633,7 +4712,7 @@ function renderMapTable(){
 function asgKeyName(u){return MODS[u]||KEYS[u]||('0x'+(+u).toString(16));}
 function asgActLabel(a){if(a===undefined)return'';if(a===null)return'—';
   return typeof a==='number'?(a===0?'∅ suppress':(KEYS[a]||MODS[a]||'?')):actShort(a);}
-function asgSearchResults(q,isBtn){
+function asgSearchResults(q,isBtn,allowExp){
   q=q.toLowerCase();const out=[];if(!q)return out;
   for(const[u,n]of Object.entries(KEYS))
     if(n.toLowerCase().includes(q))out.push({label:n,act:isBtn?['key',+u]:+u});
@@ -4647,7 +4726,10 @@ function asgSearchResults(q,isBtn){
     if('suppress'.startsWith(q))out.push({label:'∅ Suppress',act:['suppress']});
     for(let b=1;b<=5;b++)if(('btn'+b).includes(q)||btnLabel(b).toLowerCase().includes(q))
       out.push({label:'→ '+btnLabel(b),act:['btn',b]});}
-  return out.slice(0,14);}
+  // 27.2: expansions last, with their own share of the list so a query that
+  // matches many key names cannot crowd them out. Not for Baseline: that
+  // says what a key IS, and an identity cannot be a string of text.
+  return out.slice(0,14).concat(allowExp?expSearchHits(q).slice(0,8):[]);}
 function asgInputs(){
   const seen={},list=[];
   const add=(type,id)=>{const k=type+':'+id;
@@ -4667,7 +4749,7 @@ function asgRowVals(inp){
 function asgOpenSearch(cell,inp,mode,onPick){
   document.querySelectorAll('.asgsearch').forEach(x=>x.remove());
   const box=document.createElement('div');box.className='asgsearch';
-  box.innerHTML=`<input type="text" placeholder="search keys${inp.type==='btn'?' / macros / actions':''}…" style="width:100%">
+  box.innerHTML=`<input type="text" placeholder="search keys${inp.type==='btn'?' / macros / actions':''} / expansions…" style="width:100%">
     <div class="res muted" style="margin-top:.3rem">type to search</div>`;
   document.body.appendChild(box);
   const r=cell.getBoundingClientRect();
@@ -4679,11 +4761,11 @@ function asgOpenSearch(cell,inp,mode,onPick){
     a.onclick=()=>{box.remove();if(onPick)onPick(null);else asgChoose(inp,mode,null);};return a;};
   res.appendChild(clearLink());
   inpEl.oninput=()=>{
-    const hits=asgSearchResults(inpEl.value,inp.type==='btn');
+    const hits=asgSearchResults(inpEl.value,inp.type==='btn',!String(mode||'').startsWith('baseline:'));
     res.innerHTML='';res.appendChild(clearLink());
     if(!hits.length&&inpEl.value)res.insertAdjacentHTML('beforeend',' <span class="muted">no matches</span>');
     hits.forEach(h=>{const a=document.createElement('a');
-      a.className='mlink';a.textContent=h.label;
+      a.className='mlink';a.textContent=h.label;if(h.title)a.title='set: '+h.title;
       a.onclick=()=>{box.remove();if(onPick)onPick(h.act);else asgChoose(inp,mode,h.act);};
       res.appendChild(a);});};
   inpEl.onkeydown=e=>{if(e.key==='Escape')box.remove();};
@@ -7319,10 +7401,16 @@ if(k==='macro_both')return{press:'macro',pressMacro:a[1],release:'macro',relMacr
 // 20.9 BF2 #4: wheel/pan ticks as an OUTPUT of a key or button.
 if(k==='wheel'||k==='hwheel')
   return{press:'wheel',pressWheelKind:k,pressWheelN:+(a[1]||1),release:'none'};
+// 27.2: an expansion output (or plain text) has no picker of its own -- it
+// is chosen from the search -- but it must still SHOW as what it is. Falling
+// through to 'pass' would display a mapped key as "Pass through", and the
+// next change to any other control in the editor would write that back.
+if(k==='expansion'||k==='text')return{press:'value',pressValue:a,release:'none'};
 return{press:'pass',release:'none'};}
 function uiToAction(u){
 if(u.release==='macro')return u.press==='macro'?['macro_both',+u.pressMacro,+u.relMacro]:['macro_up',+u.relMacro];
 if(u.press==='pass')return null;if(u.press==='suppress')return['suppress'];
+if(u.press==='value')return u.pressValue||null;   // 27.2: kept as it was
 if(u.press==='dpi')return['dpi_cycle'];
 if(u.press==='btn')return['btn',+u.pressBtn];if(u.press==='key')return['key',+u.pressKey];
 if(u.press==='macro')return['macro',+u.pressMacro];
@@ -7566,7 +7654,7 @@ function macOpts(v){let h='';for(const n of macroSlots()){const nm=(cfg.macro_na
 // capturing a keypress is the fallback for when you do not. The common case
 // belongs first, and it was second.
 function searchBoxHTML(){return `<label>Search actions</label>
-<input type="text" id="actsearch" placeholder="type: copy, M4, Enter, dpi…">
+<input type="text" id="actsearch" placeholder="type: copy, M4, Enter, dpi, an expansion…">
 <div id="searchres" class="muted"></div>`;}
 function capBoxHTML(){return `<label>Press key(s) to assign (click box first)</label>
 <input type="text" id="keycap" placeholder="click, then press a key or a+b+c combo" readonly>`;}
@@ -7581,7 +7669,11 @@ function bindEditorCommon(applyAction){
         out.push(`<a class="mlink" onclick='applySearch(["macro",${n}])'>${nm?esc(nm)+' (M'+n+')':'M'+n}</a>`);}
     if('dpi'.includes(q))out.push(`<a class="mlink" onclick='applySearch(["dpi_cycle"])'>DPI cycle</a>`);
     if('suppress'.includes(q))out.push(`<a class="mlink" onclick='applySearch(["suppress"])'>Suppress</a>`);
-    $('searchres').innerHTML=out.slice(0,12).join(' · ');};}
+    // 27.2: expansions, by trigger or output. Referenced by index rather
+    // than inlined into the onclick, because a trigger may contain quotes.
+    window._expHits=expSearchHits(q).slice(0,8);
+    const ex=window._expHits.map((h,i)=>`<a class="mlink" title="set: ${esc(h.title)} \u2014 types the output only" onclick='applySearch(window._expHits[${i}].act)'>${esc(h.label)}</a>`);
+    $('searchres').innerHTML=out.slice(0,12).concat(ex).join(' · ');};}
   window.applySearch=a=>{applyAction(a);render();};
   const kc=$('keycap');
   if(kc){const held=new Set();
@@ -7885,7 +7977,52 @@ function positionEditor(){
   let x=a.x+30,y=a.y-10;
   if(x+w>innerWidth-8)x=Math.max(8,a.x-w-20);
   if(y+eh>innerHeight-8)y=Math.max(8,innerHeight-eh-8);
-  e.style.left=Math.max(8,x)+'px';e.style.top=Math.max(8,y)+'px';}
+  e.style.left=Math.max(8,x)+'px';e.style.top=Math.max(8,y)+'px';
+  // 27.4: the height above is a GUESS -- this runs before the content is
+  // rendered into the editor, so offsetHeight is the old contents, or 0 and
+  // the 400px fallback. Re-fit once the real content is in.
+  setTimeout(fitEditor,0);}
+
+/* 27.4: keep the whole editor on screen, using the room above if needed.
+
+   Josh, 2026-09-23: "Ensure that the mapping editor window that pops up has
+   as much visible as possible (right now it is always half-obscured below
+   the page fold, even though there is room above it that it is not
+   using!)"
+
+   positionEditor() clamps against the editor's height BEFORE the content
+   is rendered into it (every render path calls it first, then fills
+   innerHTML), so the clamp used the previous contents -- or nothing, and a
+   400px guess -- and the real editor, often most of the 82vh cap, grew down
+   past the fold. Nothing ever re-measured.
+
+   This measures the editor as it actually is and moves it only as far as
+   needed: up until its bottom is on screen (never above the top margin),
+   and left until its right edge is. It runs after each placement and
+   whenever the editor changes size (switching On press to "Key…" reveals
+   more), so it stays visible as the content grows. It never moves an editor
+   that already fits, which is what keeps a position you dragged it to. */
+function fitEditor(){
+  const e=$('editor');if(!e||e.style.display!=='block')return;
+  const r=e.getBoundingClientRect(),pad=8;
+  if(!r.height)return;
+  let top=r.top,left=r.left;
+  if(r.bottom>innerHeight-pad)top=innerHeight-pad-r.height;
+  if(top<pad)top=pad;                     // taller than the window: pin the
+                                          // top; it scrolls inside (82vh cap)
+  if(r.right>innerWidth-pad)left=innerWidth-pad-r.width;
+  if(left<pad)left=pad;
+  // Move by the DIFFERENCE, not to an absolute style value: the editor
+  // inherits a ~10px margin from a general rule, so `style.top = top` would
+  // land it 10px lower than intended -- which on first testing left it 2px
+  // below the fold, the very thing this exists to prevent.
+  const st=parseFloat(e.style.top)||0,sl=parseFloat(e.style.left)||0;
+  if(Math.round(top)!==Math.round(r.top))e.style.top=(st+top-r.top)+'px';
+  if(Math.round(left)!==Math.round(r.left))e.style.left=(sl+left-r.left)+'px';}
+(function(){
+  const e=document.getElementById('editor');
+  if(e&&window.ResizeObserver)new ResizeObserver(()=>fitEditor()).observe(e);
+  window.addEventListener('resize',fitEditor);})();
 function actionPickerHTML(idPfx,a){
   a=a||['suppress'];
   return `<select id="${idPfx}mode">
@@ -8271,6 +8408,7 @@ function renderEditor(){
     </div>
     <label>On press</label><select id="press">
       <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
+      ${ui.press==='value'?`<option value="value" selected>${esc(actShort(ui.pressValue))} (from search)</option>`:''}
       <option value="suppress" ${ui.press==='suppress'?'selected':''}>Suppress</option>
       ${isBtn?`<option value="btn" ${ui.press==='btn'?'selected':''}>Mouse button…</option>`:''}
       <option value="key" ${ui.press==='key'?'selected':''}>Key…</option>
@@ -8387,7 +8525,7 @@ function renderEditor(){
         only — a tick is an event, not a state you can hold.</div>`:
       p==='layer'?`<select id="pressLayer">${allLayers().filter(L=>L!==0).map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(LAYER_NAMES[L]||('Layer '+L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
     // quick-assign boxes only make sense for direct actions, not layer/dpi
-    $('pressAssign').style.display=(p==='key'||p==='macro'||p==='suppress'||p==='pass')?'':'none';
+    $('pressAssign').style.display=(p==='key'||p==='macro'||p==='suppress'||p==='pass'||p==='value')?'':'none';
     const r=$('release').value;
     $('relArg').innerHTML=r==='macro'?`<select id="relMacro">${macOpts(ui.relMacro||1)}</select>`:'';};
   refresh();
@@ -8444,7 +8582,7 @@ function renderEditor(){
       // role there, so there is nothing to explain -- and a green message on
       // every ordinary edit is noise, which is how Josh met it.
       if(roleHere&&p!=='layer')setLayerSource(null);
-      apply(uiToAction({press:p,release:$('release').value,
+      apply(uiToAction({press:p,release:$('release').value,pressValue:ui.pressValue,
         pressBtn:$('pressBtn')?.value,pressKey:$('pressKey')?.value,
         pressMacro:$('pressMacro')?.value,relMacro:$('relMacro')?.value,
         pressWheel:$('pressWheel')?.value}));
