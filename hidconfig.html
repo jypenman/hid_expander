@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 27.5</title>
+<title>HID Config 27.6</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -31,7 +31,17 @@ body.swappicking #swapbanner{display:block}
 .edcorner:hover{opacity:1;background:rgba(127,127,127,.45)}
 
 :root{color-scheme:light dark;--panel:rgba(128,128,128,.08);--line:rgba(128,128,128,.28);
---hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;}
+--hi:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--layer:#b8860b;
+/* 27.6: four tokens that were USED but never DEFINED. A var() with no
+   definition falls back to its second argument -- and `--bg` fell back to
+   #fff, which is why the page search's results were white on white in dark
+   mode (the topbar's text is CanvasText, i.e. white there). They are defined
+   here as THEME-FOLLOWING values -- system colours, or translucent greys that
+   read on either ground -- never a literal light or dark colour.
+   test_ui_structure fails on any var() that is neither defined here nor set
+   from JavaScript, so this cannot recur silently. */
+--bg:Canvas;--fg:CanvasText;--panel2:rgba(128,128,128,.15);
+--mut:GrayText;--bad:var(--err);}
 *{box-sizing:border-box}
 body{font-family:system-ui,sans-serif;margin:0;padding:1rem;max-width:none;margin-inline:auto}
 h1{font-size:1.25rem;margin:.2rem 0}.muted{opacity:.65;font-size:.82rem}
@@ -613,7 +623,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       style="width:13rem" title="Find anything in the UI — settings, mappings, triggers, macro names. Enter jumps to the first match; Esc closes.">
     <div id="uisearchdrop" style="display:none;position:absolute;top:100%;right:0;z-index:60;
       min-width:26rem;max-width:34rem;max-height:60vh;overflow:auto;margin-top:.2rem;
-      background:var(--bg,#fff);border:1px solid var(--line);border-radius:8px;
+      background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;
       box-shadow:0 8px 24px rgba(0,0,0,.28)"></div>
   </span>
   <button id="ostoggle" title="Which OS profile the engine applies (per-OS macro/mapping overlays). Click to switch, then ⬆ Save to device to apply & persist.">🪟 Win</button>
@@ -1653,6 +1663,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'27.6',d:'2026-09-23',items:[
+   {t:'Scroll up and Scroll down are their own assignable elements — add them from ✎ Layout (＋ Scroll up / down buttons) and map each direction separately, per layer and per device',k:'wireframes'},
+   {t:'Horizontal scroll: “hold a button + wheel” now honours the acceleration setting (it never did); new opt-in Shift + wheel → accelerated horizontal scroll with its own speed',k:'osscroll'},
+   {t:'Layer tabs are named after the key or button that opens them (e.g. “6 · Kinesis Space”), and every per-layer table shows every layer, not just the first six',k:'remap'},
+   {t:'Page search results readable in dark mode (were white on white)',k:'uisearch'}]},
  {v:'27.5',d:'2026-09-23',items:[
    {t:'Engine: inline calculations chain from the result — 807/1319== then *100== gives 0.611827*100 = 61.1827; an “=” the engine typed no longer counts as the “=” you type to start a calculation',k:'usage-sets'}]},
  {v:'27.4',d:'2026-09-23',items:[
@@ -2958,9 +2973,50 @@ function annotate(txt){
   return txt;
 }
 const LAYER_NAMES=['0 · Base','1 · CapsLock','2 · Right-btn','3 · Back-btn','4 · Fwd-btn','5'];
+/* 27.6: a layer is named after the key or button that OPENS it.
+
+   Josh, 2026-09-23: "Ensure when a new layer is assigned that it has the
+   short name of the key it's assigned to (instead of just "5, 6" etc. as more
+   are added)."
+
+   LAYER_NAMES was a guess made when the defaults were written -- "2 ·
+   Right-btn" is only true while the right button is still the thing that
+   opens layer 2 -- and it simply stopped at 5. This reads the real
+   triggers: the shared and per-device layer_keys, and the shared and
+   per-device Hold->Layer buttons. A device-scoped trigger is prefixed with
+   the device's first word ("E9 1"), because the same key on another
+   keyboard does not open it. Several triggers are joined with " / ".
+   LAYER_NAMES is now only the fallback for a layer nothing opens yet. */
+function layerTriggers(L){
+  if(!cfg||L===0)return[];
+  const out=[],short=s=>String(s||'').replace(/\s*\(.*\)\s*$/,'').trim();
+  const devShort=id=>{const d=(cfg.devices||[]).find(x=>x.id===id);
+    return String((d&&d.name)||id).split(/\s+/)[0];};
+  const keyName=u=>MODS[+u]||KEYS[+u]||('#'+u);
+  for(const[u,v]of Object.entries(cfg.layer_keys||{}))
+    if(+v===L)out.push(keyName(u));
+  for(const[dev,t]of Object.entries(cfg.layer_keys_by_device||{}))
+    for(const[u,v]of Object.entries(t||{}))
+      if(v!=null&&+v===L)out.push(devShort(dev)+' '+keyName(u));
+  for(const[b,v]of Object.entries(cfg.tap_hold||{}))
+    if(v&&+v[1]===L)out.push(short(btnLabel(+b)));
+  for(const[dev,t]of Object.entries(cfg.tap_hold_by_device||{}))
+    for(const[b,v]of Object.entries(t||{}))
+      if(v&&+v[1]===L)out.push(devShort(dev)+' '+short(btnLabel(+b)));
+  return[...new Set(out)];}
+function layerName(L){
+  if(L===0)return LAYER_NAMES[0];
+  const t=layerTriggers(L);
+  if(t.length)return L+' · '+t.join(' / ');
+  return LAYER_NAMES[L]||(''+L);}
 function btnLabel(n){return (cfg.button_labels&&cfg.button_labels[n])||
   ({1:'Left (MB1)',2:'Right (MB2)',3:'Wheel (MB3)',
-     4:'Back (MB4)',5:'FWD (MB5)'}[n]||('MB'+n));}
+     4:'Back (MB4)',5:'FWD (MB5)',
+     // 27.6: the scroll DIRECTIONS as assignable inputs (engine
+     // WHEEL_UP_BTN / WHEEL_DOWN_BTN). Not buttons on any hardware -- raised
+     // by the engine from a wheel detent -- so they are named for what they
+     // are, not given an MB number that would imply a physical button.
+     20:'Scroll up',21:'Scroll down'}[n]||('MB'+n));}
 // ---- 20.7.3 BF2: three names for one button, reconciled -------------------
 // A mouse button has THREE identities and until now the UI showed one of them
 // without saying which: the number silkscreened on the hardware (the '7' on
@@ -3791,8 +3847,9 @@ function render(){
   const L=$('layers');L.innerHTML='';
   allLayers().forEach(i=>{const p=document.createElement('div');
   p.className='pill'+(i===layer?' on':'');
-  p.textContent=LAYER_NAMES[i]||(''+i);
-  p.title=LAYER_NAMES[i]?`layer ${i}`:`layer ${i} — no name yet`;
+  p.textContent=layerName(i);
+  p.title=layerTriggers(i).length?`layer ${i} — opened by ${layerTriggers(i).join(', ')}`
+    :`layer ${i} — nothing opens it yet`;
   p.onclick=()=>{layer=i;render();};L.appendChild(p);});
   renderStage();renderMacros();renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
   renderHeldBar();
@@ -4350,6 +4407,8 @@ function renderPalette(){
       <option value="key">Key</option>
       <option value="btn">Mouse button</option>
       <option value="wheel">Scroll wheel</option>
+      <option value="wup">Scroll up (assignable)</option>
+      <option value="wdn">Scroll down (assignable)</option>
       <option value="stepper">Stepper</option></select></div>
   <div id="palvalwrap" style="margin-top:.3rem"></div>
   <div style="display:flex;gap:.4rem;margin-top:.3rem">
@@ -4364,6 +4423,8 @@ function renderPalette(){
      <label style="flex:1;margin:0">↻°<input type="number" id="palsr" value="${selk.rot||0}" step="15"></label></div>
    <button id="paldel" style="margin-top:.4rem;width:100%">🗑 Remove element</button>`:''}
   <button id="palnav" style="margin-top:.35rem;width:100%">＋ Back / Forward buttons</button>
+  <button id="palscroll" style="margin-top:.35rem;width:100%"
+    title="Add Scroll up and Scroll down as their own elements, so each direction can be mapped separately — independent of the wheel click and of the ⇅ wheel">＋ Scroll up / down buttons</button>
   ${(()=>{const dn=detectedNodesFor(d.id);
     if(!dn.length)return `<div class="muted" style="font-size:.72rem;margin-top:.35rem">
       (connect the device to add its detected keys)</div>`;
@@ -4401,6 +4462,11 @@ function renderPalette(){
     const base={x:0,y:Math.round(maxy*4)/4,w:+$('palw').value||1,h:+$('palh').value||1};
     if(kind==='key')base.u=+$('palkey').value;
     else if(kind==='btn'){base.btn=+$('palbtn').value;const l=$('pallbl').value.trim();if(l)base.label=l;}
+    // 27.6: a Scroll up / Scroll down element is a BUTTON element on the
+    // engine's pseudo-buttons, so clicking it opens the ordinary mapping
+    // editor and writes the ordinary mouse tables.
+    else if(kind==='wup'){base.btn=20;base.label='▲ Scroll';}
+    else if(kind==='wdn'){base.btn=21;base.label='▼ Scroll';}
     else if(kind==='wheel')base.wheel=1;
     else if(kind==='stepper')base.stepper=1;
     lay.keys.push(base);editSel=lay.keys.length-1;render();};
@@ -4419,6 +4485,17 @@ function renderPalette(){
     lay.keys.push({btn:4,x:0,y:Math.round(maxy*4)/4,w:1.5,label:'Back'},
                   {btn:5,x:1.6,y:Math.round(maxy*4)/4,w:1.5,label:'Forward'});
     editSel=lay.keys.length-1;render();toast('added Back (btn4) and Forward (btn5) — drag into place');};
+  $('palscroll').onclick=()=>{
+    // 27.6: skip whichever is already on this wireframe -- adding a second
+    // "Scroll up" would be two elements editing one mapping.
+    const has=b=>lay.keys.some(k=>k.btn===b);
+    const maxy=lay.keys.length?Math.max(...lay.keys.map(k=>k.y+(k.h||1))):0;
+    const y=Math.round(maxy*4)/4,add=[];
+    if(!has(20))add.push({btn:20,x:0,y,w:1.5,label:'▲ Scroll'});
+    if(!has(21))add.push({btn:21,x:1.6,y,w:1.5,label:'▼ Scroll'});
+    if(!add.length){toast('Scroll up and Scroll down are already on this wireframe');return;}
+    lay.keys.push(...add);editSel=lay.keys.length-1;render();
+    toast('added '+add.map(k=>k.label).join(' and ')+' — drag into place, ✎ Layout to save, then click one to map it');};
   // 19.9 #3: add ONE sub-device's elements, APPENDED below whatever is already
   // in the wireframe (never a replace -- that lives under "Start over from
   // template"). Each detected interface gets its own button.
@@ -4677,12 +4754,13 @@ function renderMapTable(){
       add(`≡ ${esc(devName(dev))}: ${MODS[u]||KEYS[u]||u}`,null,null,null)
         .hold='baseline → '+(v===0?'∅':(MODS[v]||KEYS[v]||v));
   let h='<tr><td><b>Input</b></td><td><b>Tap / Hold / Baseline</b></td>';
-  for(let L=0;L<6;L++)h+=`<td><b>${esc(LAYER_NAMES[L]||('L'+L))}</b></td>`;
+  const _lys=allLayers();      // 27.6: every layer, not the first six
+  for(const L of _lys)h+=`<td><b>${esc(layerName(L))}</b></td>`;
   h+='</tr>';
   for(const lbl of Object.keys(rows).sort()){
     const r=rows[lbl];
     h+=`<tr><td>${lbl}</td><td class="muted">${r.hold||''}</td>`;
-    for(let L=0;L<6;L++){
+    for(const L of _lys){
       const a=r.acts[L];
       h+=`<td style="cursor:pointer" data-l="${L}" data-lbl="${esc(lbl)}">${
         a?esc(a):'<span class="muted" style="opacity:.35">·</span>'}</td>`;}
@@ -4817,13 +4895,13 @@ function asgRows(){
   for(const[id,c]of Object.entries(cfg.combos||{}))
     rows.push({kind:'combo',id,type:'combo',keys:c.keys||[],out:c.action,
                os:(c.os&&[].concat(c.os)[0])||'',dev:c.dev||'',
-               layers:new Set(ALL_LAYERS)});
+               layers:new Set(allLayers())});
   const mcSrc=[['',cfg.mod_chords||{}]].concat(
     Object.entries(cfg.os_profiles||{}).map(([os,p])=>[os,(p&&p.mod_chords)||{}]));
   for(const[os,tbl]of mcSrc)for(const[k,act]of Object.entries(tbl)){
     const[L,m,u]=k.split(',').map(Number);
     rows.push({kind:'mc',id:k,type:'mc',mods:m,canon:u,out:act,os,
-               layers:new Set(L===-1?ALL_LAYERS:[L])});}
+               layers:new Set(L===-1?allLayers():[L])});}
   // 19.6: rules that live in an ADDITION pack (their own file on the Pi).
   // They are shown alongside your own so the list is the whole truth, tinted
   // and grouped under the pack name, each line individually switchable.
@@ -4834,11 +4912,11 @@ function asgRows(){
       if(e.scope==='modchord')
         rows.push({...base,kind:'mc',type:'mc',
           id:`${e.layer===undefined?-1:e.layer},${e.mods},${e.id}`,
-          mods:e.mods,canon:e.id,out:e.action,layers:new Set(ALL_LAYERS)});
+          mods:e.mods,canon:e.id,out:e.action,layers:new Set(allLayers())});
       else if(e.scope==='combo')
         rows.push({...base,kind:'combo',type:'combo',
           id:e.id||('combo-'+(e.keys||[]).join('-')),keys:e.keys||[],
-          out:e.action,layers:new Set(ALL_LAYERS)});
+          out:e.action,layers:new Set(allLayers())});
       else if(e.scope==='modremap'||e.scope==='baseline')
         rows.push({...base,kind:'special',type:'special',id:'sp'+ei,
           label:entryLabel(e),out:undefined,layers:new Set()});
@@ -4848,7 +4926,9 @@ function asgRows(){
   for(const r of (window._asgPending||[]))
     rows.push({type:r.type,id:r.id,out:undefined,layers:new Set(),pending:true,__p:r});
   return rows;}
-const ALL_LAYERS=[0,1,2,3,4,5];
+// 27.6: was `const ALL_LAYERS=[0,1,2,3,4,5]` -- "every layer" meant the first
+// six, so an all-layers rule showed its layer-6 box unticked. allLayers() is
+// the real set.
 // label for any row's INPUT column
 function asgInputLabel(r){
   if(r.kind==='special')return r.label||'(pack setting)';
@@ -6560,7 +6640,7 @@ function renderAssignTable(){
   // 19.4 #1.3: layer headers rotated 45 deg so the checkbox columns pack
   // tightly, freeing horizontal room for the Explanation column.
   const head=`<tr><td><b>Input</b></td><td><b>Output</b></td>`
-    +LAYER_NAMES.map((n,L)=>`<td class="lyrhead" title="layer ${L}"><span>${esc(n)}</span></td>`).join('')
+    +allLayers().map(L=>`<td class="lyrhead" title="layer ${L}"><span>${esc(layerName(L))}</span></td>`).join('')
     +`<td><b>Explanation</b></td><td><b>Group</b></td><td></td></tr>`;
   let h='';
   if(!rows.length)h='<span class="muted" style="font-size:.8rem">No mappings yet — use ＋ Add mapping, or click a key on a wireframe.</span>';
@@ -6595,8 +6675,8 @@ function renderAssignTable(){
         +(r.fromAdd?` <a class="mlink" data-asgunpack="${ri}" style="font-size:.72rem" title="move this rule out of the pack and back into your profile">⤴ un-pack</a>`:'');
       const outLbl=r.out===undefined?'<span class="muted">(set…)</span>':esc(asgActLabel(r.out));
       let cells='';
-      if(special)cells=`<td colspan="${LAYER_NAMES.length}" style="text-align:center" class="muted" title="fires on any layer">all</td>`;
-      else for(let L=0;L<6;L++)cells+=`<td class="asgcell"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
+      if(special)cells=`<td colspan="${allLayers().length}" style="text-align:center" class="muted" title="fires on any layer">all</td>`;
+      else for(const L of allLayers())cells+=`<td class="asgcell"><input type="checkbox" data-asgchk="${ri}" data-l="${L}" ${r.layers.has(L)?'checked':''} ${r.out===undefined?'disabled':''}></td>`;
       const _on=ruleEnabled(r);
       h+=`<tr class="${r.fromAdd?'fromadd':''}${(r.addOff||!_on)?' addoff':''}">
         <td>${r.fromAdd
@@ -8392,7 +8472,11 @@ function renderEditor(){
   const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)" title="${layer===0?'Edit this here.':'This belongs to the button itself — edit it on layer 0.'}">Hold → Layer ${srcLayer}${layer===0?'':' (set on layer 0)'}</span>`:'';
   // Offered on layer 0 only, for the same reason: the option is what makes
   // the picker look like the place to change a role that does not live here.
-  const layerOpt=layer===0?`<option value="layer" ${ui.press==='layer'?'selected':''}>Hold → Layer…</option>`:'';
+  // 27.6: never for Scroll up / Scroll down (pseudo-buttons 20/21): a wheel
+  // detent has no hold, so the engine can never open a layer from one, and
+  // offering it would be a control that silently does nothing.
+  const _isScrollDir=isBtn&&(sel.id===20||sel.id===21);
+  const layerOpt=(layer===0&&!_isScrollDir)?`<option value="layer" ${ui.press==='layer'?'selected':''}>Hold → Layer…</option>`:'';
   ed.innerHTML=`<h2 style="font-size:1rem">${isBtn?btnTitle:(KEYS[canon]||'?')}${physTag}${baseTag} — layer ${layer}${layerBadge}</h2>
   ${scopeSel}
   ${identBlock}
@@ -8523,7 +8607,7 @@ function renderEditor(){
             ?'selected':''}>${lbl}</option>`).join('')}</select>
         <div class="muted" style="font-size:.72rem">Wheel ticks fire on press
         only — a tick is an event, not a state you can hold.</div>`:
-      p==='layer'?`<select id="pressLayer">${allLayers().filter(L=>L!==0).map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(LAYER_NAMES[L]||('Layer '+L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
+      p==='layer'?`<select id="pressLayer">${allLayers().filter(L=>L!==0).map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(layerName(L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
     // quick-assign boxes only make sense for direct actions, not layer/dpi
     $('pressAssign').style.display=(p==='key'||p==='macro'||p==='suppress'||p==='pass'||p==='value')?'':'none';
     const r=$('release').value;
@@ -8736,8 +8820,8 @@ function macroUsers(){
       label:asgInputLabel(r),
       // A binding on every layer is the normal case and saying so on each row
       // is noise; only a restricted set is worth naming.
-      layers:(L.length&&L.length<LAYER_NAMES.length)
-        ?L.map(i=>LAYER_NAMES[i]||('layer'+i)).join(', '):'',
+      layers:(L.length&&L.length<allLayers().length)
+        ?L.map(i=>layerName(i)).join(', '):'',
       os:r.os||'',
       pack:r.fromAdd||'',
       off:!!r.addOff});}
@@ -10580,7 +10664,25 @@ function renderOsTab(){
         raw detents while vertical scroll went through the acceleration curve,
         which is why one axis flew and the other crawled. This puts both on the
         same curve. Each axis keeps its own speed accumulator, so a fast
-        vertical flick does not fling the next horizontal nudge.</div></span>
+        vertical flick does not fling the next horizontal nudge.
+        <b>27.6:</b> until now this only reached a hardware tilt wheel — the
+        "hold a button + wheel = horizontal" layer mode stayed flat whatever
+        this said. It now covers both.</div></span>
+    </label>
+    <label style="display:flex;gap:.4rem;align-items:flex-start;margin-top:.5rem">
+      <input type="checkbox" id="shifthwheel" ${(cfg.scroll&&cfg.scroll.shift_hwheel)?'checked':''}
+        style="margin-top:.2rem">
+      <span>Shift + wheel → horizontal scroll, accelerated like vertical
+        <span style="margin-left:.4rem;white-space:nowrap">speed ×
+          <input type="number" id="shifthwgain" min="0.25" max="8" step="0.25"
+            value="${(cfg.scroll&&cfg.scroll.shift_hwheel_gain)||1}" style="width:4.2rem"></span>
+        <div class="muted" style="font-size:.74rem">Off: the Pi sends an ordinary
+        (accelerated) vertical scroll with Shift held, and the application
+        decides — Excel turns it into horizontal scrolling by <i>columns</i>,
+        with its own step, which is why it feels slower than vertical. On: the
+        Pi sends a real horizontal scroll through the same acceleration curve,
+        times the speed above; wheel up scrolls left, as Windows does. Try it in
+        Excel; if an app treats Shift + horizontal scroll oddly, turn it off.</div></span>
     </label>
     <!-- 23.8: the acceleration curve, per device. It was six constants in
          s6 under a comment saying "tune to taste", with nothing that could
@@ -10588,6 +10690,21 @@ function renderOsTab(){
          the E9 could not both feel right. -->
     <div id="accelwrap" style="margin-top:.6rem"></div></td></tr>`;
   $('osscroll').innerHTML=sh;
+  // 27.6: Shift + wheel -> horizontal. Deleted rather than stored false when
+  // unticked, the same shape as pan_accel -- which is why the engine now
+  // resets its scroll options to defaults on every load.
+  if($('shifthwheel'))$('shifthwheel').onchange=e=>{
+    cfg.scroll=cfg.scroll||{};
+    if(e.target.checked)cfg.scroll.shift_hwheel=true;else delete cfg.scroll.shift_hwheel;
+    if(!Object.keys(cfg.scroll).length)delete cfg.scroll;
+    toast('Shift + wheel horizontal '+(e.target.checked?'on':'off')+' — ⬆ Save to device to apply');};
+  if($('shifthwgain'))$('shifthwgain').onchange=e=>{
+    const v=parseFloat(e.target.value);
+    cfg.scroll=cfg.scroll||{};
+    if(!v||v===1)delete cfg.scroll.shift_hwheel_gain;
+    else cfg.scroll.shift_hwheel_gain=Math.max(0.25,Math.min(8,v));
+    if(!Object.keys(cfg.scroll).length)delete cfg.scroll;
+    toast('Shift + wheel speed ×'+(v||1)+' — ⬆ Save to device to apply');};
   if($('panaccel'))$('panaccel').onchange=e=>{
     cfg.scroll=cfg.scroll||{};
     if(e.target.checked)cfg.scroll.pan_accel=true;else delete cfg.scroll.pan_accel;
