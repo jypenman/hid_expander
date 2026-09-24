@@ -1,14 +1,17 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 27.6</title>
+<title>HID Config 28.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
    to device). --pick (amber) marks STATE: this thing is selected, or armed,
    or waiting for you. Using the same colour for "press me" and "I am chosen"
    is why the Swap button looked dead when it was in fact armed. */
-:root{--pick:#d97706;--pick-soft:rgba(217,119,6,.18)}
+:root{--pick:#d97706;--pick-soft:rgba(217,119,6,.18);
+  /* 27.8: space above and below a button's label, in LINES. Set from
+     Preferences → Layout (PREFS.look.btnpad). */
+  --btnpad:.1}
 button.armed{background:var(--pick)!important;color:#fff!important;
   box-shadow:0 0 0 3px var(--pick-soft)}
 /* While a swap is armed the whole stage says so: the cursor changes, every
@@ -45,7 +48,9 @@ body.swappicking #swapbanner{display:block}
 *{box-sizing:border-box}
 body{font-family:system-ui,sans-serif;margin:0;padding:1rem;max-width:none;margin-inline:auto}
 h1{font-size:1.25rem;margin:.2rem 0}.muted{opacity:.65;font-size:.82rem}
-button{padding:.45rem .9rem;cursor:pointer;border-radius:8px;border:1px solid var(--line);
+/* 27.8: was .45rem top and bottom -- "almost half a line above and below"
+   (Josh, 2026-09-23). Now --btnpad lines, 0.1 unless he slides it. */
+button{padding:calc(var(--btnpad) * 1.2em) .9rem;cursor:pointer;border-radius:8px;border:1px solid var(--line);
 background:var(--panel);color:inherit;font-size:.88rem}
 button.primary{background:var(--hi);border-color:var(--hi);color:#fff;font-weight:600}
 button:disabled{opacity:.4;cursor:default}
@@ -268,6 +273,37 @@ font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12)
    ".88rem" Connected summary's own line box and pushed that row 0.9px --
    invisible to look at, and exactly the thing he asked not to happen. The
    chip now contributes less height than the smallest row it sits in. */
+/* 27.9: the legend beside the Wireframes / Connected headers. Collapsed it
+   is a fixed-height strip, filled RIGHT TO LEFT (row-reverse) so the first
+   group sits against the right edge; items that do not fit are hidden and
+   counted rather than clipped half-way. Expanded it drops into the flow. */
+.wflegend{position:absolute;top:.3rem;right:.6rem;width:min(64%,62rem);height:3.4rem;
+  overflow:hidden;font-size:.68rem;line-height:1.15;z-index:2}
+.wflegend .lgrow{display:flex;flex-direction:row-reverse;gap:.7rem;align-items:flex-start;
+  height:100%;padding-right:3.6rem}
+.wflegend .lgi{flex:0 0 auto;max-width:8.6rem;display:flex;gap:.3rem;align-items:flex-start}
+.wflegend .lgi .sw{flex:0 0 auto;min-width:1.1rem;height:.9rem;border-radius:3px;
+  display:inline-flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:700}
+.wflegend .lgi .lgd{color:var(--mut)}
+.wflegend .lghead{font-weight:700;color:var(--fg);font-size:.66rem;flex:0 0 auto;
+  writing-mode:vertical-rl;transform:rotate(180deg);opacity:.6}
+.wflegend .lgmore{position:absolute;right:0;top:0;font-size:.66rem;padding:0 .35rem}
+.wflegend.open{position:static;width:auto;height:auto;margin:.3rem 0 .4rem;
+  border:1px solid var(--line);border-radius:8px;padding:.5rem .6rem;font-size:.76rem;line-height:1.35}
+.wflegend.open .lgrow{flex-direction:row;flex-wrap:wrap;height:auto;padding-right:0}
+.wflegend.open .lgi{max-width:15rem}
+.wflegend.open .lgsec{margin:.25rem 0 .5rem}
+.wflegend.open .lgsec>b{display:block;margin-bottom:.25rem}
+.wflegend.open .lgmore{position:absolute;right:.5rem;top:.4rem}
+.wflegend.open{position:relative}
+.lgsample{position:relative;display:inline-block;width:27rem;max-width:100%;height:9.5rem;margin:.2rem .6rem .2rem 0;
+  vertical-align:top}
+.lgsample .key{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(2.1);
+  transform-origin:center;min-width:2.4rem;pointer-events:none}
+.lgsample .lgl{position:absolute;font-size:.7rem;line-height:1.2;max-width:9rem}
+.lgsample svg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+@media(max-width:900px){.wflegend:not(.open){width:auto;left:auto}
+  .wflegend:not(.open) .lgrow{display:none}}
 .legendchip:hover{border-color:var(--hi);color:var(--hi)}
 #popover .legendpop{max-width:min(46rem,92vw);padding:.5rem .7rem;
   font-size:.78rem;line-height:1.6}
@@ -628,6 +664,16 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   </span>
   <button id="ostoggle" title="Which OS profile the engine applies (per-OS macro/mapping overlays). Click to switch, then ⬆ Save to device to apply & persist.">🪟 Win</button>
   <span id="toast"></span>
+  <span id="toasterr" style="display:none;color:var(--err);font-size:.85rem"
+    title="The last error stays until you clear it or another replaces it (27.7)"><span id="toasterrtxt"></span>
+    <button id="toasterrx" style="padding:0 .35rem;margin-left:.25rem" title="Clear">×</button></span>
+  <span style="position:relative;display:inline-block">
+    <button id="msglogbtn" title="Every message this page has shown since it was loaded, with the time. Kept in this page's memory only — nothing is read from or sent to the Pi.">🗒</button>
+    <div id="msglog" style="display:none;position:absolute;top:100%;right:0;z-index:60;
+      width:32rem;max-width:90vw;max-height:60vh;overflow:auto;margin-top:.2rem;padding:.4rem .6rem;
+      background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;
+      box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:.8rem"></div>
+  </span>
 </div>
 <div id="svcwarn" style="display:none;border:2px solid var(--err);border-radius:10px;
   padding:.6rem .9rem;margin:.5rem 0;font-size:.85rem">
@@ -718,7 +764,14 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 <details class="dbg" id="clipdock" data-uikey="clipdock"><summary>📋 Copy / Paste</summary>
   <div style="padding:0 1rem 1rem">
   <div class="panel">
-    <h2 style="font-size:1rem">Copy / Paste — carry text between computers</h2>
+    <!-- 27.8: the description sits behind the ▸ after the heading. Josh,
+         2026-09-23: "Make the description above the Copy/Paste items optional
+         and collapsible and available in a little carat or something after
+         the main Copy/Paste header instead of using up space." -->
+    <h2 style="font-size:1rem">Copy / Paste — carry text between computers
+      <button id="clipabouttg" class="txmini" style="margin-left:.3rem;font-weight:400"
+        title="About Copy / Paste" aria-expanded="false" aria-controls="clipabout">▸ about</button></h2>
+    <div id="clipabout" style="display:none">
     <p class="muted" style="font-size:.82rem">Text stored on the Pi in its own
     <code>copy_paste/</code> files. Open this page on the other computer, press
     <b>📋 Copy</b>, and paste. Nothing is typed out key-by-key, so length costs a
@@ -726,6 +779,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <p class="muted" style="font-size:.78rem"><b>Kept apart on purpose:</b> this has its own
     storage and its own transfer channel, and <i>no</i> part of the remapping engine reads it —
     so anything wrong with a saved item cannot affect your keys, macros or expansions.</p>
+    <p class="muted" style="font-size:.76rem">
+      Items are <b>read-only</b> until you press <b>✎ Edit</b>. Up to
+      <b>32 KB</b> per item and <b>128 KB</b> in total; transfer runs at roughly
+      9 KB/s, so a 30 KB script takes about 3 seconds to save. Text is stored and
+      returned verbatim — no character sequence is interpreted.</p>
+    </div>
     <div class="bar">
       <button id="clipnew" class="primary">＋ New</button>
       <button id="clipsave" disabled>⬆ Save all to device</button>
@@ -738,11 +797,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       border-color:var(--warn);color:var(--warn)">⚠ new notes on the Pi — ↻ re-read</button>
     </div>
     <div id="cliplist" style="margin-top:.5rem"></div>
-    <p class="muted" style="font-size:.76rem;margin-top:.5rem">
-      Items are <b>read-only</b> until you press <b>✎ Edit</b>. Up to
-      <b>32 KB</b> per item and <b>128 KB</b> in total; transfer runs at roughly
-      9 KB/s, so a 30 KB script takes about 3 seconds to save. Text is stored and
-      returned verbatim — no character sequence is interpreted.</p>
   </div>
   </div>
 </details>
@@ -762,6 +816,13 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
          <span class="muted">Then ⬆ Save to device; the engine picks up new devices on service restart.</span>
        </div>
      </details>
+     <!-- 28.1: palm rejection. Josh, 2026-09-23 09:52:43: "Build logic to
+          ignore touches on the Fintie touchpad when certain criteria are met
+          (... make it a setting where I can control the key variables)". -->
+     <details id="palmsec" data-uikey="palm" style="margin-top:.7rem">
+       <summary style="cursor:pointer;font-weight:600;font-size:.9rem">🖐 Palm rejection — ignore a touchpad while you type</summary>
+       <div id="palmbody" style="padding:.4rem 0"></div>
+     </details>
    </div>
  </details>
  <div id="maprow">
@@ -779,7 +840,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <button onclick="clearChordSel()">✕</button>
   </div>
   <div id="groupshost" style="margin:.3rem 0"></div>
-  <details id="wfsection" data-uikey="wireframes" open class="panel" style="padding:.5rem .7rem">
+  <details id="wfsection" data-uikey="wireframes" open class="panel" style="padding:.5rem .7rem;position:relative">
     <!-- 26.0: Josh, 2026-09-11 14:13:11 (HID Notes): "Add a little 'legend'
          at the top (in the space to the right of 'Wireframes' and 'Connected'
          - WITHOUT MAKING THAT SPACE ANY BIGGER, if possible)".
@@ -796,15 +857,19 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
          drift apart is precisely the confusion this is meant to end. -->
     <summary style="cursor:pointer;font-weight:600">🖼 Wireframes
       <span class="muted" id="wfcount" style="font-weight:400;font-size:.8rem"></span>
-      <span class="legendchip" onclick="legendPop(event,this)"
-        title="What the colours, outlines and corners mean">🎨 legend</span></summary>
+</summary>
+    <!-- 27.9: THE legend -- one copy, in the space to the right of the
+         "Wireframes" and "Connected" headers, readable without a click.
+         Built by renderWfLegend(). The 26.0 chips and the separate 🎨 Legend
+         panel below the wireframes are gone: Josh, 2026-09-23, "(legend should
+         not be repeated)". -->
+    <div id="legend" class="wflegend" onclick="event.stopPropagation()"></div>
     <div id="stage" style="position:relative">
       <svg id="chordsvg"></svg>
       <details id="wfconn" data-uikey="wf-connected" open style="margin:.3rem 0">
         <summary style="cursor:pointer;font-weight:600;font-size:.88rem">✅ Connected
           <span class="muted" id="wfconncount" style="font-weight:400;font-size:.78rem"></span>
-          <span class="legendchip" onclick="legendPop(event,this)"
-            title="What the colours, outlines and corners mean">🎨 legend</span></summary>
+</summary>
         <div class="devrow" id="devcards"></div>
       </details>
       <details id="wfdisc" data-uikey="wf-disconnected" style="margin:.3rem 0">
@@ -818,30 +883,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div id="heldbar" class="muted" style="display:none;font-size:.8rem;
     margin:.3rem 0;padding:.35rem .6rem;border:1px solid var(--line);
     border-radius:8px"></div>
-  <details id="legend" data-uikey="legend" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">🎨 Legend</summary>
-    <div id="legendbody" style="padding:.4rem;font-size:.8rem;line-height:1.7">
-      <span style="background:rgba(239,68,68,.55);padding:0 .3rem;border-radius:3px">red</span> raw key held down on a device ·
-      <span style="background:rgba(245,158,11,.55);padding:0 .3rem;border-radius:3px">yellow flash</span> key sent to the PC ·
-      <span style="background:rgba(34,197,94,.55);padding:0 .3rem;border-radius:3px">green flash</span> macro output ·
-      <span style="background:rgba(59,130,246,.6);padding:0 .3rem;border-radius:3px">blue flash</span> expansion output<br>
-      <span style="border:2px solid var(--ok);padding:0 .3rem;border-radius:3px">green outline</span> has a custom mapping on this layer ·
-      <span style="background:rgba(184,134,11,.45);padding:0 .3rem;border-radius:3px">gold key</span> starts a layer (its layer # is shown) ·
-      <span style="outline:2px solid var(--warn);padding:0 .3rem;border-radius:3px">dashed line</span> a chord (click to inspect) ·
-      <span style="outline:2px solid #a855f7;padding:0 .3rem;border-radius:3px">purple outline</span> belongs to a highlighted <b>group</b> (toggle groups in the 🗂 Groups card)<br>
-      corners on each key: <span style="color:var(--err)">red top-left</span> = original before this device's Baseline · grey center = current identity · <span style="color:var(--ok)">green bottom-right</span> = custom output on this layer · <span style="color:#000;background:var(--layer);border-radius:3px;padding:0 .2rem">L#</span> top-right = triggers that layer<br>
-      <span style="color:var(--hi);font-weight:700">⌘ badge</span> (bottom-left) = this key has a <b>modifier shortcut</b> (e.g. Cmd+Tab); hover to see it · a per-OS <b>modifier swap</b> shows like a Baseline change: red original, grey what it now sends<br>
-      <span class="heldchip inuse" style="display:inline">green label</span> a
-      shortcut you already use · <span class="heldchip learn" style="display:inline">yellow
-      label</span> one you are learning · <span class="heldchip" style="display:inline">grey
-      label</span> your own mapping or chord · <b>multiple</b> = more than one
-      set claims that key, hover for all of them (25.6)<br>
-      While a key is held, the <b>grey centre changes to what the key would
-      then produce</b> — hold Shift and <code>;</code> reads <code>:</code>.
-      Shift only: with Ctrl or Alt in the mix the result is a command, not a
-      character, so the centre is left alone (25.6)<br>
-      <b>Modifier swaps live in Baseline:</b> to make a keyboard's <b>LAlt</b> act as <b>LWin</b> (Option/Command feel), click that key and set Baseline · LAlt → LWin. It then shows red LAlt → grey LWin. Nothing is swapped by default.
-    </div>
-  </details>
   <details class="dbg" id="remappanel" data-uikey="remap" open><summary>📋 All custom remappings</summary>
     <div style="padding:0 1rem 1rem">
       <details id="ovpanel" data-uikey="overview" open style="margin:.3rem 0"><summary style="cursor:pointer;font-weight:600">Overview</summary>
@@ -1189,7 +1230,10 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   </div>
   <div class="panel" id="testhist" data-uikey="test-hist" style="margin-top:.6rem">
     <h2 style="font-size:1rem;margin:0 0 .3rem">History, per device
-      <button id="testhistload" class="txmini" style="margin-left:.5rem">↻ load</button></h2>
+      <button id="testhistload" class="txmini" style="margin-left:.5rem">↻ load</button>
+      <label style="font-size:.78rem;font-weight:400;margin-left:.8rem"
+        title="What the little chart beside each device plots, oldest run on the left">chart
+        <select id="testmetric" style="width:auto;font-size:.78rem"></select></label></h2>
     <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Every run is
       a line in <code>usage/tests.jsonl</code> on the Pi, written by the engine
       with its own numbers attached. Over time this is where “floaty” becomes a
@@ -1462,6 +1506,10 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </div></div>
 
 <div id="page-os" style="display:none">
+  <!-- 27.8: every section below the OS bar is collapsible and starts
+       collapsed. Josh, 2026-09-23 11:18:58: "in the OS section, have the
+       various sections collapsible and collapsed by default." The OS bar
+       stays open: it is the control the sections apply to. -->
   <!-- 26.2: the disambiguation page. Josh, 2026-09-11 11:19:01 (vii): "ensure
        that there is a disambiguation dataset (and a page for this in the UI,
        probably under the OS tab)". And (viii): "For the logic surrounding
@@ -1489,13 +1537,13 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     to set an OS-specific override; the ⇄ reorders which OS is base.</p>
     <div id="ostabs" class="pills"></div>
   </div>
-  <div class="panel">
-    <h3 style="font-size:.95rem;margin:.2rem 0">Per-device scrolling</h3>
+  <details class="panel" data-uikey="osscrolls">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">Per-device scrolling</h3></summary>
     <p class="muted" style="font-size:.78rem">Tick to invert scroll direction for a device on the selected OS (e.g. natural on Mac, reversed on PC).</p>
     <table style="width:100%;font-size:.84rem" id="osscroll"></table>
-  </div>
-  <div class="panel">
-    <h3 style="font-size:.95rem;margin:.2rem 0">Unicode typing method <span class="muted">(how ☑ / Δ are typed)</span></h3>
+  </details>
+  <details class="panel" data-uikey="osunicode">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">Unicode typing method <span class="muted">(how ☑ / Δ are typed)</span></h3></summary>
     <table style="width:100%;font-size:.84rem" id="osuni"></table>
     <details data-uikey="unimethods" style="margin-top:.3rem">
       <summary style="cursor:pointer;font-weight:600;font-size:.85rem">❓ Which method should I pick?</summary>
@@ -1548,28 +1596,28 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
         <b>Copy / Paste</b> item and paste it — no escape sequence involved.
       </div>
     </details>
-  </div>
-  <div class="panel">
-    <h3 style="font-size:.95rem;margin:.2rem 0">Macro / mapping differences</h3>
+  </details>
+  <details class="panel" data-uikey="osdiffs">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">Macro / mapping differences</h3></summary>
     <p class="muted" style="font-size:.78rem">Rows are macros &amp; layer mappings that differ (or can differ) per OS. Base is the default; set an OS cell to override just for that OS. Empty = inherits base.</p>
     <table style="width:100%;font-size:.82rem" id="osgrid"></table>
-  </div>
-  <div class="panel">
-    <h3 style="font-size:.95rem;margin:.2rem 0">Per-OS custom-mapping overrides <span class="muted" id="osmaphdr"></span></h3>
+  </details>
+  <details class="panel" data-uikey="osmapover">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">Per-OS custom-mapping overrides <span class="muted" id="osmaphdr"></span></h3></summary>
     <p class="muted" style="font-size:.78rem">Override a custom key/button mapping just for the selected OS — e.g. pass <b>Cmd+Option</b> through untouched on mac while it runs a macro on win. Click a cell to change it; <b>= base</b> means it inherits. <b>Passthrough</b> clears the mapping for that OS only.</p>
     <table style="width:100%;font-size:.82rem" id="osmap"></table>
     <p class="muted" style="font-size:.76rem;margin-top:.3rem">Only inputs that have a base custom mapping appear here. Add base mappings in the <b>Mapping</b> tab first.</p>
-  </div>
-  <div class="panel">
-    <h3 style="font-size:.95rem;margin:.2rem 0">Modifier swap <span class="muted" id="mrhdr" style="font-weight:400;font-size:.8rem"></span></h3>
+  </details>
+  <details class="panel" data-uikey="osmodswap">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">Modifier swap <span class="muted" id="mrhdr" style="font-weight:400;font-size:.8rem"></span></h3></summary>
     <p class="muted" style="font-size:.78rem">Swap modifiers at the source for the selected OS. Unlike a per-shortcut rewrite this keeps <b>hold</b> behaviour intact, so Cmd+Tab can hold the app switcher open and Cmd+C works with zero latency. Blank = no swap.</p>
     <table style="width:100%;font-size:.82rem" id="modremap"></table>
-  </div>
-  <div class="panel">
-    <h3 style="font-size:.95rem;margin:.2rem 0">Window mode (drag / resize chord)</h3>
+  </details>
+  <details class="panel" data-uikey="oswinmode">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">Window mode (drag / resize chord)</h3></summary>
     <p class="muted" style="font-size:.78rem">Hold this modifier chord and move the mouse to <b>move</b> a window; add Shift to <b>resize</b>. Set the chord to match your physical keys — if you swap Cmd/Ctrl above, the same physical keys arrive as a different combination.</p>
     <div id="winmodebox"></div>
-  </div>
+  </details>
 </div>
 
 <div id="page-bt" style="display:none"><div class="panel">
@@ -1663,6 +1711,32 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'28.2',d:'2026-09-24',items:[
+   {t:'Macros: add _down or _up to a key or button (btn1_down … btn1_up) to press and release in separate steps; a plain name still means press-and-release in its step',k:'page-macros'}]},
+ {v:'28.1',d:'2026-09-24',items:[
+   {t:'Palm rejection: tick a touchpad (the Fintie) under Devices → 🖐 Palm rejection and it ignores touches for a set time after you type — longer while you type fast; choose move / click / scroll, which keyboards count, and see how much it ignored',k:'palmsec'}]},
+ {v:'27.9.2',d:'2026-09-24',items:[
+   {t:'The shortcut sets load on their own — What to track, Disambiguation and the wireframe’s shortcut labels no longer wait for (or need) a Usage read',k:'trackbody'},
+   {t:'Engine: two replies from the Pi can no longer interleave (asking for Usage and the shortcut sets together scrambled both)',k:'usageload'}]},
+ {v:'27.9.1',d:'2026-09-24',items:[
+   {t:'Engine: a macro step releases the mouse buttons it does not list — btn1 · · btn1 · · btn1 is now three clicks (it was one press held to the end). Window move/resize macros that start with btn1 now click rather than hold',k:'page-macros'}]},
+ {v:'27.9',d:'2026-09-24',items:[
+   {t:'One legend, beside the Wireframes and Connected headers, readable without a click: Basic (right to left), then Within keys, then Labels; Live feedback appears while Show key presses is on. The chips and the separate panel are gone',k:'legend'},
+   {t:'Legend ▾ all: the corners of a key drawn round real keys from your own wireframes, with leader lines — chosen once, re-chosen only when that key changes',k:'legend'},
+   {t:'Hold (select) Ctrl, Alt or Win: each key’s centre shows what that shortcut does — ours first, then ones you use, then ones you are learning',k:'devcards'},
+   {t:'Shortcut labels come only from the active OS’s sets (a Mac Cmd+C no longer shows as Win+C)',k:'devcards'}]},
+ {v:'27.8.1',d:'2026-09-24',items:[
+   {t:'The Kinesis and the mouse behind it are no longer torn down and rebuilt whenever one keepalive from the Feather goes missing (27 times on 09-23). A short silence now only releases held keys; the devices are removed only after 15 s of real silence',k:'devsection'}]},
+ {v:'27.8',d:'2026-09-24',items:[
+   {t:'Buttons are tighter: a tenth of a line above and below the label (was nearly half) — adjustable in ⚙ Preferences → Layout',k:'connect'},
+   {t:'Copy / Paste: the description is behind “▸ about” after the heading',k:'clipabouttg'},
+   {t:'OS tab: every section below the OS bar collapses, and starts collapsed',k:'page-os'},
+   {t:'Test → History: each device collapses, with a small chart of its runs over time beside the name; pick the metric from “chart”',k:'testmetric'}]},
+ {v:'27.7',d:'2026-09-23',items:[
+   {t:'Usage “Load now” works again: the Pi cut every reply at 60,000 bytes and the usage data had grown past it; it now arrives whole, packed to about half the size, with a KB readout while it reads — and the Pi builds it in well under a second instead of 12',k:'usageload'},
+   {t:'The last error stays on screen, timestamped, until you press × (successes still fade)',k:'toasterr'},
+   {t:'🗒 beside it: every message this page has shown, with times — kept in page memory only',k:'msglogbtn'},
+   {t:'A Copy/Paste box you resize by its corner keeps that size through Save (it snapped back when the save finished)',k:'clipdock'}]},
  {v:'27.6',d:'2026-09-23',items:[
    {t:'Scroll up and Scroll down are their own assignable elements — add them from ✎ Layout (＋ Scroll up / down buttons) and map each direction separately, per layer and per device',k:'wireframes'},
    {t:'Horizontal scroll: “hold a button + wheel” now honours the acceleration setting (it never did); new opt-in Shift + wheel → accelerated horizontal scroll with its own speed',k:'osscroll'},
@@ -2068,7 +2142,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Its own try: a failure here must not take the search box down with
   // it, and vice versa. Worst case the tabs stick at the wrong offset.
   try{initTopbarSync();}catch(e){console.warn('topbar sync failed',e);}});
-let btTotal=0,btGot={},pfGot={};
+let btTotal=0,btGot={},pfGot={},pfTotal=0,pfN=0,_usageWait=false;
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let editMulti=new Set();   // 19.1 #6: marquee-selected key indices in the layout editor
@@ -2113,8 +2187,36 @@ function log(m,c='',box='log'){const el=$(box),l=document.createElement('div');
 if(c)l.className=c;l.textContent=new Date().toLocaleTimeString()+'  '+m;
 el.appendChild(l);el.scrollTop=el.scrollHeight;
 while(el.childNodes.length>500)el.removeChild(el.firstChild);}
+/* 27.7: Josh, 2026-09-23: "Have error messages stay on screen longer…perhaps
+   timestamp and just keep the last error on screen indefinitely (with a
+   little x to clear); ii) perhaps have a log that only runs in page memory
+   while loaded, that I can click to look at". A success still fades after
+   3.5 s. An error is copied, with its time, into #toasterr and stays until
+   × or the next error. Every message goes into _msgLog, which is page memory
+   only: nothing is stored, nothing is sent to the Pi. */
+const _msgLog=[];
+function _hms(d){return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 function toast(m,bad){const t=$('toast');t.textContent=m;t.style.color=bad?'var(--err)':'var(--ok)';
-clearTimeout(toast._t);toast._t=setTimeout(()=>t.textContent='',3500);}
+clearTimeout(toast._t);toast._t=setTimeout(()=>t.textContent='',3500);
+const now=new Date();_msgLog.push({t:now,m:String(m),bad:!!bad});
+if(_msgLog.length>1000)_msgLog.shift();
+if(bad){const e=$('toasterr'),x=$('toasterrtxt');
+  if(e&&x){x.textContent='⚠ '+_hms(now)+'  '+m;e.style.display='';t.textContent='';}}
+if($('msglog')&&$('msglog').style.display!=='none')renderMsgLog();}
+function renderMsgLog(){const el=$('msglog');if(!el)return;
+  el.innerHTML=_msgLog.length
+    ?'<div class="muted" style="margin-bottom:.3rem">This page’s messages, newest first — page memory only.</div>'
+     +_msgLog.slice().reverse().map(r=>`<div style="padding:.1rem 0;border-bottom:1px solid var(--line)${r.bad?';color:var(--err)':''}">`
+       +`<span class="muted">${r.t.toLocaleDateString()} ${_hms(r.t)}</span> ${r.bad?'⚠ ':''}${esc(r.m)}</div>`).join('')
+    :'<div class="muted">No messages since this page was loaded.</div>';}
+document.addEventListener('click',ev=>{
+  const b=ev.target.closest&&ev.target.closest('#msglogbtn,#toasterrx,#msglog');
+  const lg=$('msglog');
+  if(b&&b.id==='toasterrx'){$('toasterr').style.display='none';return;}
+  if(b&&b.id==='msglogbtn'){if(!lg)return;
+    lg.style.display=lg.style.display==='none'?'':'none';
+    if(lg.style.display!=='none')renderMsgLog();return;}
+  if(!b&&lg&&lg.style.display!=='none')lg.style.display='none';});
 // 23.5 liveness. PING (0x20) was defined but never sent, so nothing in the UI
 // could tell a live link from a dead one -- the only signal was a command
 // failing when you finally tried it.
@@ -2310,12 +2412,21 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
     }catch(err){toast('read error: '+err.message,true);
       try{log('read error @ fid '+curFile+': '+err.message,'er','log');}catch(_){}}
     finally{_readDone();}}   // never wedge the read queue on an error
-  else if(t===PF_BEGIN){pfGot={};}
-  else if(t===PF_CHUNK){pfGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
+  else if(t===PF_BEGIN){pfGot={};pfTotal=(d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24))>>>0;pfN=0;}
+  else if(t===PF_CHUNK){pfGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);pfN+=d[3];
+    // 27.7: a long reply (usage is tens of KB at ~9 KB/s) says how far it
+    // has got, rather than "reading…" for as long as it takes.
+    if(_usageWait&&(pfN%2800)<28)usageProgress(pfN,pfTotal);}
   else if(t===PF_END){
     const parts=Object.keys(pfGot).map(Number).sort((a,b)=>a-b).map(k=>pfGot[k]);
     const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
     for(const p of parts){buf.set(p,o);o+=p.length;}
+    // 27.7: BEGIN has always carried the length; nothing checked it. A reply
+    // that lost chunks is named as that, not as the JSON error it causes.
+    if(pfTotal&&buf.length!==pfTotal){
+      _usageWait=false;
+      toast(`reply from the Pi arrived incomplete: ${buf.length.toLocaleString()} of ${pfTotal.toLocaleString()} bytes — try again`,true);
+      return;}
     pfResult(new TextDecoder().decode(buf));}
   else if(t===BT_BEGIN){btTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);btGot={};}
   else if(t===BT_CHUNK){btGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
@@ -2499,10 +2610,12 @@ function showKeysIdle(){        // 19.2 BF2 #4i: single place that resets the bu
   _showKeysState=0;clearTimeout(_showKeysTimer);
   const b=$('showkeys');if(!b)return;
   b.classList.remove('rec');b.textContent='▶ Show key presses';
-  $('showkeysinfo').textContent='';}
+  $('showkeysinfo').textContent='';
+  try{renderWfLegend();}catch(_){}}     // 27.9: the Live row goes with it
 let _showKeysTimer=null;
 $('showkeys').onclick=()=>{
   _showKeysState=(_showKeysState+1)%3;
+  setTimeout(()=>{try{renderWfLegend();}catch(_){}},0);   // 27.9: Live row
   const b=$('showkeys');
   clearTimeout(_showKeysTimer);
   if(_showKeysState===1){eventsOn(60);
@@ -2545,8 +2658,18 @@ function updateCurProf(){
 function pfResult(text){
   if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
   if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
+  if(text.startsWith('CORPUS')){
+    try{ corpusData=JSON.parse(text.slice(text.indexOf('\n')+1));
+         renderTrack(); renderTraining();
+         if(typeof renderDisamb==='function') renderDisamb();
+         if(sel) render();            // held-key labels read the corpus
+         toast('shortcut sets loaded ('+(corpusData.corpus||[]).length+')'); }
+    catch(e){ _corpusAsked=false; toast('shortcut sets unreadable: '+e.message,true); }
+    return;}
+  if(text.startsWith('corpus read failed')){_corpusAsked=false;toast(text,true);return;}
   if(text.startsWith('USAGE')){
-    try{ usageData=JSON.parse(text.slice(text.indexOf('\n')+1));
+    _usageWait=false;
+    try{ usageData=unpackUsage(JSON.parse(text.slice(text.indexOf('\n')+1)));
          renderUsage(); renderTrack(); renderTraining();
          // 24.3: the Expansions tab's "Used" column reads the same payload,
          // so it has to be repainted here too -- otherwise it keeps saying
@@ -3851,7 +3974,7 @@ function render(){
   p.title=layerTriggers(i).length?`layer ${i} — opened by ${layerTriggers(i).join(', ')}`
     :`layer ${i} — nothing opens it yet`;
   p.onclick=()=>{layer=i;render();};L.appendChild(p);});
-  renderStage();renderMacros();renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
+  renderStage();try{renderWfLegend();}catch(e){console.warn('legend',e);}try{renderPalm();}catch(e){console.warn('palm',e);}renderMacros();renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
   renderHeldBar();
   requestAnimationFrame(drawChords);
 }
@@ -5218,11 +5341,26 @@ function markClipsRead(){
 /* Size a clip's box to its text, between the old fixed height and 55vh (24.3).
    Measured, not guessed: the height is cleared first so scrollHeight reports
    what the content actually needs rather than what the box currently is. */
+/* 27.7: a size YOU gave a box by dragging its corner wins over the fit, and
+   survives the re-render. Josh, 2026-09-23: "If I resize the HID Notes while
+   editing, then click "save" ... it resizes to what it was before I hit save
+   when ... it finishes saving." Save re-renders the list twice (on click, and
+   again when the Pi acks), and each render re-fitted the box to its text,
+   discarding the drag. Kept per clip, in page memory only. */
+const _clipUserH={};
 function clipFitBox(ta){
   if(!ta)return;
+  const ck=ta.dataset.ck;
+  if(ck&&_clipUserH[ck]){ta.style.height=_clipUserH[ck]+'px';ta.dataset.fitH=_clipUserH[ck];return;}
   const min=126, max=Math.max(min,Math.round(innerHeight*0.55));
   ta.style.height='auto';
-  ta.style.height=Math.min(max,Math.max(min,ta.scrollHeight+4))+'px';}
+  ta.style.height=Math.min(max,Math.max(min,ta.scrollHeight+4))+'px';
+  ta.dataset.fitH=ta.offsetHeight;}
+// A drag of the resize corner ends in a pointerup on the box; a height that
+// differs from the last one clipFitBox set can only have come from the user.
+function clipNoteDrag(ta){
+  const h=ta.offsetHeight,ck=ta.dataset.ck;
+  if(ck&&h&&Math.abs(h-(+ta.dataset.fitH||0))>2){_clipUserH[ck]=h;ta.dataset.fitH=h;}}
 
 /* ---- 25.3: the Copy/Paste dock --------------------------------------
    An OPEN note is moved out of #cliplist and into a fixed bar under the two
@@ -5432,7 +5570,10 @@ function _renderClipsInner(){
     // for an element that has not been attached yet, and for one inside a
     // closed <details>. Measuring at either moment gives the minimum height
     // for every clip, which looks exactly like the feature not working.
+    ta.dataset.ck=key;
     ta.addEventListener('input',()=>clipFitBox(ta));
+    ta.addEventListener('pointerup',()=>clipNoteDrag(ta));
+    ta.addEventListener('mouseup',()=>clipNoteDrag(ta));
     box.addEventListener('toggle',()=>{if(box.open)clipFitBox(ta);});
     // 23.5: live character count while editing. The limit was only ever
     // announced by truncating you at it, which is the worst moment to find
@@ -6222,7 +6363,7 @@ function renderUsage(){
 }
 
 function usageSetsHTML(){
-  const sets = usageData.sets || [];
+  const sets = refData('sets') || [];
   if(!sets.length) return '<p class="muted" style="font-size:.78rem">'
     + 'No reference shortcut sets. Drop JSON files into '
     + '<code>expander/shortcut_sets/</code> to name what a combination does.</p>';
@@ -6243,9 +6384,58 @@ function usageSetsHTML(){
 }
 
 function loadUsage(weeks){
-  pfCmd('usage ' + (weeks || 12));
+  // 27.7: " p" asks for the packed rows (unpackUsage); an engine before 27.7
+  // ignores the extra word and sends the old shape, which still parses.
+  // 28.0: " nc" -- the reference data (shortcut sets, disambiguation) is
+  // read on its own by loadCorpus(), so the usage read no longer carries it.
+  pfCmd('usage ' + (weeks || 12) + ' p nc');
+  if(!corpusData && !_corpusAsked) loadCorpus();
+  _usageWait = true;
   const el = $('usagebody');
-  if(el && !usageData) el.innerHTML = '<p class="muted">reading…</p>';
+  if(el && !usageData) el.innerHTML = '<p class="muted" id="usageprog">asking the Pi…</p>';
+}
+/* 28.0: the reference data -- the kbd_shortcuts corpus, the flat shortcut
+   sets, and the disambiguation dataset -- read on its own. Josh, 2026-09-23:
+   "let's make kbd_shortcuts and the training side of things ... load
+   separately from the "Usage" section." What to track, Training's picks,
+   Disambiguation and the wireframe's held-key labels need only this, and it
+   is a fraction of the usage read.
+
+   Asked for on demand, never on Connect: Connect already competes with the
+   mouse for the one core (26.6.2). refData() is the one reader, so a page
+   that has only the older usage payload (which carried these) still works. */
+let corpusData = null, _corpusAsked = false;
+function loadCorpus(){
+  if(!device) return;
+  _corpusAsked = true;
+  pfCmd('corpus');}
+function refData(k){
+  if(corpusData && corpusData[k] !== undefined) return corpusData[k];
+  return (typeof usageData !== 'undefined' && usageData) ? usageData[k] : undefined;}
+function usageProgress(n, total){
+  const el = $('usageprog'); if(!el) return;
+  el.textContent = total ? `reading… ${Math.round(n/1024)} of ${Math.round(total/1024)} KB`
+                         : `reading… ${Math.round(n/1024)} KB`;
+}
+/* 27.7: the engine's packed usage payload back into the row shape every
+   consumer already reads: {count, chars, os:{…}, per_week}. A row is
+   [count, chars, os] with os a bare name when one OS holds every use;
+   chord_devs arrives as {device: {chord: row}} and goes back to
+   "chord\tdevice" keys. See usage.pack_summary. */
+function unpackUsage(u){
+  if(!u || !u.packed) return u;
+  const w = Math.max(1, u.weeks || 12);
+  const row = r => ({count:r[0], chars:r[1]||0,
+    os: typeof r[2]==='string' ? {[r[2]]:r[0]} : (r[2]||{}),
+    per_week: Math.round(r[0]/w*100)/100});
+  const flat = t => { const o = {}; for(const k in (t||{})) o[k] = row(t[k]); return o; };
+  for(const k of ['shortcuts','expansions','notes']) u[k] = flat(u[k]);
+  const cd = {};
+  for(const dev in (u.chord_devs||{}))
+    for(const ch in u.chord_devs[dev]) cd[ch+'\t'+dev] = row(u.chord_devs[dev][ch]);
+  u.chord_devs = cd;
+  delete u.packed;
+  return u;
 }
 
 /* ---- Training ----------------------------------------------------------
@@ -6293,10 +6483,13 @@ function setTrained(chord, on){
 
 function renderTrack(){
   const el = $('trackbody'); if(!el) return;
-  const corpus = (usageData && usageData.corpus) || [];
+  const corpus = refData('corpus') || [];
   if(!corpus.length){
-    el.innerHTML = '<p class="muted">No shortcut corpus on the Pi yet — '
-      + 'deploy kbd_shortcuts/ and read Usage again.</p>';
+    // 28.0: not loaded is not the same as none on the Pi.
+    if(!refData('corpus') && device && !_corpusAsked) loadCorpus();
+    el.innerHTML = refData('corpus')
+      ? '<p class="muted">No shortcut corpus on the Pi yet — deploy kbd_shortcuts/.</p>'
+      : '<p class="muted">' + (device ? 'reading the shortcut sets…' : 'Connect to read the shortcut sets.') + '</p>';
     return;}
   trackState();
   el.innerHTML = corpus.map(c => {
@@ -6956,7 +7149,7 @@ function heldModBits(held){
    built on the first is exactly the wrong number that gets acted on (the same
    distinction 24.3 drew for the expansions "Used" column). */
 function shortcutCorpus(){
-  const c=(typeof usageData!=='undefined'&&usageData&&usageData.corpus)||null;
+  const c=refData('corpus')||null;
   return (c&&c.length)?c:null;}
 
 // "Cmd+Shift+K" -> {mods:<engine bits>, canon:<usage>} or null.
@@ -6996,8 +7189,22 @@ function heldPaint(id,kind,dev){
     _heldCache=heldEffects(dev);_heldCacheDev=dev;}
   const list=_heldCache.get(kind+':'+id)||[];
   const bits=heldModBits(heldInputs());
-  const center=kind==='key'?heldCenter(id,bits):null;
+  let center=kind==='key'?heldCenter(id,bits):null;
   if(!list.length)return {center,chip:''};
+  // 27.9 (B.a): with Ctrl / Alt / Win held -- anything beyond Shift alone --
+  // the centre shows what the key would DO. Josh, 2026-09-23: "Ctrl or Alt
+  // leaving the center alone is not what I want; I want to see the possible
+  // keyboard shortcuts". Ours first (a chord, a layer mapping, a combo),
+  // then a shortcut he uses, then one he is learning, then any other.
+  if(kind==='key'&&bits&&bits!==modsToEngine(0x02)&&!usageIsMod(id)){
+    const rank=x=>x.kind==='chord'?0:x.kind==='mapping'?1:x.kind==='combo'?2
+      :x.tone==='inuse'?3:x.tone==='learn'?4:5;
+    const top=list.slice().sort((a,b)=>rank(a)-rank(b))[0];
+    // "Source — Save Current Document" (RStudio's section prefix) reads as
+    // "Save Curr…"; the whole label is on the chip and in its tooltip.
+    const t=String(top.label||'').replace(/^[^—]{1,40}—\s*/,'')
+      .replace(/^(the|a|an)\s+/i,'');
+    center=t.length>10?t.slice(0,9)+'…':t;}
   // iv) more than one claim on this key: say so rather than picking one.
   // The alternative is showing the first match, which is a guess wearing the
   // costume of an answer -- and 26.1's disambiguation dataset is the thing
@@ -7073,7 +7280,16 @@ function heldEffects(dev){
   // ---- 4. SHORTCUTS the OS or an app owns -- not ours, which is exactly why
   //         they are worth showing: nothing else in this UI knows about them.
   const corpus=shortcutCorpus();
+  // 27.9: only the ACTIVE OS's sets. A macOS "Cmd+C" parses to the GUI bit,
+  // so on Windows it was offered as what Win+C does -- a confident answer
+  // from the wrong operating system.
+  const _osf=o=>/^mac/i.test(o||'')?'mac':/^win/i.test(o||'')?'win':String(o||'');
+  const _aos=_osf(cfg.active_os||'win');
+  // 28.0: a modifier selected with no corpus yet -- ask for it once; the
+  // labels appear when it lands (the CORPUS handler re-renders).
+  if(!corpus&&bits&&device&&!_corpusAsked)loadCorpus();
   if(corpus&&bits)for(const c of corpus){
+    if(c.os&&_osf(c.os)!==_aos)continue;
     for(const[chord,desc]of Object.entries(c.shortcuts||{})){
       const pc=parseCorpusChord(chord);
       if(!pc||pc.mods!==bits)continue;
@@ -7362,33 +7578,217 @@ function moveChordTarget(cur,inp){
 // so a trigger near the right edge opened a panel running off the page --
 // with the part you needed to click on the invisible side. Flips above the
 // trigger when there is no room below, which is the same problem vertically.
-/* 26.0: the legend, on demand, from the ONE copy of it.
-   Reads #legendbody rather than holding its own text: the wireframe's
-   vocabulary grows most releases (25.6 added three entries by itself) and two
-   legends drifting apart is exactly the confusion a legend exists to end.
-   Clicking the chip must not also toggle the <details> it sits in, hence the
-   stopPropagation and preventDefault -- a summary swallows clicks by default,
-   and without this the legend opened and the wireframes collapsed. */
-function legendPop(e,el){
-  e.stopPropagation();e.preventDefault();
-  const p=$('popover'),src=$('legendbody');
-  if(!p||!src)return;
-  if(p.dataset.kind==='legend'&&p.style.display==='block'){
-    p.style.display='none';p.dataset.kind='';return;}
-  p.dataset.kind='legend';
-  p.innerHTML='<div class="legendpop">'+src.innerHTML+'</div>';
-  placePopover(p,el.getBoundingClientRect(),6);
-  // Close on the next click anywhere else, and on Escape. Deferred by a tick
-  // so the click that OPENED it does not immediately close it.
-  setTimeout(()=>{
-    const close=ev=>{
-      if(p.contains(ev.target))return;
-      p.style.display='none';p.dataset.kind='';
-      document.removeEventListener('click',close);
-      document.removeEventListener('keydown',esc);};
-    const esc=ev=>{if(ev.key==='Escape')close(ev);};
-    document.addEventListener('click',close);
-    document.addEventListener('keydown',esc);},50);}
+/* ===== 28.1: PALM REJECTION =================================================
+   One row per configured device. Ticking "on" creates its entry in
+   cfg.palm_rejection; unticking deletes it (the engine resets the table on
+   every load, so that takes effect without a restart). Read-only on render
+   (CLAUDE.md §2.5 rule 5): the table is created on the WRITE path only.
+   Counts come from the engine's status, since it started. */
+const PALM_FIELDS=[
+  ['after_key_ms','ignore for (ms) after a key',300,'After any key on this device (or the ones listed), touchpad input is ignored for this long.'],
+  ['apm_min','…or while typing at ≥ APM',0,'0 = off. When the last 10 s of typing is at least this many actions a minute, the hold below applies instead.'],
+  ['apm_hold_ms','…then hold (ms)',1000,'How long after the last key the pad stays ignored while typing that fast.']];
+function renderPalm(){
+  const el=$('palmbody');if(!el||!cfg)return;
+  const pr=cfg.palm_rejection||{};
+  const counts=(lastEng&&lastEng.palm_blocked)||{};
+  const devs=cfg.devices||[];
+  el.innerHTML=`<p class="muted" style="font-size:.78rem;margin:0 0 .4rem">For a touchpad built into a keyboard (the Fintie):
+    touches right after a keypress are almost always a palm. Off unless ticked; other mice are never affected.</p>
+    <table style="width:100%;font-size:.8rem"><tr><th>device</th><th>on</th>
+    ${PALM_FIELDS.map(f=>`<th title="${esc(f[3])}">${esc(f[1])}</th>`).join('')}
+    <th title="Which parts of the touchpad are ignored">ignore</th>
+    <th title="Keys from these device ids also count (comma separated). Empty = this device's own keys.">keys from</th>
+    <th title="Ignored since the engine started">ignored</th></tr>
+    ${devs.map(d=>{const o=pr[d.id],on=!!o&&o.on!==false,v=o||{};
+      const c=counts[d.id];
+      return `<tr data-palmdev="${esc(d.id)}"><td>${esc(d.name||d.id)}</td>
+        <td><input type="checkbox" data-palm="on" ${on?'checked':''}></td>
+        ${PALM_FIELDS.map(f=>`<td><input type="number" min="0" step="50" style="width:5rem" data-palm="${f[0]}"
+          value="${esc(String(v[f[0]]??f[2]))}" ${on?'':'disabled'}></td>`).join('')}
+        <td style="white-space:nowrap">${['move','click','scroll'].map(k=>`<label class="inl"><input type="checkbox"
+          data-palm="block_${k}" ${v['block_'+k]===false?'':'checked'} ${on?'':'disabled'}>${k}</label>`).join(' ')}</td>
+        <td><input type="text" style="width:8rem" data-palm="keys_from" placeholder="this device"
+          value="${esc((v.keys_from||[]).join(', '))}" ${on?'':'disabled'}></td>
+        <td class="muted">${c?`${c.move} moves · ${c.click} clicks · ${c.scroll} scrolls`:'—'}</td></tr>`;}).join('')}
+    </table>`;
+  el.querySelectorAll('[data-palm]').forEach(inp=>inp.onchange=()=>{
+    const dev=inp.closest('tr').dataset.palmdev,k=inp.dataset.palm;
+    if(k==='on'){
+      if(inp.checked){(cfg.palm_rejection=cfg.palm_rejection||{})[dev]={};}
+      else if(cfg.palm_rejection){delete cfg.palm_rejection[dev];
+        if(!Object.keys(cfg.palm_rejection).length)delete cfg.palm_rejection;}
+      profileTouched();renderPalm();return;}
+    const o=((cfg.palm_rejection=cfg.palm_rejection||{})[dev]=cfg.palm_rejection[dev]||{});
+    if(k.startsWith('block_')){if(inp.checked)delete o[k];else o[k]=false;}
+    else if(k==='keys_from'){const a=inp.value.split(',').map(x=>x.trim()).filter(Boolean);
+      if(a.length)o[k]=a;else delete o[k];}
+    else{const n=Math.max(0,Math.round(+inp.value||0));o[k]=n;}
+    profileTouched();});}
+
+/* ===== 27.9: THE WIREFRAME LEGEND ===========================================
+   Josh, 2026-09-23 09:18:04 -- the whole specification is quoted in the
+   27.9 changelog. In short: ONE legend, in the space to the right of the
+   "Wireframes" and "Connected" headers, as much of it readable without a
+   click as fits; groups in his order -- Live feedback (only while it is on),
+   Basic (right to left, descriptions wrapping onto several lines), Within
+   keys, Labels -- and, expanded, the Within-keys entries drawn around a REAL
+   key from his own config with fine grey leader lines.
+
+   The sample key is chosen at random ONCE and kept (this browser) until THAT
+   key changes -- "randomly select this once, and then only select again ...
+   if that particular key is changed". One key rarely carries every corner,
+   so more are added until every element is covered; only an element nothing
+   in his config has is shown on a synthetic key, and says so. */
+const LG_LIVE=[
+  {sw:'<span class="sw" style="background:rgba(239,68,68,.55);color:var(--fg)"></span>',d:'red: raw key held down on a device'},
+  {sw:'<span class="sw" style="box-shadow:inset 0 0 0 2px rgba(245,158,11,.98);color:var(--fg)"></span>',d:'yellow flash: key sent to the PC'},
+  {sw:'<span class="sw" style="background:rgba(34,197,94,.55);color:var(--fg)"></span>',d:'green flash: macro output'},
+  {sw:'<span class="sw" style="background:rgba(59,130,246,.6);color:var(--fg)"></span>',d:'blue flash: expansion output'}];
+const LG_BASIC=[
+  {sw:'<span class="sw" style="border:2px solid var(--ok)"></span>',d:'green outline: custom mapping on this layer'},
+  {sw:'<span class="sw" style="background:rgba(184,134,11,.45);color:var(--fg)"></span>',d:'gold key: starts a layer'},
+  {sw:'<span class="sw" style="outline:2px dashed var(--warn);outline-offset:-2px"></span>',d:'dashed line: a chord (click to inspect)'},
+  {sw:'<span class="sw" style="outline:2px solid #a855f7;outline-offset:-2px"></span>',d:'purple outline: in a highlighted group (toggle groups in 🗂 Groups)'}];
+const LG_KEY={
+  center:{sw:'<span class="sw" style="border:1px solid var(--line);color:var(--mut)">A</span>',d:'grey centre = current identity',col:'var(--mut)',sel:'.kcenter'},
+  br:{sw:'<span class="sw" style="border:1px solid var(--line);color:var(--ok)">↘</span>',d:'green bottom-right = custom output on this layer',col:'var(--ok)',sel:'.chip'},
+  tl:{sw:'<span class="sw" style="border:1px solid var(--line);color:var(--err)">↖</span>',d:'red top-left = original before this device’s Baseline (a per-OS modifier swap shows the same way: red original, grey what it now sends)',a:'red top-left = what it was before Baseline or a modifier swap',col:'var(--err)',sel:'.chipbase'},
+  tr:{sw:'<span class="sw" style="background:var(--layer);color:#000">L#</span>',d:'L# top-right = triggers that layer',col:'var(--fg)',sel:'.chiplayer'},
+  bl:{sw:'<span class="sw" style="color:var(--hi)">⌘</span>',d:'⌘ bottom-left = has a modifier shortcut (e.g. Cmd+Tab); hover to see it',a:'⌘ bottom-left = has a modifier shortcut; hover the key',col:'var(--hi)',sel:'.chipchord'}};
+const LG_KEY_ORDER=['center','br','tl','tr','bl'];
+const LG_LABELS=[
+  {sw:'<span class="sw heldchip inuse" style="display:inline-flex">abc</span>',d:'green label: a shortcut you already use'},
+  {sw:'<span class="sw heldchip learn" style="display:inline-flex">abc</span>',d:'yellow label: one you are learning'},
+  {sw:'<span class="sw heldchip" style="display:inline-flex">abc</span>',d:'grey label: your own mapping or chord'},
+  {sw:'<span class="sw heldchip" style="display:inline-flex">multiple</span>',d:'more than one set claims that key; hover for all of them'}];
+let _lgOpen=false;
+try{_lgOpen=localStorage.getItem('hc.lgopen')==='1';}catch(_){}
+function _lgItem(x){return `<div class="lgi">${x.sw}<span class="lgd">${esc(x.d)}</span></div>`;}
+// What a rendered key shows, minus what only reflects the moment (the ✎
+// corner, held labels): the "has THAT key changed?" test.
+function _lgSig(el){const c=el.cloneNode(true);
+  c.querySelectorAll('.edcorner,.heldchip,.seqbadge').forEach(x=>x.remove());
+  c.querySelectorAll('.heldcenter').forEach(x=>x.classList.remove('heldcenter'));
+  return c.innerHTML;}
+// The element that shows feature f on a rendered key, or null. `.chip` is
+// shared: a "≡key"/"≡btn" chip is a Baseline identity, not custom output.
+function _lgPart(el,f){
+  if(f==='br')return [...el.querySelectorAll('.chip')].find(c=>!/^≡/.test(c.textContent.trim()))||null;
+  return el.querySelector(LG_KEY[f].sel);}
+function _lgFeats(el){return ['br','tl','tr','bl'].filter(f=>_lgPart(el,f));}
+// Connected wireframes first; a page with nothing connected (no Pi yet)
+// still has the not-connected cards, and a key from those is still his.
+function _lgKeys(off){return [...document.querySelectorAll((off?'#devcardsoff':'#devcards')
+  +' .key[data-dev][data-usage]')];}
+function _lgFind(p){return [..._lgKeys(),..._lgKeys(true)].find(k=>k.dataset.dev===p.dev&&k.dataset.usage===String(p.usage))||null;}
+/* The picks: kept while their key is unchanged, topped up at random from
+   keys covering what is still missing. Returns [{el, feats, synth}]. */
+function lgPickSamples(){
+  let picks=[];
+  try{picks=JSON.parse(localStorage.getItem('hc.lgpick')||'[]');}catch(_){picks=[];}
+  const out=[],covered=new Set();
+  for(const p of picks){const el=_lgFind(p);
+    if(!el||_lgSig(el)!==p.sig)continue;             // that key changed: re-pick
+    const f=_lgFeats(el).filter(x=>!covered.has(x));
+    if(!f.length)continue;
+    f.forEach(x=>covered.add(x));out.push({el,feats:_lgFeats(el),p});}
+  // Every card is his config; on a tie a CONNECTED key is preferred, and
+  // only an element no card has falls to a synthetic key.
+  const on=new Set(_lgKeys()),keys=[..._lgKeys(),..._lgKeys(true)];
+  for(;;){
+    const missing=['br','tl','tr','bl'].filter(f=>!covered.has(f));
+    if(!missing.length)break;
+    let best=0,cands=[];
+    for(const k of keys){const n=_lgFeats(k).filter(f=>missing.includes(f)).length;
+      if(n>best){best=n;cands=[k];}else if(n&&n===best)cands.push(k);}
+    if(cands.some(k=>on.has(k)))cands=cands.filter(k=>on.has(k));
+    if(!best)break;
+    const el=cands[Math.floor(Math.random()*cands.length)];
+    _lgFeats(el).forEach(f=>covered.add(f));
+    out.push({el,feats:_lgFeats(el),p:{dev:el.dataset.dev,usage:el.dataset.usage,sig:_lgSig(el)}});}
+  try{localStorage.setItem('hc.lgpick',JSON.stringify(out.map(o=>o.p)));}catch(_){}
+  const missing=['br','tl','tr','bl'].filter(f=>!covered.has(f));
+  if(missing.length){
+    const el=document.createElement('div');el.className='key';
+    el.innerHTML=(missing.includes('tl')?'<span class="chipbase">LAlt</span>':'')
+      +'<span class="kcenter">LWin</span>'
+      +(missing.includes('br')?'<span class="chip">Home</span>':'')
+      +(missing.includes('bl')?'<span class="chipchord">⌘</span>':'')
+      +(missing.includes('tr')?'<span class="chiplayer">L2</span>':'');
+    out.push({el,feats:missing,synth:true});}
+  return out;}
+// One annotated sample: the key scaled up in the middle, each element's
+// description round it, joined by a fine grey line to the part it names.
+function lgSampleNode(s,shown){
+  const box=document.createElement('div');box.className='lgsample';
+  const k=s.el.cloneNode(true);
+  k.className='key'+(s.el.classList.contains('mapped')?' mapped':'')
+    +(s.el.classList.contains('layerkey')?' layerkey':'');
+  k.querySelectorAll('.edcorner,.heldchip,.seqbadge').forEach(x=>x.remove());
+  k.removeAttribute('draggable');k.style.cssText='';
+  box.appendChild(k);
+  const pos={tl:'left:0;top:0',center:'left:0;top:50%;transform:translateY(-50%)',
+             bl:'left:0;bottom:0',tr:'right:0;top:0;text-align:right',
+             br:'right:0;bottom:0;text-align:right'};
+  // Each element is named once across all the samples; a key that shares a
+  // corner with an earlier sample shows it without a second label.
+  const feats=['center',...s.feats].filter(f=>!shown.has(f));
+  feats.forEach(f=>shown.add(f));
+  for(const f of feats){const l=document.createElement('div');l.className='lgl';
+    l.dataset.f=f;l.style.cssText=pos[f]+';color:'+LG_KEY[f].col;
+    l.textContent=LG_KEY[f].a||LG_KEY[f].d;box.appendChild(l);}
+  const cap=document.createElement('div');cap.className='muted';
+  cap.style.cssText='position:absolute;left:50%;bottom:-.1rem;transform:translateX(-50%);font-size:.64rem;white-space:nowrap';
+  cap.textContent=s.synth?'example — nothing in your config has this yet'
+    :((((cfg&&cfg.devices)||[]).find(d=>d.id===s.el.dataset.dev)||{}).name||s.el.dataset.dev);
+  box.appendChild(cap);
+  return box;}
+function lgDrawLines(box){
+  const B=box.getBoundingClientRect();if(!B.width)return;
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg');
+  for(const l of box.querySelectorAll('.lgl')){
+    const kk=box.querySelector('.key'),t=kk&&_lgPart(kk,l.dataset.f);if(!t)continue;
+    const L=l.getBoundingClientRect(),T=t.getBoundingClientRect();
+    const left=L.left+L.width/2<B.left+B.width/2;
+    const x1=(left?L.right+3:L.left-3)-B.left,y1=L.top+L.height/2-B.top;
+    const x2=T.left+T.width/2-B.left,y2=T.top+T.height/2-B.top;
+    const ln=document.createElementNS(NS,'line');
+    ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+    ln.setAttribute('stroke','var(--mut)');ln.setAttribute('stroke-width','.75');
+    const dot=document.createElementNS(NS,'circle');
+    dot.setAttribute('cx',x2);dot.setAttribute('cy',y2);dot.setAttribute('r','1.8');
+    dot.setAttribute('fill','var(--mut)');
+    svg.appendChild(ln);svg.appendChild(dot);}
+  box.appendChild(svg);}
+function renderWfLegend(){
+  const host=$('legend');if(!host)return;
+  const live=typeof _showKeysState!=='undefined'&&_showKeysState>0;
+  const keyItems=LG_KEY_ORDER.map(f=>LG_KEY[f]);
+  host.classList.toggle('open',_lgOpen);
+  const btn=`<button class="txmini lgmore" id="lgmore" title="${_lgOpen?'Back to the strip':'The whole legend, with a key from your own config annotated'}">${_lgOpen?'▴ less':'▾ all'}</button>`;
+  if(!_lgOpen){
+    // DOM order = right-to-left on screen (row-reverse): the first group sits
+    // against the right edge, which is where he asked for it to start.
+    const items=[...(live?LG_LIVE:[]),...LG_BASIC,...keyItems,...LG_LABELS];
+    host.innerHTML=`<div class="lgrow">${items.map(_lgItem).join('')}</div>`+btn;
+    const row=host.querySelector('.lgrow');let hidden=0;
+    for(const it of row.children){if(it.offsetLeft<0){it.style.visibility='hidden';hidden++;}}
+    if(hidden)$('lgmore').textContent='▾ +'+hidden+' more';}
+  else{
+    const sec=(t,items)=>`<div class="lgsec"><b>${t}</b><div class="lgrow">${items.map(_lgItem).join('')}</div></div>`;
+    host.innerHTML=btn
+      +(live?sec('Live feedback',LG_LIVE):'')
+      +sec('Basic',LG_BASIC)
+      +`<div class="lgsec"><b>Within keys</b><div id="lgsamples"></div></div>`
+      +sec('Labels — under other keys while a key or modifier is selected: what each would then do',LG_LABELS);
+    const sh=$('lgsamples');
+    const shown=new Set();
+    for(const s of lgPickSamples()){const n=lgSampleNode(s,shown);sh.appendChild(n);lgDrawLines(n);}}
+  $('lgmore').onclick=e=>{e.stopPropagation();e.preventDefault();_lgOpen=!_lgOpen;
+    try{localStorage.setItem('hc.lgopen',_lgOpen?'1':'0');}catch(_){}
+    renderWfLegend();};}
 
 function placePopover(p,r,gap){
   gap=gap||4;
@@ -7779,7 +8179,7 @@ function bindEditorCommon(applyAction){
     // 19.2R #1: name the macro right here, at creation time
     $('inlinemacro').innerHTML=`<label>Name (optional)</label>
     <input type="text" id="imname" placeholder="e.g. Copy line" value="${esc((cfg.macro_names||{})[n]||'')}">
-    <label>Macro ${n} steps (one per line: ctrl+c / btn1 / wheel / .)</label>
+    <label>Macro ${n} steps (one per line: ctrl+c / btn1 / wheel / . — add _down / _up to hold across steps, e.g. btn1_down … btn1_up)</label>
     <textarea id="im" rows="4"></textarea><button onclick="finishInline(${n})">Done</button>`;
     const nmi=$('imname');
     if(nmi)nmi.oninput=()=>{cfg.macro_names=cfg.macro_names||{};
@@ -8783,7 +9183,14 @@ function renderStepperEd(ed){
 }
 
 /* ============ macros tab ============ */
-function usageName(u){const p=u>>>16,x=u&0xffff;
+/* 28.2: a step token may end _down or _up -- press (and keep held across
+   steps) or release. Stored as the usage plus a flag bit; see DOWN_FLAG in
+   s3_macros.py. A plain name still means "held for this step only". */
+const MACRO_DOWN=0x40000000,MACRO_UP=0x20000000;
+function usageName(u){
+if(u&MACRO_DOWN)return usageName(u&~(MACRO_DOWN|MACRO_UP))+'_down';
+if(u&MACRO_UP)return usageName(u&~(MACRO_DOWN|MACRO_UP))+'_up';
+const p=u>>>16,x=u&0xffff;
 if(p===9)return'btn'+x;if(u===0x00010038)return'wheel';
 if(p===7)return(MODS[x]||KEYS[x]||'0x'+x.toString(16)).toLowerCase();
 if(p===12&&KEYS[u])return KEYS[u].toLowerCase();   // 26.4: consumer-page steps
@@ -8792,12 +9199,17 @@ function macroToText(s){return s.map(x=>x.length?x.map(usageName).join('+'):'.')
 function textToMacro(t){const steps=[];
 for(let line of t.split('\n')){line=line.trim().toLowerCase();if(!line)continue;
 if(line==='.'){steps.push([]);continue;}const us=[];
-for(const tok of line.split('+').map(x=>x.trim()).filter(Boolean)){
+for(let tok of line.split('+').map(x=>x.trim()).filter(Boolean)){
+let fl=0;
+if(/_down$/.test(tok)){fl=MACRO_DOWN;tok=tok.slice(0,-5);}
+else if(/_up$/.test(tok)){fl=MACRO_UP;tok=tok.slice(0,-3);}
+const n0=us.length;
 if(tok.startsWith('btn'))us.push(0x00090000+ +tok.slice(3));
 else if(tok==='wheel')us.push(0x00010038);
 else if(NAME2MOD[tok]!==undefined)us.push(0x00070000+NAME2MOD[tok]);
 else if(NAME2KEY[tok]!==undefined)us.push(0x00070000+NAME2KEY[tok]);
-else if(tok.startsWith('0x'))us.push(parseInt(tok,16));}
+else if(tok.startsWith('0x'))us.push(parseInt(tok,16));
+if(fl&&us.length>n0)us[us.length-1]=(us[us.length-1]|fl)>>>0;}
 steps.push(us);}return steps;}
 // 23.5: which bindings fire a given macro.
 //
@@ -10537,8 +10949,9 @@ window.setActiveOs=setActiveOs;
    the same principle as `source_url` on a reference set (CLAUDE.md §2). */
 function renderDisamb(){
   const el=$('disambbody');if(!el)return;
-  const d=(typeof usageData!=='undefined'&&usageData&&usageData.disamb)||null;
-  const groups=(typeof usageData!=='undefined'&&usageData&&usageData.equiv)||[];
+  const d=refData('disamb')||null;
+  const groups=refData('equiv')||[];
+  if(!d&&device&&!_corpusAsked)loadCorpus();    // 28.0: on its own read
   const cnt=$('disambcount');
   const LOGIC=`
     <details style="margin:.4rem 0"><summary style="cursor:pointer;font-weight:600"
@@ -12528,6 +12941,7 @@ const PF_DEFAULT_RECIPE =
   'lat.mean|Lat ; lat.p95|p95 ; lat.max|max ; lat.sd|± ; lat.n|n ; apm.mean|APM ; apm.band|';
 
 let PREFS = {
+  look: { btnpad: 0.1 },       // 27.8: Preferences → Layout
   bench: {
     recipe: PF_DEFAULT_RECIPE,
     show: true,
@@ -12552,6 +12966,15 @@ function pfLoad(){
       for(const k in d) PREFS[k] = Object.assign(PREFS[k] || {}, d[k]);
     }
   }catch(e){ /* defaults are fine */ }
+  pfApplyLook();
+}
+/* 27.8: page-wide look settings, applied as CSS variables. A browser
+   preference like the benchmark recipe, not profile config: it is how this
+   screen looks, and it must not travel to the Pi. */
+function pfApplyLook(){
+  const v = +((PREFS.look || {}).btnpad);
+  document.documentElement.style.setProperty('--btnpad',
+    String(isFinite(v) ? Math.max(0, Math.min(0.6, v)) : 0.1));
 }
 function pfSave(){
   try{ localStorage.setItem(PF_LS, JSON.stringify(PREFS)); }
@@ -12670,6 +13093,7 @@ function pfRunBenchmark(){
 
 /* ---------- preferences ---------- */
 const PF_TABS = [
+  { id:'look',   label:'Layout'         },
   { id:'map',    label:'Mapping'        },
   { id:'macros', label:'Macros'         },
   { id:'exp',    label:'Expansions'     },
@@ -12703,6 +13127,21 @@ const pfHelp = (title, html) =>
   `<details class="pfhelp"><summary>${esc(title)}</summary><div>${html}</div></details>`;
 
 const PF_SECTIONS = {
+
+  look: () => {
+    const v = +((PREFS.look || {}).btnpad ?? 0.1);
+    return `
+    <div class="pfrow">
+      <label for="pf-btnpad">Button spacing</label>
+      <input type="range" id="pf-btnpad" min="0" max="0.6" step="0.05" value="${v}" style="width:12rem">
+      <span id="pf-btnpadv">${v.toFixed(2)} line above and below</span>
+      <button data-pfa="btnpad-reset" class="txmini">reset</button>
+      ${pfHelp('What this changes', `
+        <p>The space above and below the label of every button on the page,
+        in lines of text. It was nearly half a line (0.45); the default is
+        now a tenth. Kept in this browser only.</p>`)}
+    </div>`;
+  },
 
   bench: () => {
     const b = PREFS.bench;
@@ -12836,6 +13275,8 @@ function pfInit(){
       case 'open':  pfOpen(); break;
       case 'close': pfClose(); break;
       case 'run':   pfRunBenchmark(); break;
+      case 'btnpad-reset':
+        (PREFS.look = PREFS.look || {}).btnpad = 0.1; pfSave(); pfApplyLook(); pfRender(); break;
       case 'recipe-reset':
         PREFS.bench.recipe = PF_DEFAULT_RECIPE; pfSave(); pfRender(); pfRenderStrip(); break;
       case 'bench-report': {
@@ -12866,6 +13307,10 @@ function pfInit(){
     else if(id === 'pf-secs')   b.random_seconds = +e.target.value || 20;
     else if(id === 'pf-from')   { b.random_from = e.target.value; pfSchedule(); }
     else if(id === 'pf-to')     { b.random_to = e.target.value; pfSchedule(); }
+    else if(id === 'pf-btnpad'){
+      (PREFS.look = PREFS.look || {}).btnpad = +e.target.value; pfApplyLook();
+      const o = $('pf-btnpadv');
+      if(o) o.textContent = (+e.target.value).toFixed(2) + ' line above and below'; }
     else return;
     pfSave();
     const c = $('pf-cron'); if(c) c.textContent = pfCronLine();
@@ -13541,8 +13986,44 @@ async function testSend(r){
   try{await sendCmd(TEST_CMD,TEST_CMD_X,JSON.stringify(r));toast('run filed on the Pi');
     setTimeout(()=>getFile(TESTS_FID),1200);}
   catch(e){toast('could not file the run: '+e,true);}}
+/* 27.8: Josh, 2026-09-23 11:14:59: "give a little graph of the results over
+   time in the empty area to the right of the device names (maybe a line chart
+   filled green underneath the line, for example), with a little selector so
+   you can choose which metric you're looking at?; ii) make them collapsible
+   (the device names)". Each metric names the run kind it exists for; a run
+   of another kind simply has no point on that chart. */
+const TEST_METRICS=[
+  {id:'eng',  label:'engine ms (this device)', get:(r,dev)=>((r.engine_delta||{})[dev]||{}).mean},
+  {id:'wpm',  label:'typing: wpm',           kind:'typing', get:r=>r.wpm},
+  {id:'miss', label:'typing: missing keys',  kind:'typing', get:r=>r.missing},
+  {id:'gap',  label:'typing: gap p95 ms',    kind:'typing', get:r=>(r.gap_ms||{}).p95},
+  {id:'stall',label:'typing: stalls',        kind:'typing', get:r=>(r.gap_ms||{}).stalls_400||0},
+  {id:'click',label:'targets: median ms',    kind:'mouse',  get:r=>(r.click_ms||{}).median},
+  {id:'mmiss',label:'targets: misses',       kind:'mouse',  get:r=>r.misses},
+  {id:'pause',label:'fidget: pauses',        kind:'fidget', get:r=>(r.pauses||{}).n},
+  {id:'plong',label:'fidget: longest pause ms',kind:'fidget',get:r=>(r.pauses||{}).longest}];
+let testMetric='eng';
+const _testDevOpen={};                 // page memory: which devices are open
+function testSpark(runs,dev){
+  const m=TEST_METRICS.find(x=>x.id===testMetric)||TEST_METRICS[0];
+  const pts=runs.filter(r=>!m.kind||r.kind===m.kind)
+    .map(r=>m.get(r,dev)).filter(v=>typeof v==='number'&&isFinite(v));
+  if(!pts.length)return '<span class="muted" style="font-size:.72rem">no '+esc(m.label)+' yet</span>';
+  const W=180,H=26,lo=Math.min(...pts),hi=Math.max(...pts),sp=(hi-lo)||1;
+  const xy=pts.map((v,i)=>[pts.length>1?i*(W/(pts.length-1)):W/2,H-2-(v-lo)/sp*(H-4)]);
+  const line=xy.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const area=`0,${H} ${line} ${xy[xy.length-1][0].toFixed(1)},${H}`;
+  const last=pts[pts.length-1];
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle"
+      role="img" aria-label="${esc(m.label)} over ${pts.length} run(s)"><title>${esc(m.label)}: ${pts.length} run(s), ${lo.toFixed(1)} – ${hi.toFixed(1)}</title>
+      <polygon points="${area}" fill="var(--ok)" fill-opacity=".22"/>
+      <polyline points="${line}" fill="none" stroke="var(--ok)" stroke-width="1.5"/></svg>
+    <span style="font-size:.72rem">${Math.abs(last)>=100?last.toFixed(0):last.toFixed(1)}</span>`;}
 function renderTestHistory(){
   const el=$('testhistbody');if(!el)return;
+  const ms=$('testmetric');
+  if(ms&&!ms.options.length){ms.innerHTML=TEST_METRICS.map(m=>`<option value="${m.id}">${esc(m.label)}</option>`).join('');
+    ms.value=testMetric;ms.onchange=()=>{testMetric=ms.value;renderTestHistory();};}
   if(!testRuns.length){el.textContent=testHistMeta.error?('ledger error: '+testHistMeta.error):(device?'no runs yet':'connect to load');return;}
   const byDev={};for(const r of testRuns){(byDev[r.device||'?']=byDev[r.device||'?']||[]).push(r);}
   const fmt=v=>v==null?'–':(typeof v==='number'?(Math.abs(v)>=100?v.toFixed(0):v.toFixed(1)):esc(String(v)));
@@ -13550,7 +14031,10 @@ function renderTestHistory(){
   for(const dev of Object.keys(byDev).sort()){
     const runs=byDev[dev].slice(-12).reverse();
     const nm=((cfg&&cfg.devices)||[]).find(d=>d.id===dev);
-    h+=`<h3 style="font-size:.88rem;margin:.6rem 0 .2rem">${esc(nm?nm.name:dev)} <span class="muted">(${byDev[dev].length} runs)</span></h3>`;
+    h+=`<details class="testdev" data-dev="${esc(dev)}"${_testDevOpen[dev]?' open':''} style="margin:.4rem 0">
+      <summary style="cursor:pointer"><h3 style="font-size:.88rem;margin:.2rem 0;display:inline">${esc(nm?nm.name:dev)}
+      <span class="muted">(${byDev[dev].length} runs)</span></h3>
+      <span style="margin-left:1rem">${testSpark(byDev[dev],dev)}</span></summary>`;
     h+='<div style="overflow-x:auto"><table class="testtbl"><tr><th>when</th><th>kind</th><th>result</th><th>gaps / clicks</th><th>engine ms (n) for this device</th><th>engine says</th><th>Pi was doing</th><th>other devices during run</th></tr>';
     for(const r of runs){
       const when=r.ts?new Date(r.ts*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'–';
@@ -13567,9 +14051,10 @@ function renderTestHistory(){
       const det=r.device_detected?`${esc(r.device_detected)}${r.device_mismatch?' <b style="color:var(--hi,#d33)" title="the device with the most samples during this run is not the one named">≠ named</b>':' ✓'}`:'<span class="muted">–</span>';
       const hk=(r.housekeeping||[]).map(e=>`${esc(e.what)} ${fmt(e.ms)}ms`).join(', ');
       h+=`<tr><td>${when}</td><td>${esc(r.kind||'')}${r.suite&&r.suite!=='full'?` <span class="muted">${esc(r.suite)}</span>`:''}</td><td>${res}</td><td>${gaps}</td><td>${mine?`<b>${fmt(mine.mean)}</b> ±${fmt(mine.sd)} (${mine.n})${mine.reset?' <span class="muted">engine restarted</span>':''}`:'<span class="muted">none — did you name the right device?</span>'}</td><td>${det}</td><td class="muted" title="engine housekeeping that ran during the run, from the Pi's own clock">${hk||'nothing'}</td><td class="muted">${others||'–'}</td></tr>`;}
-    h+='</table></div>';}
+    h+='</table></div></details>';}
   if(testHistMeta.bad_lines)h+=`<p class="muted">${testHistMeta.bad_lines} unreadable line(s) in the ledger were skipped.</p>`;
-  el.innerHTML=h;}
+  el.innerHTML=h;
+  el.querySelectorAll('details.testdev').forEach(d=>d.addEventListener('toggle',()=>{_testDevOpen[d.dataset.dev]=d.open;}));}
 (function(){
   const on=(id,ev,fn)=>{const e=$(id);if(e)e.addEventListener(ev,fn);};
   on('testkstart','click',testKStart);on('testkfinish','click',testKFinish);on('testkreset','click',testKReset);
@@ -13596,6 +14081,14 @@ function switchTab(t){
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
 pfInit();
+// 27.8: the Copy/Paste "about" caret. Remembered in this browser only (a
+// look preference, not profile config), and closed unless you opened it.
+(function(){const b=$('clipabouttg'),d=$('clipabout');if(!b||!d)return;
+  const set=o=>{d.style.display=o?'':'none';b.textContent=(o?'▾':'▸')+' about';
+    b.setAttribute('aria-expanded',o?'true':'false');};
+  let o=false;try{o=localStorage.getItem('hc.clipabout')==='1';}catch(_){}
+  set(o);
+  b.onclick=()=>{o=!o;set(o);try{localStorage.setItem('hc.clipabout',o?'1':'0');}catch(_){}};})();
 $('editorclose').onclick=closeEditor;
 $('editorrevert').onclick=revertEditor;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('editor').style.display==='block')closeEditor();});
