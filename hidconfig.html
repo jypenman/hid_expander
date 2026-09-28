@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.0</title>
+<title>HID Config 29.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1723,6 +1723,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.1',d:'2026-09-28',items:[
+   {t:'Right Alt now switches Mac mode (every Mac character, nothing to tick) and Windows mode (ordinary Alt, except the characters you ticked) — explained in the ⌥ panel; the engine starts in Windows mode',k:'optsec'},
+   {t:'Without Show key presses, the keys you press in the browser drive the wireframe and the practice keyboard',k:'devcards'},
+   {t:'Saves queue one behind another (two at once arrived scrambled: “✗ length mismatch”); a short save now says so and what to do',k:'write'},
+   {t:'⌥ panel: a chord on your practice or known list counts as a collision (Alt+O is RStudio’s Fold All)',k:'optsec'}]},
  {v:'29.0',d:'2026-09-28',items:[
    {t:'Usage: every column header sorts (click again to reverse); sorted by Group, each group has a ▾ header that folds',k:'usagepane'},
    {t:'Usage: a practice keyboard at the top right — keys that finish a chord you are learning are lit (hover for them); hold a modifier and each key shows what it would do',k:'practicekbd'},
@@ -2478,7 +2483,11 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
     // something. It reports what actually happened now.
     toast(_lastOp==='put'?'✓ saved (hot-reloads ~2s)':'✓ done');
     _lastOp=null;}
-  else if(t===ERR){toast('✗ '+new TextDecoder().decode(d.slice(1)).replace(/\0+$/,''),true);_readDone();}
+  else if(t===ERR){const m=new TextDecoder().decode(d.slice(1)).replace(/\0+$/,'');
+    // 29.1: the old engine's wording, explained for as long as one runs.
+    const sm=/^save short (\d+)\/(\d+)/.exec(m);
+    toast('✗ '+(sm?`save arrived incomplete (${sm[1]} of ${sm[2]} bytes) — nothing was written; press ⬆ Save to device again`
+      :m==='length mismatch'?'save arrived incomplete — nothing was written; press ⬆ Save to device again':m),true);_readDone();}
 }
 let _readQ=[],_reading=false,_readTimer=null,_setsChannelOk=false;
 // What the pending ack belongs to, so the toast can tell the truth.
@@ -2521,7 +2530,18 @@ function _readPoke(){
     _readDone();
   },READ_IDLE_MS);}
 function _readDone(){clearTimeout(_readTimer);_reading=false;_drainReads();}
-async function putFile(fid,obj){
+/* 29.1: ONE SAVE AT A TIME. putFile had no queue, so two saves at once --
+   the profile and a Copy/Paste note, say -- sent their chunks interleaved,
+   and the Pi (which assembles one save) got the wrong length and refused it:
+   Josh's "✗ length mismatch" (2026-09-28 10:30). Each save now waits for the
+   one before it has been fully sent. */
+let _putChain=Promise.resolve();
+function putFile(fid,obj){
+  const run=()=>_putFileNow(fid,obj);
+  const p=_putChain.then(run,run);
+  _putChain=p.catch(()=>{});
+  return p;}
+async function _putFileNow(fid,obj){
   _lastOp='put';
   const data=new TextEncoder().encode(JSON.stringify(obj));
   await send([PUT_BEGIN,data.length&255,(data.length>>8)&255,(data.length>>16)&255,(data.length>>24)&255,fid]);
@@ -4162,6 +4182,44 @@ function holdKey(u,on,dev){
     holdKey._t=setTimeout(()=>{heldPaintReset();renderStage();
       if(typeof renderPracticeKbd==='function')renderPracticeKbd();},0);}
   document.querySelectorAll(_heldSel(u,dev)).forEach(e=>e.classList.toggle('held',on));}
+/* 29.1: the BROWSER as a key source. Josh, 2026-09-28 10:26:29: "set it up
+   so browser-side ... it will change what it shows depending on what keys I
+   press without having to rely on the Pi: It could default back to this mode
+   whenever the Pi doesn't have "Show key preses" running."
+
+   Active only while Show key presses is OFF (the Pi's stream is the better
+   source when it runs: it knows which DEVICE a key came from), on the Mapping
+   and Usage tabs, and never while typing into a field. These are the keys the
+   HOST received -- after the Pi's remapping -- so they carry no device;
+   holdKey(u, on, '') lights that usage on every card. Nothing is prevented:
+   the page reacts, it does not swallow. */
+const BROWSER_CODE2HID=(()=>{const m={};
+  for(let i=0;i<26;i++)m['Key'+String.fromCharCode(65+i)]=0x04+i;
+  for(let i=1;i<=9;i++)m['Digit'+i]=0x1d+i;m.Digit0=0x27;
+  for(let i=1;i<=12;i++)m['F'+i]=0x39+i;
+  Object.assign(m,{Enter:0x28,Escape:0x29,Backspace:0x2a,Tab:0x2b,Space:0x2c,Minus:0x2d,
+    Equal:0x2e,BracketLeft:0x2f,BracketRight:0x30,Backslash:0x31,Semicolon:0x33,Quote:0x34,
+    Backquote:0x35,Comma:0x36,Period:0x37,Slash:0x38,CapsLock:0x39,Insert:0x49,Home:0x4a,
+    PageUp:0x4b,Delete:0x4c,End:0x4d,PageDown:0x4e,ArrowRight:0x4f,ArrowLeft:0x50,
+    ArrowDown:0x51,ArrowUp:0x52,ControlLeft:0xe0,ShiftLeft:0xe1,AltLeft:0xe2,MetaLeft:0xe3,
+    ControlRight:0xe4,ShiftRight:0xe5,AltRight:0xe6,MetaRight:0xe7});
+  return m;})();
+const _browserHeld=new Set();
+function _browserKeysActive(e){
+  if(typeof _showKeysState!=='undefined'&&_showKeysState>0)return false;
+  const t=e&&e.target,tn=(t&&t.tagName||'').toLowerCase();
+  if(tn==='input'||tn==='textarea'||tn==='select'||(t&&t.isContentEditable))return false;
+  const pm=$('page-map'),pu=$('page-usage');
+  return (pm&&pm.style.display!=='none')||(pu&&pu.style.display!=='none');}
+document.addEventListener('keydown',e=>{
+  if(e.repeat||!_browserKeysActive(e))return;
+  const u=BROWSER_CODE2HID[e.code];if(u===undefined)return;
+  _browserHeld.add(u);holdKey(u,true,'');});
+document.addEventListener('keyup',e=>{
+  const u=BROWSER_CODE2HID[e.code];if(u===undefined||!_browserHeld.has(u))return;
+  _browserHeld.delete(u);holdKey(u,false,'');});
+// Leaving the window mid-chord never delivers the keyup: let go of everything.
+window.addEventListener('blur',()=>{for(const u of [..._browserHeld]){_browserHeld.delete(u);holdKey(u,false,'');}});
 function holdBtn(box,on){
   if(on)_heldBtns.add(box);else _heldBtns.delete(box);
   const r=document.querySelector(`#mousesvg [data-btn="${box}"]`);if(r)r.classList.toggle('held',on);
@@ -7635,13 +7693,20 @@ function heldEffects(dev){
     const tbls=[['',cfg.mod_chords||{}]];
     const p=(cfg.os_profiles||{})[os];
     if(p&&p.mod_chords)tbls.push([os,p.mod_chords]);
-    // 28.7: Right Alt switched the Option characters off -- Alt is plain Alt,
-    // so they do not describe what the next key does.
-    const optOff=!!(lastEng&&lastEng.option_mode===false);
+    // 29.1: in MAC MODE (Right Alt) Alt / Alt+Shift + key is the Mac
+    // character for EVERY key in the table, ticked or not -- so that is what
+    // the next key would do. In Windows mode the tables below already hold
+    // exactly the ticked ones.
+    const macMode=!!(lastEng&&lastEng.option_mode===true)&&/^win/i.test(cfg.active_os||'win');
+    const aB=modsToEngine(0x04),asB=modsToEngine(0x06);
+    const macRows=macMode&&(bits===aB||bits===asB);
+    if(macRows)for(const r of OPT_CHARS){
+      const act=(bits===aB&&r[4])?['dead',r[2]]:['char',bits===aB?r[2]:r[3]];
+      add('key:'+r[0],{kind:'chord',tone:'',label:actShort(act),detail:modsName(bits)+' [Mac mode]'});}
     for(const[o,tbl]of tbls)for(const[k,act]of Object.entries(tbl)){
       const[,m,u]=k.split(',').map(Number);
       if(m!==bits)continue;
-      if(optOff&&act&&(act[0]==='char'||act[0]==='dead'))continue;
+      if(macRows&&act&&(act[0]==='char'||act[0]==='dead'))continue;
       add('key:'+u,{kind:'chord',tone:'',label:actShort(act)||'∅',
                     detail:modsName(bits)+(o?' ['+o+' only]':'')});}}
 
@@ -8019,6 +8084,12 @@ function optCollisions(row,shift){
   const us=(typeof usageData!=='undefined'&&usageData&&usageData.shortcuts)||{};
   for(const[id,r]of Object.entries(us))if(_chordNorm(id)===want)
     out.push({kind:'used',text:`you used ${id} ${r.count}× in ${usageData.weeks} wk`});
+  // 29.1: a chord he is PRACTISING (or has marked known) is his too -- Alt+O
+  // is RStudio's Fold All, on his 2026-09-28 training list, and a ticked ø
+  // would type over it in Windows mode.
+  for(const ch of [...((cfg&&cfg.kbd_train)||[]),...((cfg&&cfg.kbd_known)||[])])
+    if(_chordNorm(ch)===want)
+      out.push({kind:'used',text:`you are ${((cfg.kbd_train||[]).includes(ch))?'practising':'using (known)'} ${ch}`});
   const key=_optKey(shift,row[0]);
   const mine=_optAct(row,shift),g=(cfg.mapping_groups||{})[OPT_GROUP]||{};
   const ours=new Set(g.option_passthru||[]);
@@ -8068,21 +8139,24 @@ function renderOptChars(){
     Left Alt + key types what Option + key types on a Mac; add Shift for the second column.
     The five ◌ keys wait for the next letter (⌥E then e → é; Space types the accent alone).
     Applies on <b>Windows</b> only. Source: ${esc(OPT_SRC)}; the accent combinations are general knowledge.</p>
-    <p style="font-size:.8rem;margin:.2rem 0 .4rem">Right now:
-      ${lastEng&&typeof lastEng.option_mode==='boolean'
-        ?(lastEng.option_mode?'<b style="color:var(--ok)">ON</b> — Alt + key types these characters'
-                             :'<b style="color:var(--warn)">OFF</b> — Alt is ordinary Windows Alt')
-        :'<span class="muted">unknown until connected</span>'}
-      · <b>tap Right Alt</b> to switch between Mac characters and normal Windows Alt (28.7).
-      Holding Right Alt with another key is still just Alt.</p>
+    <div style="font-size:.8rem;margin:.2rem 0 .5rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem">
+      <b>Two modes — tap Right Alt to switch</b> (Windows only; holding Right Alt with another key is still Alt):
+      <div style="margin:.2rem 0 0 .6rem">• <b>Mac mode</b> — Alt / Alt+Shift + <i>every</i> key below types its Mac
+        character. Nothing needs ticking.</div>
+      <div style="margin:.1rem 0 0 .6rem">• <b>Windows mode</b> — Alt is ordinary Windows Alt, <i>except</i> the items
+        ticked below, which type their character in both modes. So tick only ones that collide with nothing you
+        use — the button below does exactly that.</div>
+      <div style="margin-top:.3rem">Now: ${lastEng&&typeof lastEng.option_mode==='boolean'
+        ?(lastEng.option_mode?'<b style="color:var(--ok)">Mac mode</b>':'<b style="color:var(--hi)">Windows mode</b>')
+        :'<span class="muted">unknown until connected</span>'} · the engine starts in Windows mode.</div></div>
     <p style="font-size:.78rem;margin:.2rem 0 .4rem">Collisions: <span style="color:var(--err)">red</span> = you have used that Alt chord ·
     <span style="color:var(--warn)">amber</span> = one of your own chords · grey = an app or Windows shortcut in the shortcut sets.
     ${haveU&&haveC?'':`<b style="color:var(--warn)">${!haveU?'Usage':''}${!haveU&&!haveC?' and ':''}${!haveC?'the shortcut sets':''} not loaded — collisions are incomplete.</b>`}</p>
     <div class="bar" style="margin:.2rem 0 .4rem">
-      <button id="optinstall" title="Tick every item with NO collision; leave the rest off">＋ Tick every item with no collision</button>
+      <button id="optinstall" title="For Windows mode: tick every item with NO collision; leave the rest off">＋ Windows mode: tick every item with no collision</button>
       <button id="optnone">Untick all</button>
       <span class="muted" style="font-size:.74rem">Then ⬆ Save to device.</span></div>
-    <table style="width:100%;font-size:.82rem"><tr><th>key</th><th>⌥</th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
+    <table style="width:100%;font-size:.82rem"><tr><th>key</th><th title="Ticked = also in Windows mode. Mac mode types every one.">⌥ <span class="muted" style="font-weight:400">ticked = Windows mode too</span></th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
   el.querySelectorAll('[data-opt]').forEach(cb=>cb.onchange=()=>{
     const row=OPT_CHARS.find(r=>r[0]===+cb.dataset.opt);
     _optSet(row,cb.dataset.sh==='1',cb.checked);profileTouched();renderOptChars();});
@@ -11285,7 +11359,7 @@ function liveOut(txt){
   if(om){if(lastEng)lastEng.option_mode=om[1]==='ON';
     heldPaintReset();renderStage();
     if(typeof renderOptChars==='function'&&$('optsec')&&$('optsec').open)renderOptChars();
-    toast('Right Alt: Mac characters '+om[1]);return;}
+    toast('Right Alt: '+(om[1]==='ON'?'Mac mode — every Mac character':'Windows mode — Alt is Windows Alt (ticked characters still type)'));return;}
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
   if(txt.startsWith('expand')){expandFlash=Date.now()+600;return;}
