@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 28.2</title>
+<title>HID Config 28.7</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1537,6 +1537,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     to set an OS-specific override; the ⇄ reorders which OS is base.</p>
     <div id="ostabs" class="pills"></div>
   </div>
+  <!-- 28.3: the macOS Option characters on Left Alt. -->
+  <details class="panel" id="optsec" data-uikey="osoption">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">⌥ macOS Option characters on Left Alt
+      <span class="muted" id="optcount" style="font-weight:400;font-size:.8rem"></span></h3></summary>
+    <div id="optbody"></div>
+  </details>
   <details class="panel" data-uikey="osscrolls">
     <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">Per-device scrolling</h3></summary>
     <p class="muted" style="font-size:.78rem">Tick to invert scroll direction for a device on the selected OS (e.g. natural on Mac, reversed on PC).</p>
@@ -1711,6 +1717,19 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'28.7',d:'2026-09-28',items:[
+   {t:'Tap Right Alt to switch between the Mac Option characters and normal Windows Alt; the OS tab’s ⌥ panel says which is on',k:'optsec'}]},
+ {v:'28.6',d:'2026-09-28',items:[
+   {t:'Engine: text expansions cost a fraction of the CPU per keystroke — a rule is only tried when the key you just typed could finish it (identical results, checked against your own rules)',k:'page-exp'}]},
+ {v:'28.5',d:'2026-09-24',items:[
+   {t:'Usage: a Group column after “Does what” — filled from your mapping groups or the shortcut set (app · section), editable with ✎, sortable, and ▾ in its header to tick which groups show',k:'usagepane'},
+   {t:'“Does what” comes from the shortcut sets for the OS you used the chord on — a Windows chord is no longer described by a Mac set',k:'usagepane'}]},
+ {v:'28.4',d:'2026-09-24',items:[
+   {t:'A button with Hold → Layer now shows and edits its TAP action (Tap: click / any macro) — the E9’s 2 and 3 tap to Move window / Resize corner, which the editor never showed',k:'editor'},
+   {t:'Layer tabs are named by what the button does and the key that reaches it: “3 · Back / E9 3”, not “3 · 4”; a stray usage-0 entry no longer names a layer',k:'layers'}]},
+ {v:'28.3',d:'2026-09-24',items:[
+   {t:'OS tab → ⌥ macOS Option characters: Left Alt (+Shift) + key types what Option (+Shift) types on a Mac, from your Keyboard Viewer screenshots — every item shows what it collides with (your usage first), and one button ticks only the ones with no collision',k:'optsec'},
+   {t:'Engine: the five accent keys work like the Mac — ⌥E then e gives é, Space gives the accent — and Alt is tagged so Windows does not open the menu bar',k:'optsec'}]},
  {v:'28.2',d:'2026-09-24',items:[
    {t:'Macros: add _down or _up to a key or button (btn1_down … btn1_up) to press and release in separate steps; a plain name still means press-and-release in its step',k:'page-macros'}]},
  {v:'28.1',d:'2026-09-24',items:[
@@ -2662,6 +2681,7 @@ function pfResult(text){
     try{ corpusData=JSON.parse(text.slice(text.indexOf('\n')+1));
          renderTrack(); renderTraining();
          if(typeof renderDisamb==='function') renderDisamb();
+         if(typeof renderOptChars==='function') renderOptChars();   // 28.3
          if(sel) render();            // held-key labels read the corpus
          toast('shortcut sets loaded ('+(corpusData.corpus||[]).length+')'); }
     catch(e){ _corpusAsked=false; toast('shortcut sets unreadable: '+e.message,true); }
@@ -2671,6 +2691,7 @@ function pfResult(text){
     _usageWait=false;
     try{ usageData=unpackUsage(JSON.parse(text.slice(text.indexOf('\n')+1)));
          renderUsage(); renderTrack(); renderTraining();
+         if(typeof renderOptChars==='function') renderOptChars();   // 28.3: collisions
          // 24.3: the Expansions tab's "Used" column reads the same payload,
          // so it has to be repainted here too -- otherwise it keeps saying
          // "not fetched yet" on a page that has just fetched it.
@@ -3116,16 +3137,34 @@ function layerTriggers(L){
   const devShort=id=>{const d=(cfg.devices||[]).find(x=>x.id===id);
     return String((d&&d.name)||id).split(/\s+/)[0];};
   const keyName=u=>MODS[+u]||KEYS[+u]||('#'+u);
+  // 28.4: a BUTTON is named by what it does (Back, Fwd), not by
+  // cfg.button_labels -- his still carry an old E9 layout ("4 (digit,
+  // unassigned)"), which is why layer 3 read "3 · 4". Josh, 2026-09-24:
+  // "Instead of "Mouse Button" Numbers ... a lookup of that button's name".
+  const BTN_FN={1:'Left',2:'Right',3:'Wheel',4:'Back',5:'Fwd'};
+  const bName=b=>BTN_FN[+b]||short(btnLabel(+b));
+  // ...and the physical key that IS that button on a device (Baseline
+  // "p2btn:0x1f" -> 5), because that is the thing he actually presses:
+  // "3 · Back / E9 3".
+  const viaKeys=(b,onlyDev)=>{const r=[];
+    for(const[dev,bl]of Object.entries(cfg.baseline||{})){
+      if(onlyDev&&dev!==onlyDev)continue;
+      for(const[k,v]of Object.entries(bl||{}))
+        if(k.startsWith('p2btn:')&&+v===+b)
+          r.push(devShort(dev)+' '+keyName(parseInt(k.slice(6),16)));}
+    return r;};
+  // Usage 0 is not a key. A stray `"0": L` entry (his E9 carries one) must
+  // not name a layer "E9 #0" -- see 28.4 in the roadmap.
   for(const[u,v]of Object.entries(cfg.layer_keys||{}))
-    if(+v===L)out.push(keyName(u));
+    if(+u&&+v===L)out.push(keyName(u));
   for(const[dev,t]of Object.entries(cfg.layer_keys_by_device||{}))
     for(const[u,v]of Object.entries(t||{}))
-      if(v!=null&&+v===L)out.push(devShort(dev)+' '+keyName(u));
+      if(+u&&v!=null&&+v===L)out.push(devShort(dev)+' '+keyName(u));
   for(const[b,v]of Object.entries(cfg.tap_hold||{}))
-    if(v&&+v[1]===L)out.push(short(btnLabel(+b)));
+    if(v&&+v[1]===L)out.push(bName(b),...viaKeys(b));
   for(const[dev,t]of Object.entries(cfg.tap_hold_by_device||{}))
     for(const[b,v]of Object.entries(t||{}))
-      if(v&&+v[1]===L)out.push(devShort(dev)+' '+short(btnLabel(+b)));
+      if(v&&+v[1]===L)out.push(devShort(dev)+' '+bName(b),...viaKeys(b,dev));
   return[...new Set(out)];}
 function layerName(L){
   if(L===0)return LAYER_NAMES[0];
@@ -3594,6 +3633,9 @@ if(k==='dpi_cycle')return'DPI';
 // 27.2: expansion outputs bound to a key/button, and the plain-text action
 if(k==='expansion')return'\u270e '+a[2];
 if(k==='text')return'\u201c'+String(a[1]).slice(0,16)+'\u201d';
+// 28.3: the macOS Option characters
+if(k==='char')return String(a[1]);
+if(k==='dead')return String(a[1])+'\u25cc';   // ◌: waits for the next key
 return k;}
 /* 27.2: Expansions in the action search. Josh, 2026-09-22: match "either
    trigger or the output, but of course, only output the output when clicked
@@ -6038,6 +6080,51 @@ function fmtChars(n){
    what CLAUDE.md §2 forbids -- "an undated scrape presented as fact is worse
    than no list". So his note is shown as his, and where a cited description
    also exists, both are visible with the source link intact. */
+/* ===== 28.5: THE GROUP COLUMN ===========================================
+   Josh, 2026-09-24 12:37:45: a "Group" column after "Does What" -- "i) edit
+   that, and ii) assign initial categories (based on grouping in Mapping, if
+   defined there, or keyboard shortcut list, if defined there), sort by it
+   (and select categories to remove or not from a dropdown that appears from
+   the top of the column, like an excel table sorting and selecting
+   selector)".
+
+   Precedence, most specific first: HIS group (cfg.usage_groups, written
+   only when he edits a cell) -> the mapping group whose chord this is -> the
+   shortcut set that names it (app, and RStudio's own section) -> for an
+   expansion, the set that defines it. Only the first is stored; the rest are
+   derived on every render, so a regrouped mapping re-labels its rows. */
+let usageGroupHide = new Set();
+try{ usageGroupHide = new Set(JSON.parse(localStorage.getItem('hc.ugrphide')||'[]')); }catch(_){}
+function usageGroupOf(id, kind, desc){
+  const mine = ((cfg && cfg.usage_groups) || {})[id];
+  if(mine) return {g: mine, from: 'you'};
+  if(kind === 'shortcuts'){
+    const pc = parseCorpusChord(id);
+    if(pc){
+      for(const [name, g] of Object.entries((cfg && cfg.mapping_groups) || {}))
+        for(const m of (g.members || [])){
+          const mm = /^mc:(-?\d+),(\d+),(\d+)$/.exec(m);
+          if(mm && +mm[2] === pc.mods && +mm[3] === pc.canon)
+            return {g: name, from: 'mapping group'};}}
+    if(desc && desc.text){
+      const sec = /^([^—]{1,40})\s—\s/.exec(desc.text);
+      const app = desc.app || desc.source || '';
+      if(app || sec) return {g: [app, sec && sec[1]].filter(Boolean).join(' · '),
+                             from: 'shortcut set'};}}
+  if(kind === 'expansions'){
+    for(const [file, st] of Object.entries(expSets || {}))
+      for(const it of ((st && st.items) || []))
+        if(it && it.trigger === id)
+          return {g: (st.name || file), from: 'expansion set'};}
+  return {g: '', from: ''};}
+function usageGroupCell(r){
+  const t = r.group.from === 'you' ? '' :
+    r.group.from ? `from the ${r.group.from} — ✎ to set your own` : 'no group — ✎ to set one';
+  return `<td class="ugrp" title="${esc(t)}">${r.group.g
+      ? `<span${r.group.from === 'you' ? '' : ' class="muted"'}>${esc(r.group.g)}</span>`
+      : '<span class="muted">—</span>'} <a class="mlink ugrpedit" data-uid="${esc(r.id)}"
+      title="Set this row's group">✎</a></td>`;}
+
 function expSetNote(trigger){
   for(const s of Object.values(expSets||{})){
     for(const it of ((s&&s.items)||[])){
@@ -6166,6 +6253,7 @@ function usageRows(kind){
     // what it is (the set's text), never as a citation.
     setnote: kind === 'expansions' ? expSetNote(id) : '',
   }));
+  for(const r of rows) r.group = usageGroupOf(r.id, kind, r.desc);   // 28.5
   const q = usageFilter.trim().toLowerCase();
   const filtered = q ? rows.filter(r =>
     r.id.toLowerCase().includes(q)
@@ -6173,9 +6261,13 @@ function usageRows(kind){
     // 24.4: his own notes are searchable too. A description you typed is the
     // one you are most likely to search for.
     || r.note.toLowerCase().includes(q)
-    || r.os.toLowerCase().includes(q)) : rows;
+    || r.os.toLowerCase().includes(q)
+    || r.group.g.toLowerCase().includes(q)) : rows;
   return filtered.sort((a, b) =>
     usageSort === 'id' ? a.id.localeCompare(b.id)
+    : usageSort === 'group'
+      ? ((a.group.g || '\uffff').localeCompare(b.group.g || '\uffff')
+         || (b.per_week || 0) - (a.per_week || 0))
     : (b[usageSort] || 0) - (a[usageSort] || 0));
 }
 
@@ -6214,7 +6306,10 @@ function renderUsage(){
     return;
   }
   const table = (kind, title, openDefault, keep) => {
-    const rows = keep ? usageRows(kind).filter(keep) : usageRows(kind);
+    // 28.5: the Group column's filter applies to THESE tables only -- not to
+    // Training, which reads usageRows() for its own lists.
+    const rows = (keep ? usageRows(kind).filter(keep) : usageRows(kind))
+      .filter(r => !usageGroupHide.has(r.group.g || ''));
     // Only expansions save typing, so only they get the column. A "Saved"
     // column reading 0 down every shortcut row would be a column that means
     // nothing, which is worse than a missing one.
@@ -6225,11 +6320,15 @@ function renderUsage(){
         <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}${
           totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span></summary>
       ${rows.length ? `<table style="width:100%">
-        <tr><td><b>Does what</b></td><td><b>What you press</b></td><td><b>Per week</b></td>
+        <tr><td><b>Does what</b></td><td><b>Group</b> <a class="mlink ugrpfilter"
+              title="Sort by group, and choose which groups to show"
+              style="${usageGroupHide.size?'color:var(--hi);font-weight:700':''}">▾${usageGroupHide.size?' '+usageGroupHide.size+' hidden':''}</a></td>
+            <td><b>What you press</b></td><td><b>Per week</b></td>
             <td><b>Total</b></td>${saved ? '<td><b>Chars saved</b></td>' : ''}
             <td><b>OS</b></td><td></td></tr>
         ${rows.map(r => `<tr>
           <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
+          ${usageGroupCell(r)}
           <td style="font-family:ui-monospace,monospace;max-width:18rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.id)}">${esc(r.id)}</td>
           <td>${r.per_week}</td><td class="muted">${r.count}</td>
           ${saved ? `<td class="muted" title="${
@@ -6310,6 +6409,7 @@ function renderUsage(){
           <option value="count" ${usageSort==='count'?'selected':''}>total</option>
           <option value="chars" ${usageSort==='chars'?'selected':''}>characters saved</option>
           <option value="id" ${usageSort==='id'?'selected':''}>name</option>
+          <option value="group" ${usageSort==='group'?'selected':''}>group</option>
         </select></label>
       <span class="muted">over the last ${usageData.weeks} week(s)</span>
       <span style="flex:1"></span>
@@ -6324,6 +6424,49 @@ function renderUsage(){
   $('usagefilter').oninput = e => { usageFilter = e.target.value; renderUsage();
     const b = $('usagefilter'); if(b){ b.focus(); b.setSelectionRange(b.value.length, b.value.length); } };
   $('usagesort').onchange = e => { usageSort = e.target.value; renderUsage(); };
+  // 28.5: edit a row's group. Written on the user's action only; an emptied
+  // box DELETES the entry so the derived group shows through again.
+  el.querySelectorAll('.ugrpedit').forEach(a => a.onclick = ev => {
+    ev.stopPropagation();
+    if(!cfg){ toast('read the device first — there is no profile to save it in', true); return; }
+    const id = a.dataset.uid, cur = ((cfg.usage_groups || {})[id]) || '';
+    const v = prompt(`Group for ${id}\n(empty = use the automatic one)`, cur);
+    if(v === null) return;
+    cfg.usage_groups = cfg.usage_groups || {};
+    if(v.trim()) cfg.usage_groups[id] = v.trim(); else delete cfg.usage_groups[id];
+    if(!Object.keys(cfg.usage_groups).length) delete cfg.usage_groups;
+    profileTouched(); renderUsage(); });
+  // 28.5: the Excel-style header dropdown -- sort, and tick which groups show.
+  el.querySelectorAll('.ugrpfilter').forEach(a => a.onclick = ev => {
+    ev.stopPropagation(); ev.preventDefault();
+    const p = $('popover'); if(!p) return;
+    const all = new Map();
+    for(const k of ['shortcuts', 'expansions']){
+      for(const r of usageRows(k)) all.set(r.group.g || '', (all.get(r.group.g || '') || 0) + 1);}
+    const names = [...all.keys()].sort((x, y) => (x || '\uffff').localeCompare(y || '\uffff'));
+    p.dataset.kind = 'ugrp';
+    p.innerHTML = `<div style="font-size:.8rem;min-width:14rem;max-height:50vh;overflow:auto">
+      <div class="bar" style="margin:0 0 .3rem"><button class="txmini" data-ug="sort">↕ Sort by group</button>
+        <button class="txmini" data-ug="all">All</button><button class="txmini" data-ug="none">None</button></div>
+      ${names.map(n => `<label style="display:block"><input type="checkbox" data-ugn="${esc(n)}"
+        ${usageGroupHide.has(n) ? '' : 'checked'}> ${n ? esc(n) : '<i>(no group)</i>'}
+        <span class="muted">${all.get(n)}</span></label>`).join('')}</div>`;
+    placePopover(p, a.getBoundingClientRect(), 4);
+    const save = () => { try{ localStorage.setItem('hc.ugrphide', JSON.stringify([...usageGroupHide])); }catch(_){}
+      renderUsage(); };
+    p.querySelectorAll('[data-ugn]').forEach(cb => cb.onchange = () => {
+      if(cb.checked) usageGroupHide.delete(cb.dataset.ugn); else usageGroupHide.add(cb.dataset.ugn);
+      save(); });
+    p.querySelectorAll('[data-ug]').forEach(b => b.onclick = () => {
+      const k = b.dataset.ug;
+      if(k === 'sort'){ usageSort = 'group'; p.style.display = 'none'; renderUsage(); return; }
+      usageGroupHide = k === 'all' ? new Set() : new Set(names);
+      p.querySelectorAll('[data-ugn]').forEach(cb => cb.checked = k === 'all');
+      save(); });
+    setTimeout(() => {
+      const close = e2 => { if(p.contains(e2.target)) return;
+        p.style.display = 'none'; document.removeEventListener('click', close); };
+      document.addEventListener('click', close); }, 50); });
   $('usagereload').onclick = () => loadUsage();
   el.querySelectorAll('[data-ugo]').forEach(a =>
     a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
@@ -7578,6 +7721,149 @@ function moveChordTarget(cur,inp){
 // so a trigger near the right edge opened a panel running off the page --
 // with the part you needed to click on the invisible side. Flips above the
 // trigger when there is no room below, which is the same problem vertically.
+/* ===== 28.3: macOS OPTION CHARACTERS ON LEFT ALT ==========================
+   Josh, 2026-09-24: Option is "Left alt. That's the one I use. So make sure
+   there's a way to view the collisions when I view the shortcuts list. Since
+   this would be a remap group make sure it comes in by default with only
+   items that have no collision checked".
+
+   THE TABLE is transcribed from his own screenshots of the macOS Keyboard
+   Viewer (US layout), 2026-09-24: one with Option held, one with
+   Option+Shift. That is the citation. `d` marks the five orange (dead) keys
+   in the Option screenshot; with Option+Shift those same keys type the
+   accent itself. The dead-key COMPOSITIONS (´ + e = é) are general knowledge
+   of the Mac, flagged as such, and live in the engine (DEAD_COMPOSE).
+
+   Written to os_profiles.win.mod_chords, not the shared table: on a Mac host
+   Option already does this, and a rewrite on top would type it twice.
+
+   An item is ON when its chord holds exactly this action. Unticking an
+   Option+Shift item whose Option twin is on writes ["passthru"] there, or the
+   engine's Shift retry would type the Option character for it (MAPPING_MODEL
+   §2, and the mod-chord header in s2). Those passthru entries are recorded on
+   the group so only OURS are ever removed. */
+const OPT_SRC='his macOS Keyboard Viewer screenshots (US), Option and Option+Shift, 2026-09-24';
+const OPT_GROUP='macOS Option characters';
+const OPT_CHARS=[
+ // [usage, key label, Option, Option+Shift, dead?]
+ [0x35,'`','`','`',1],[0x1e,'1','¡','⁄'],[0x1f,'2','™','€'],[0x20,'3','£','‹'],
+ [0x21,'4','¢','›'],[0x22,'5','∞','ﬁ'],[0x23,'6','§','ﬂ'],[0x24,'7','¶','‡'],
+ [0x25,'8','•','°'],[0x26,'9','ª','·'],[0x27,'0','º','‚'],[0x2d,'-','–','—'],
+ [0x2e,'=','≠','±'],
+ [0x14,'Q','œ','Œ'],[0x1a,'W','∑','„'],[0x08,'E','´','´',1],[0x15,'R','®','‰'],
+ [0x17,'T','†','ˇ'],[0x1c,'Y','¥','Á'],[0x18,'U','¨','¨',1],[0x0c,'I','ˆ','ˆ',1],
+ [0x12,'O','ø','Ø'],[0x13,'P','π','∏'],[0x2f,'[','“','”'],[0x30,']','‘','’'],
+ [0x31,'\\','«','»'],
+ [0x04,'A','å','Å'],[0x16,'S','ß','Í'],[0x07,'D','∂','Î'],[0x09,'F','ƒ','Ï'],
+ [0x0a,'G','©','˝'],[0x0b,'H','˙','Ó'],[0x0d,'J','∆','Ô'],[0x0e,'K','˚',''],
+ [0x0f,'L','¬','Ò'],[0x33,';','…','Ú'],[0x34,"'",'æ','Æ'],
+ [0x1d,'Z','Ω','¸'],[0x1b,'X','≈','˛'],[0x06,'C','ç','Ç'],[0x19,'V','√','◊'],
+ [0x05,'B','∫','ı'],[0x11,'N','˜','˜',1],[0x10,'M','µ','Â'],[0x36,',','≤','¯'],
+ [0x37,'.','≥','˘'],[0x38,'/','÷','¿']];
+// U+F8FF is Apple's logo, a private-use character: Windows fonts draw a box.
+const OPT_NO_GLYPH=new Set(['']);
+function _optKey(shift,u){return `-1,${modsToEngine(shift?0x06:0x04)},${u}`;}
+function _optAct(row,shift){return (!shift&&row[4])?['dead',row[2]]:['char',shift?row[3]:row[2]];}
+function _optWin(write){const p=(cfg.os_profiles=cfg.os_profiles||(write?{}:undefined));
+  if(!p)return null;const w=p.win||(write?(p.win={}):null);if(!w)return null;
+  return w.mod_chords||(write?(w.mod_chords={}):null);}
+function _optIsOn(row,shift){const t=_optWin(false);const v=t&&t[_optKey(shift,row[0])];
+  return !!v&&JSON.stringify(v)===JSON.stringify(_optAct(row,shift));}
+// "Alt+Shift+e", "Shift+Alt+E" -> one spelling, so usage, the corpus and our
+// own chords compare as the same chord.
+function _chordNorm(s){const ps=String(s||'').split('+').map(x=>x.trim().toLowerCase()).filter(Boolean);
+  if(!ps.length)return '';const key=ps.pop();
+  const al={option:'alt',opt:'alt',control:'ctrl',cmd:'win',command:'win',super:'win',meta:'win'};
+  return [...new Set(ps.map(m=>al[m]||m))].sort().join('+')+'+'+key;}
+/* Every collision for one chord, most important first: chords he has USED
+   (from usage -- "paramount"), then his own chords that are not ours, then
+   shortcuts the corpus names for Windows. */
+function optCollisions(row,shift){
+  const out=[];const want=_chordNorm((shift?'Alt+Shift+':'Alt+')+row[1]);
+  const us=(typeof usageData!=='undefined'&&usageData&&usageData.shortcuts)||{};
+  for(const[id,r]of Object.entries(us))if(_chordNorm(id)===want)
+    out.push({kind:'used',text:`you used ${id} ${r.count}× in ${usageData.weeks} wk`});
+  const key=_optKey(shift,row[0]);
+  const mine=_optAct(row,shift),g=(cfg.mapping_groups||{})[OPT_GROUP]||{};
+  const ours=new Set(g.option_passthru||[]);
+  for(const[src,t]of [['shared',cfg.mod_chords||{}],['win',_optWin(false)||{}]]){
+    const v=t[key];if(!v)continue;
+    if(JSON.stringify(v)===JSON.stringify(mine))continue;
+    if(src==='win'&&ours.has(key)&&v[0]==='passthru')continue;
+    out.push({kind:'mine',text:`your ${src==='win'?'Windows ':''}chord: ${actShort(v)||v[0]}`});}
+  const aos=(cfg.active_os||'win');
+  for(const c of (refData('corpus')||[])){
+    if(c.os&&!/^win/i.test(c.os))continue;
+    for(const[ch,desc]of Object.entries(c.shortcuts||{}))
+      if(_chordNorm(ch)===want)out.push({kind:'app',text:`${c.app||c.name}: ${desc}`});}
+  if(OPT_NO_GLYPH.has(mine[1]))out.push({kind:'glyph',text:'no Windows glyph (Apple logo, private use)'});
+  return out;}
+function _optSet(row,shift,on){
+  const t=_optWin(true),key=_optKey(shift,row[0]);
+  const g=((cfg.mapping_groups=cfg.mapping_groups||{})[OPT_GROUP]=
+    cfg.mapping_groups[OPT_GROUP]||{members:[],color:'#0ea5e9'});
+  g.members=g.members||[];g.option_passthru=g.option_passthru||[];
+  const mem='mc:'+key,drop=a=>{const i=a.indexOf(mem);if(i>=0)a.splice(i,1);};
+  if(on){t[key]=_optAct(row,shift);
+    if(!g.members.includes(mem))g.members.push(mem);
+    const pi=g.option_passthru.indexOf(key);if(pi>=0)g.option_passthru.splice(pi,1);}
+  else{if(_optIsOn(row,shift))delete t[key];drop(g.members);}
+  // Keep each Shift twin honest: base on + shift off -> OUR passthru there.
+  const sk=_optKey(true,row[0]);
+  const baseOn=_optIsOn(row,false),shiftOn=_optIsOn(row,true);
+  const pi=g.option_passthru.indexOf(sk);
+  if(baseOn&&!shiftOn&&!t[sk]){t[sk]=['passthru'];g.option_passthru.push(sk);}
+  else if((!baseOn||shiftOn)&&pi>=0){
+    if(t[sk]&&t[sk][0]==='passthru')delete t[sk];g.option_passthru.splice(pi,1);}}
+function renderOptChars(){
+  const el=$('optbody');if(!el||!cfg)return;
+  const haveU=!!(typeof usageData!=='undefined'&&usageData),haveC=!!refData('corpus');
+  let on=0,n=0;
+  const cell=(row,shift)=>{const ch=shift?row[3]:row[2],col=optCollisions(row,shift),isOn=_optIsOn(row,shift);
+    n++;if(isOn)on++;
+    const dead=!shift&&row[4];
+    return `<td style="white-space:nowrap"><label class="inl" title="${dead?'dead key: combines with the next letter, like the Mac':''}">
+      <input type="checkbox" data-opt="${row[0]}" data-sh="${shift?1:0}" ${isOn?'checked':''}>
+      <b style="font-size:1rem">${esc(ch)}</b>${dead?'<span class="muted">◌</span>':''}</label></td>
+      <td style="font-size:.74rem">${col.length?col.map(c=>`<div style="color:${c.kind==='used'?'var(--err)':c.kind==='mine'?'var(--warn)':'var(--mut)'}">${esc(c.text)}</div>`).join(''):'<span class="muted">—</span>'}</td>`;};
+  const rows=OPT_CHARS.map(r=>`<tr><td style="font-family:ui-monospace,monospace">${esc(r[1])}</td>${cell(r,false)}${cell(r,true)}</tr>`).join('');
+  $('optcount').textContent=`· ${on} of ${n} on`;
+  el.innerHTML=`<p class="muted" style="font-size:.78rem;margin:.2rem 0 .4rem">
+    Left Alt + key types what Option + key types on a Mac; add Shift for the second column.
+    The five ◌ keys wait for the next letter (⌥E then e → é; Space types the accent alone).
+    Applies on <b>Windows</b> only. Source: ${esc(OPT_SRC)}; the accent combinations are general knowledge.</p>
+    <p style="font-size:.8rem;margin:.2rem 0 .4rem">Right now:
+      ${lastEng&&typeof lastEng.option_mode==='boolean'
+        ?(lastEng.option_mode?'<b style="color:var(--ok)">ON</b> — Alt + key types these characters'
+                             :'<b style="color:var(--warn)">OFF</b> — Alt is ordinary Windows Alt')
+        :'<span class="muted">unknown until connected</span>'}
+      · <b>tap Right Alt</b> to switch between Mac characters and normal Windows Alt (28.7).
+      Holding Right Alt with another key is still just Alt.</p>
+    <p style="font-size:.78rem;margin:.2rem 0 .4rem">Collisions: <span style="color:var(--err)">red</span> = you have used that Alt chord ·
+    <span style="color:var(--warn)">amber</span> = one of your own chords · grey = an app or Windows shortcut in the shortcut sets.
+    ${haveU&&haveC?'':`<b style="color:var(--warn)">${!haveU?'Usage':''}${!haveU&&!haveC?' and ':''}${!haveC?'the shortcut sets':''} not loaded — collisions are incomplete.</b>`}</p>
+    <div class="bar" style="margin:.2rem 0 .4rem">
+      <button id="optinstall" title="Tick every item with NO collision; leave the rest off">＋ Tick every item with no collision</button>
+      <button id="optnone">Untick all</button>
+      <span class="muted" style="font-size:.74rem">Then ⬆ Save to device.</span></div>
+    <table style="width:100%;font-size:.82rem"><tr><th>key</th><th>⌥</th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
+  el.querySelectorAll('[data-opt]').forEach(cb=>cb.onchange=()=>{
+    const row=OPT_CHARS.find(r=>r[0]===+cb.dataset.opt);
+    _optSet(row,cb.dataset.sh==='1',cb.checked);profileTouched();renderOptChars();});
+  $('optinstall').onclick=()=>{
+    if(!haveU||!haveC){
+      if(!haveU&&device)loadUsage();if(!haveC&&device&&!_corpusAsked)loadCorpus();
+      toast(device?'loading usage and the shortcut sets — press again once they arrive':'connect first, so collisions can be checked',true);return;}
+    let k=0;
+    for(const r of OPT_CHARS)for(const sh of [false,true])
+      if(!optCollisions(r,sh).length&&!_optIsOn(r,sh)){_optSet(r,sh,true);k++;}
+    profileTouched();renderOptChars();
+    toast(`ticked ${k} item(s) with no collision — ⬆ Save to device`);};
+  $('optnone').onclick=()=>{
+    if(!confirm('Untick every macOS Option character?'))return;
+    for(const r of OPT_CHARS)for(const sh of [true,false])if(_optIsOn(r,sh))_optSet(r,sh,false);
+    profileTouched();renderOptChars();};}
+
 /* ===== 28.1: PALM REJECTION =================================================
    One row per configured device. Ticking "on" creates its entry in
    cfg.palm_rejection; unticking deletes it (the engine resets the table on
@@ -8869,7 +9155,26 @@ function renderEditor(){
   // not editable from the wrong place.
   const roleHere=srcLayer!=null&&layer===0;
   if(roleHere)ui.press='layer';
-  const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)" title="${layer===0?'Edit this here.':'This belongs to the button itself — edit it on layer 0.'}">Hold → Layer ${srcLayer}${layer===0?'':' (set on layer 0)'}</span>`:'';
+  // 28.4: name the TAP too. Josh, 2026-09-24: "tappingn E9 button 2 gets me to
+  // "Move window" ... that doesn't seem to be shown in the mapping editor UI,
+  // not in Layer 0 (base) OR in layer 4". It is half of the same record.
+  const _thNow=isBtn?_thLookup(sel.id,selDev):null;
+  const _tapTxt=(_thNow&&_thNow[0]&&!(_thNow[0][0]==='btn'&&+_thNow[0][1]===sel.id))
+    ?' · tap: '+actShort(_thNow[0]):(isBtn&&_thNow?' · tap: click':'');
+  const layerBadge=srcLayer!=null?` <span class="status layerkey" style="background:rgba(184,134,11,.55)" title="${layer===0?'Edit this here.':'This belongs to the button itself — edit it on layer 0.'}">Hold → Layer ${srcLayer}${esc(_tapTxt)}${layer===0?'':' (set on layer 0)'}</span>`:'';
+  // The Tap picker offered beside "Hold → Layer" (refresh() below).
+  const _tapPickHTML=()=>{
+    const cur=(_thNow&&_thNow[0])||['btn',sel.id];
+    const isClick=cur[0]==='btn'&&+cur[1]===sel.id;
+    const curMac=cur[0]==='macro'?+cur[1]:null;
+    const other=!isClick&&curMac==null;
+    return ` <label style="font-size:.78rem;margin-left:.4rem" title="A quick TAP does this; HOLDING opens the layer. Both live on the button itself, so this is set here on layer 0.">Tap:
+      <select id="tapAct" style="width:auto">
+        <option value="click" ${isClick?'selected':''}>click (${esc(btnLabel(sel.id).replace(/\s*\(.*\)$/,''))})</option>
+        ${other?`<option value="keep" selected>${esc(actShort(cur))} (current)</option>`:''}
+        ${Object.keys(cfg.macros||{}).map(Number).sort((a,b)=>a-b).map(n=>
+          `<option value="macro:${n}" ${n===curMac?'selected':''}>Macro ${n} · ${esc(macroLabel(n))}</option>`).join('')}
+      </select></label>`;};
   // Offered on layer 0 only, for the same reason: the option is what makes
   // the picker look like the place to change a role that does not live here.
   // 27.6: never for Scroll up / Scroll down (pseudo-buttons 20/21): a wheel
@@ -8956,7 +9261,13 @@ function renderEditor(){
         delete th[sel.id];
         return true;}
       const prev=_thLookup(sel.id,selDev);
-      th[sel.id]=[(prev&&prev[0])||['btn',sel.id],L];
+      // 28.4: the TAP half, from its own picker when it is on screen.
+      let tap=(prev&&prev[0])||['btn',sel.id];
+      const ts=$('tapAct');
+      if(ts){const v=ts.value;
+        if(v==='click')tap=['btn',sel.id];
+        else if(v.startsWith('macro:'))tap=['macro',+v.slice(6)];}
+      th[sel.id]=[tap,L];
       return true;}
     const lk=_lkFor(selDev,devScoped);
     if(L==null){ if(devScoped)lk[canon]=null; else delete lk[canon]; }
@@ -9007,7 +9318,7 @@ function renderEditor(){
             ?'selected':''}>${lbl}</option>`).join('')}</select>
         <div class="muted" style="font-size:.72rem">Wheel ticks fire on press
         only — a tick is an event, not a state you can hold.</div>`:
-      p==='layer'?`<select id="pressLayer">${allLayers().filter(L=>L!==0).map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(layerName(L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?' <span class="muted" style="font-size:.72rem">(quick tap still clicks)</span>':''}`:'';
+      p==='layer'?`<select id="pressLayer">${allLayers().filter(L=>L!==0).map(L=>`<option value="${L}" ${L===srcLayer?'selected':''}>${esc(layerName(L))}</option>`).join('')}<option value="__new__">＋ new layer</option></select>${isBtn?_tapPickHTML():''}`:'';
     // quick-assign boxes only make sense for direct actions, not layer/dpi
     $('pressAssign').style.display=(p==='key'||p==='macro'||p==='suppress'||p==='pass'||p==='value')?'':'none';
     const r=$('release').value;
@@ -11028,6 +11339,7 @@ function renderDisamb(){
 function renderOsTab(){
   if(!cfg)return;
   renderDisamb();
+  try{renderOptChars();}catch(e){console.warn('option chars',e);}   // 28.3
   const oses=osKnown();
   if(!osView||!oses.includes(osView))osView=(cfg.active_os&&oses.includes(cfg.active_os))?cfg.active_os:oses[0];
   $('osactive').textContent=cfg.active_os||'win';
