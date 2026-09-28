@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 28.7.1</title>
+<title>HID Config 29.0</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1145,6 +1145,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div class="tab" data-ut="train">Training</div>
   </div>
   <div class="panel" id="usagepane">
+    <!-- 29.0: the practice keyboard. Josh, 2026-09-28 10:36:52: "have a
+         keyoard at the top right that shows the current keyboard combinations
+         that the user has selected under "chosen to practice" (on mouse-over
+         key, show what that combination does) - Ensure this one is responsive
+         to changes in keys held just like the wireframe keyboards are." -->
+    <div id="practicekbd" style="float:right;margin:0 0 .5rem .8rem;max-width:100%"></div>
     <h2 style="font-size:1rem">What you actually reach for</h2>
     <p class="muted" style="font-size:.8rem">Recorded on the Pi, one counter
       per key-down, written to disk on a timer. Two ledgers, because shortcuts
@@ -1717,6 +1723,15 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.0',d:'2026-09-28',items:[
+   {t:'Usage: every column header sorts (click again to reverse); sorted by Group, each group has a ▾ header that folds',k:'usagepane'},
+   {t:'Usage: a practice keyboard at the top right — keys that finish a chord you are learning are lit (hover for them); hold a modifier and each key shows what it would do',k:'practicekbd'},
+   {t:'Shortcuts spelled “Up”, “PageDown” etc. in the sets are now recognised (8 of your practice chords were invisible to the keyboard and the wireframe labels)',k:'practicekbd'}]},
+ {v:'28.9',d:'2026-09-28',items:[
+   {t:'Training: every chosen shortcut is described from its shortcut set (no more “not in any set”), with per-week and total counts',k:'trainpane'},
+   {t:'Training: a Priority column — type a number or drag a row; “✓ know it” takes one off the list',k:'trainpane'},
+   {t:'What to track: a Know column (“I already know this one”) and per-week / total counts beside every shortcut',k:'trackpane'},
+   {t:'Training: “Suggested for your editing” — RStudio shortcuts for find & replace, refactoring and multiple cursors, one click to practise',k:'trainpane'}]},
  {v:'28.7.1',d:'2026-09-28',items:[
    {t:'With Show key presses on, the keys you hold change what the wireframe shows: Shift → capitals and symbols, Alt → the Mac characters (when Right Alt has them on), Ctrl → the shortcut, a layer key → that layer. Letters read lowercase otherwise',k:'devcards'}]},
  {v:'28.7',d:'2026-09-28',items:[
@@ -3055,6 +3070,13 @@ for(let i=0;i<12;i++)KEYS[0x3a+i]='F'+(i+1);
 KEYS[0x73]='F24';
 const MODS={0xe0:'LCtrl',0xe1:'LShift',0xe2:'LAlt',0xe3:'LWin',0xe4:'RCtrl',0xe5:'RShift',0xe6:'RAlt',0xe7:'RWin'};
 const NAME2KEY={};for(const[u,n]of Object.entries(KEYS))NAME2KEY[n.toLowerCase()]=+u;
+// 29.0: the spellings shortcut SETS use for keys whose face here is a symbol
+// or an abbreviation. Without these, "Ctrl+Alt+Up" or "Ctrl+PageDown" parsed
+// as nothing -- invisible on the practice keyboard and to the held-key labels.
+Object.assign(NAME2KEY,{up:0x52,down:0x51,left:0x50,right:0x4f,pageup:0x4b,
+  pagedown:0x4e,'page up':0x4b,'page down':0x4e,backspace:0x2a,delete:0x4c,
+  escape:0x29,return:0x28,spacebar:0x2c,space:0x2c,tab:0x2b,insert:0x49,
+  plus:0x2e,minus:0x2d,'+':0x2e});
 const NAME2MOD={ctrl:0xe0,lctrl:0xe0,shift:0xe1,lshift:0xe1,alt:0xe2,lalt:0xe2,win:0xe3,lwin:0xe3,cmd:0xe3,rctrl:0xe4,rshift:0xe5,ralt:0xe6,rwin:0xe7};
 // evdev -> HID usage (for RAW highlight); common subset
 const EV2HID={30:0x04,48:0x05,46:0x06,32:0x07,18:0x08,33:0x09,34:0x0a,35:0x0b,23:0x0c,36:0x0d,
@@ -4137,7 +4159,8 @@ function holdKey(u,on,dev){
   // keystroke for nothing). One redraw per tick, however many events.
   if(had!==on&&cfg&&(usageIsMod(+u)||layerOfSource('key',baselineOf(dev||'',+u),dev||'')!=null)){
     clearTimeout(holdKey._t);
-    holdKey._t=setTimeout(()=>{heldPaintReset();renderStage();},0);}
+    holdKey._t=setTimeout(()=>{heldPaintReset();renderStage();
+      if(typeof renderPracticeKbd==='function')renderPracticeKbd();},0);}
   document.querySelectorAll(_heldSel(u,dev)).forEach(e=>e.classList.toggle('held',on));}
 function holdBtn(box,on){
   if(on)_heldBtns.add(box);else _heldBtns.delete(box);
@@ -6109,6 +6132,9 @@ function fmtChars(n){
    expansion, the set that defines it. Only the first is stored; the rest are
    derived on every render, so a regrouped mapping re-labels its rows. */
 let usageGroupHide = new Set();
+let usageSortRev = false;              // 29.0: the second click on a header
+let usageGroupFold = new Set();        // 29.0: collapsed groups
+try{ usageGroupFold = new Set(JSON.parse(localStorage.getItem('hc.ugrpfold')||'[]')); }catch(_){}
 try{ usageGroupHide = new Set(JSON.parse(localStorage.getItem('hc.ugrphide')||'[]')); }catch(_){}
 function usageGroupOf(id, kind, desc){
   const mine = ((cfg && cfg.usage_groups) || {})[id];
@@ -6278,12 +6304,17 @@ function usageRows(kind){
     || r.note.toLowerCase().includes(q)
     || r.os.toLowerCase().includes(q)
     || r.group.g.toLowerCase().includes(q)) : rows;
-  return filtered.sort((a, b) =>
+  // 29.0: every column sorts, and a second click reverses it.
+  const txt = r => (r.note || (r.desc && r.desc.text) || r.setnote || '').toLowerCase();
+  const cmp = (a, b) =>
     usageSort === 'id' ? a.id.localeCompare(b.id)
+    : usageSort === 'desc' ? (txt(a) || '\uffff').localeCompare(txt(b) || '\uffff')
+    : usageSort === 'os' ? a.os.localeCompare(b.os)
     : usageSort === 'group'
       ? ((a.group.g || '\uffff').localeCompare(b.group.g || '\uffff')
          || (b.per_week || 0) - (a.per_week || 0))
-    : (b[usageSort] || 0) - (a[usageSort] || 0));
+    : (b[usageSort] || 0) - (a[usageSort] || 0);
+  return filtered.sort((a, b) => usageSortRev ? -cmp(a, b) : cmp(a, b));
 }
 
 // Jump to where the thing is EDITED, rather than opening an editor here.
@@ -6320,6 +6351,12 @@ function renderUsage(){
     const b = $('usageload'); if(b) b.onclick = () => loadUsage();
     return;
   }
+  // 29.0: a sortable header cell. The arrow shows the current sort.
+  const sh = (k, label, bare) => {
+    const on = usageSort === k;
+    const inner = `<a class="mlink usorthd" data-usort="${k}" title="Sort by ${esc(label)} (click again to reverse)"
+      style="color:inherit;text-decoration:none"><b>${esc(label)}</b>${on ? (usageSortRev ? ' ▴' : ' ▾') : ''}</a>`;
+    return bare ? inner : `<td>${inner}</td>`;};
   const table = (kind, title, openDefault, keep) => {
     // 28.5: the Group column's filter applies to THESE tables only -- not to
     // Training, which reads usageRows() for its own lists.
@@ -6335,13 +6372,22 @@ function renderUsage(){
         <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}${
           totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span></summary>
       ${rows.length ? `<table style="width:100%">
-        <tr><td><b>Does what</b></td><td><b>Group</b> <a class="mlink ugrpfilter"
+        <tr>${sh('desc','Does what')}<td>${sh('group','Group',1)} <a class="mlink ugrpfilter"
               title="Sort by group, and choose which groups to show"
               style="${usageGroupHide.size?'color:var(--hi);font-weight:700':''}">▾${usageGroupHide.size?' '+usageGroupHide.size+' hidden':''}</a></td>
-            <td><b>What you press</b></td><td><b>Per week</b></td>
-            <td><b>Total</b></td>${saved ? '<td><b>Chars saved</b></td>' : ''}
-            <td><b>OS</b></td><td></td></tr>
-        ${rows.map(r => `<tr>
+            ${sh('id','What you press')}${sh('per_week','Per week')}
+            ${sh('count','Total')}${saved ? sh('chars','Chars saved') : ''}
+            ${sh('os','OS')}<td></td></tr>
+        ${rows.map((r, i) => {
+          // 29.0: sorted by group, each group gets a header row that folds.
+          const g = r.group.g || '';
+          const head = (usageSort === 'group' && (i === 0 || (rows[i-1].group.g || '') !== g))
+            ? `<tr class="ugrphdr" data-ugfold="${esc(g)}" style="cursor:pointer">
+                 <td colspan="${saved ? 8 : 7}" style="font-weight:600;padding-top:.4rem">
+                 ${usageGroupFold.has(g) ? '▸' : '▾'} ${g ? esc(g) : '<i>(no group)</i>'}
+                 <span class="muted" style="font-weight:400">· ${rows.filter(x => (x.group.g || '') === g).length}</span></td></tr>` : '';
+          if(usageSort === 'group' && usageGroupFold.has(g)) return head;
+          return head + `<tr>
           <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
           ${usageGroupCell(r)}
           <td style="font-family:ui-monospace,monospace;max-width:18rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.id)}">${esc(r.id)}</td>
@@ -6354,7 +6400,7 @@ function renderUsage(){
           <td>${kind==='shortcuts'?devCellHTML(r.id):''}<a class="mlink"
                  data-ugo="${kind}" data-uid="${esc(r.id)}"
                  title="Go to where this is defined">✎</a></td>
-        </tr>`).join('')}</table>`
+        </tr>`;}).join('')}</table>`
         : '<p class="muted">Nothing recorded yet.</p>'}
     </details>`;
   };
@@ -6438,7 +6484,17 @@ function renderUsage(){
     ${usageSetsHTML()}`;
   $('usagefilter').oninput = e => { usageFilter = e.target.value; renderUsage();
     const b = $('usagefilter'); if(b){ b.focus(); b.setSelectionRange(b.value.length, b.value.length); } };
-  $('usagesort').onchange = e => { usageSort = e.target.value; renderUsage(); };
+  $('usagesort').onchange = e => { usageSort = e.target.value; usageSortRev = false; renderUsage(); };
+  el.querySelectorAll('[data-usort]').forEach(a => a.onclick = ev => {
+    ev.preventDefault();
+    const k = a.dataset.usort;
+    if(usageSort === k) usageSortRev = !usageSortRev; else { usageSort = k; usageSortRev = false; }
+    renderUsage(); });
+  el.querySelectorAll('[data-ugfold]').forEach(tr => tr.onclick = () => {
+    const g = tr.dataset.ugfold;
+    if(usageGroupFold.has(g)) usageGroupFold.delete(g); else usageGroupFold.add(g);
+    try{ localStorage.setItem('hc.ugrpfold', JSON.stringify([...usageGroupFold])); }catch(_){}
+    renderUsage(); });
   // 28.5: edit a row's group. Written on the user's action only; an emptied
   // box DELETES the entry so the derived group shows through again.
   el.querySelectorAll('.ugrpedit').forEach(a => a.onclick = ev => {
@@ -6650,6 +6706,8 @@ function renderTrack(){
       : '<p class="muted">' + (device ? 'reading the shortcut sets…' : 'Connect to read the shortcut sets.') + '</p>';
     return;}
   trackState();
+  // 28.9: counts beside each shortcut, matched by the normalised chord.
+  const _cnt = _usageByNorm(), _haveU = !!usageData;
   el.innerHTML = corpus.map(c => {
     const t = cfg.kbd_track[c.file] || {on:false, off:[]};
     const chords = Object.entries(c.shortcuts || {});
@@ -6664,13 +6722,18 @@ function renderTrack(){
         <span class="muted" style="font-size:.78rem">· ${esc(c.os||'')} · ${nOn}/${chords.length} tracked</span>${warn}
       </summary>
       <table style="width:100%;font-size:.8rem">
-        <tr><td><b>Track</b></td><td><b>Train</b></td><td><b>Shortcut</b></td><td><b>Does what</b></td></tr>
-        ${chords.map(([k, does]) => `<tr>
+        <tr><td><b>Track</b></td><td><b>Train</b></td><td title="I already know this one"><b>Know</b></td>
+            <td><b>Shortcut</b></td><td><b>Does what</b></td><td><b>/wk</b></td><td><b>Total</b></td></tr>
+        ${chords.map(([k, does]) => { const u = _cnt.get(_chordNorm(k)); return `<tr>
           <td><input type="checkbox" data-trackone="${esc(c.file)}" data-chord="${esc(k)}"
                 ${isTracked(c.file,k)?'checked':''} ${t.on?'':'disabled'}></td>
           <td><input type="checkbox" data-train="${esc(k)}" ${isTrained(k)?'checked':''}></td>
+          <td><input type="checkbox" data-know="${esc(k)}" ${isKnown(k)?'checked':''}
+                title="I already know this one"></td>
           <td style="font-family:ui-monospace,monospace">${esc(k)}</td>
-          <td class="muted">${esc(does)}</td></tr>`).join('')}
+          <td class="muted">${esc(does)}</td>
+          <td>${_haveU ? (u ? u.per_week : 0) : '—'}</td>
+          <td class="muted">${_haveU ? (u ? u.count : 0) : '—'}</td></tr>`; }).join('')}
       </table></details>`;}).join('');
 
   el.querySelectorAll('[data-trackset]').forEach(cb => cb.onchange = () => {
@@ -6687,55 +6750,197 @@ function renderTrack(){
     setTracked(cb.dataset.trackone, cb.dataset.chord, cb.checked));
   el.querySelectorAll('[data-train]').forEach(cb => cb.onchange = () => {
     setTrained(cb.dataset.train, cb.checked);
-    renderTraining();});}
+    if(cb.checked && isKnown(cb.dataset.train)) setKnown(cb.dataset.train, false);
+    renderTraining(); renderTrack();});
+  // 28.9: "I already know this one" -- takes it off the practice list.
+  el.querySelectorAll('[data-know]').forEach(cb => cb.onchange = () => {
+    setKnown(cb.dataset.know, cb.checked); renderTraining(); renderTrack();});}
 
+/* ===== 29.0: THE PRACTICE KEYBOARD =========================================
+   A compact US keyboard in the Usage tab. Keys that finish one of his
+   "chosen to practise" chords are lit, with how many; hovering a key lists
+   those chords and what they do. While a modifier is HELD (the same source
+   as the wireframes: heldInputs()), only the chords with exactly that
+   modifier set stay lit, and each key's face shows what it would do. */
+const PK_ROWS=[
+ [['Esc',0x29,1.2],null,['F1',0x3a],['F2',0x3b],['F3',0x3c],['F4',0x3d],null,['F5',0x3e],['F6',0x3f],['F7',0x40],['F8',0x41],null,['F9',0x42],['F10',0x43],['F11',0x44],['F12',0x45]],
+ [['`',0x35],['1',0x1e],['2',0x1f],['3',0x20],['4',0x21],['5',0x22],['6',0x23],['7',0x24],['8',0x25],['9',0x26],['0',0x27],['-',0x2d],['=',0x2e],['⌫',0x2a,1.6]],
+ [['Tab',0x2b,1.4],['q',0x14],['w',0x1a],['e',0x08],['r',0x15],['t',0x17],['y',0x1c],['u',0x18],['i',0x0c],['o',0x12],['p',0x13],['[',0x2f],[']',0x30],['\\',0x31,1.2]],
+ [['Caps',0x39,1.7],['a',0x04],['s',0x16],['d',0x07],['f',0x09],['g',0x0a],['h',0x0b],['j',0x0d],['k',0x0e],['l',0x0f],[';',0x33],["'",0x34],['Enter',0x28,1.9]],
+ [['Shift',0xe1,2.2],['z',0x1d],['x',0x1b],['c',0x06],['v',0x19],['b',0x05],['n',0x11],['m',0x10],[',',0x36],['.',0x37],['/',0x38],['Shift',0xe5,2.4]],
+ [['Ctrl',0xe0,1.4],['Win',0xe3,1.2],['Alt',0xe2,1.2],['Space',0x2c,5.2],['Alt',0xe6,1.2],['Ctrl',0xe4,1.2],null,['←',0x50],['↑',0x52],['↓',0x51],['→',0x4f],null,['PgUp',0x4b,1.1],['PgDn',0x4e,1.1],['Home',0x4a,1.1],['End',0x4d,1.1]]];
+function renderPracticeKbd(){
+  const el=$('practicekbd');if(!el)return;
+  const chosen=(cfg&&cfg.kbd_train)||[];
+  if(!chosen.length){el.innerHTML='';return;}
+  // key usage -> [{chord, mods, desc}]
+  const by=new Map();
+  for(const ch of chosen){const pc=parseCorpusChord(ch);if(!pc)continue;
+    const d=corpusDesc(ch);
+    (by.get(pc.canon)||by.set(pc.canon,[]).get(pc.canon)).push({ch,mods:pc.mods,d:d?d.text.replace(/^[^—]{1,40}—\s*/,''):''});}
+  const bits=heldModBits(heldInputs());
+  const U=40;
+  const rowHTML=r=>r.map(k=>{
+    if(!k)return '<span style="display:inline-block;width:10px"></span>';
+    const[lab,u,w]=k,list=by.get(u)||[];
+    const live=bits?list.filter(x=>x.mods===bits):list;
+    const isHeldMod=usageIsMod(u)&&heldInputs().keys.includes(u);
+    const face=bits&&live.length?esc(live[0].d.slice(0,10)||live[0].ch):esc(lab);
+    const tip=list.length?list.map(x=>`${x.ch} — ${x.d||'(no description)'}`).join('\n'):'';
+    const bg=isHeldMod?'rgba(239,68,68,.55)':live.length?(bits?'rgba(34,197,94,.45)':'rgba(234,179,8,.35)'):'transparent';
+    return `<span title="${esc(tip)}" style="display:inline-flex;align-items:center;justify-content:center;
+      position:relative;width:${Math.round((w||1)*U)}px;height:${U-8}px;margin:1px;border:1px solid var(--line);
+      border-radius:4px;font-size:.62rem;line-height:1;overflow:hidden;background:${bg};color:var(--fg);
+      ${live.length?'font-weight:600':''}">${face}${list.length&&!bits?`<sup style="position:absolute;right:2px;top:1px;font-size:.5rem">${list.length}</sup>`:''}</span>`;}).join('');
+  el.innerHTML=`<div class="muted" style="font-size:.7rem;margin-bottom:.15rem">Practising ${chosen.length} ·
+    ${bits?`holding <b>${esc(modsName(bits))}</b> — green keys do something you are learning`
+          :'lit keys finish a chord you are learning (hover for them); hold a modifier to see what each does'}</div>
+    <div style="font-family:ui-monospace,monospace;white-space:nowrap;overflow-x:auto">${PK_ROWS.map(r=>`<div>${rowHTML(r)}</div>`).join('')}</div>`;}
+
+/* ===== 28.9: TRAINING -- R SHORTCUTS THIS WEEK ===========================
+   Josh, 2026-09-28: "make the training things highest priority: I want to
+   work on my R shortcuts this week."
+
+   "NOT IN ANY SET" came from reading the description out of the USAGE
+   payload's `describe`, which only covers chords he has already PRESSED (the
+   first 400 used ids). A shortcut he ticked "Train" on in What to track but
+   has not used yet had no entry, so it read "not in any set" although it
+   came from a set. The corpus is the source now (active OS first), with
+   the usage description as the fallback.
+
+   COUNTS are matched by the normalised chord (_chordNorm), because usage
+   spells "Alt+Shift+L" where the set spells "Shift+Alt+L".
+
+   PRIORITY is the order of cfg.kbd_train, which was already a list: typing
+   a number moves the item there and shifts the rest back by one; dragging a
+   row does the same. Written only on his action. */
+function _usageByNorm(){
+  const m=new Map();
+  for(const[id,v]of Object.entries((typeof usageData!=='undefined'&&usageData&&usageData.shortcuts)||{})){
+    const k=_chordNorm(id),o=m.get(k)||{count:0,per_week:0};
+    o.count+=v.count||0;o.per_week=Math.round((o.per_week+(v.per_week||0))*100)/100;m.set(k,o);}
+  return m;}
+function corpusDesc(chord){
+  const want=_chordNorm(chord),aos=/^mac/i.test(cfg&&cfg.active_os||'')?'mac':'win';
+  let any=null;
+  for(const c of (refData('corpus')||[])){
+    const fam=/^mac/i.test(c.os||'')?'mac':/^win/i.test(c.os||'')?'win':'';
+    for(const[k,d]of Object.entries(c.shortcuts||{}))
+      if(_chordNorm(k)===want){
+        const hit={text:d,app:c.app||c.name||c.file};
+        if(fam===aos)return hit;
+        any=any||hit;}}
+  return any;}
+function isKnown(ch){return ((cfg&&cfg.kbd_known)||[]).includes(ch);}
+function setKnown(ch,on){
+  cfg.kbd_known=cfg.kbd_known||[];
+  const i=cfg.kbd_known.indexOf(ch);
+  if(on&&i<0)cfg.kbd_known.push(ch);
+  if(!on&&i>=0)cfg.kbd_known.splice(i,1);
+  if(on)setTrained(ch,false);             // known is the opposite of practising
+  if(!cfg.kbd_known.length)delete cfg.kbd_known;
+  profileTouched();}
+function setTrainPriority(ch,pos){
+  const t=cfg.kbd_train||[];const i=t.indexOf(ch);if(i<0)return;
+  t.splice(i,1);t.splice(Math.max(0,Math.min(t.length,pos)),0,ch);profileTouched();}
+// BONUS (his question): from the RStudio (Windows) set, the ones that fit
+// find-and-replace, refactoring and multiple cursors. Chords only -- the
+// descriptions come from the set itself at render time.
+const R_EDIT_PICKS=[
+  ['Ctrl+Alt+Shift+M','rename a symbol everywhere it is used in scope — refactoring in one step'],
+  ['Ctrl+Alt+Up','add a cursor on the line above — multiple cursors'],
+  ['Ctrl+Alt+Down','add a cursor on the line below — multiple cursors'],
+  ['Ctrl+Alt+Shift+Up','move the active cursor up (with several cursors)'],
+  ['Ctrl+F3','find the selected text — then F3 / Shift+F3 to step through'],
+  ['Ctrl+Shift+J','replace this one and jump to the next'],
+  ['Ctrl+Shift+F','find (and replace) across files'],
+  ['Ctrl+Alt+X','extract the selection into a function'],
+  ['Ctrl+Alt+V','extract the selection into a variable'],
+  ['Ctrl+Shift+Up','expand the selection outward (word → call → block)'],
+  ['Alt+Up','move lines up / down (Alt+Down)'],
+  ['Shift+Alt+Up','copy lines up / down'],
+  ['Ctrl+Shift+A','reformat the selection'],
+  ['Ctrl+Shift+C','comment / uncomment'],
+  ['Ctrl+D','delete the line']];
 function renderTraining(){
   const el = $('trainbody'); if(!el) return;
-  if(!usageData){ el.innerHTML = '<p class="muted">Load the Usage tab first.</p>';
-    return; }
-  const used = new Set(Object.keys(usageData.shortcuts || {}));
-  const rows = usageRows('shortcuts');
+  const haveU = !!usageData;
+  const rows = haveU ? usageRows('shortcuts') : [];
   const top = rows.slice().sort((a,b)=>b.per_week-a.per_week).slice(0,10);
   const rare = rows.filter(r => r.per_week < 1)
     .sort((a,b)=>a.per_week-b.per_week).slice(0,20);
-  // 24.0: what Josh has CHOSEN to practise, first -- "The Training portion of
-  // the Usage tab will identify the shortcuts that I've chosen to focus on
-  // (and what they do), and give me a UI for seeing how often I've used them
-  // in the past week". Above the two automatic lists, because a deliberate
-  // choice outranks a statistic.
   const chosen = (cfg && cfg.kbd_train) || [];
-  const byId = {};
-  rows.forEach(r => { byId[r.id] = r; });
-  const desc = (usageData.describe || {});
+  const counts = _usageByNorm();
+  const desc = (haveU && usageData.describe) || {};
+  if(!refData('corpus') && device && !_corpusAsked) loadCorpus();
+  const cnt = id => counts.get(_chordNorm(id));
   const chosenHTML = !chosen.length ? '' : `
     <details open style="margin-bottom:.5rem"><summary style="cursor:pointer">
       <b>Chosen to practise</b>
-      <span class="muted">· ${chosen.length}</span></summary>
-      <table style="width:100%">
-        <tr><td><b>Shortcut</b></td><td><b>Does what</b></td>
-            <td><b>This week</b></td><td><b>Per week</b></td><td></td></tr>
-        ${chosen.map(id => {
-          const r = byId[id];
-          const d = desc[id];
-          // A chosen shortcut with no usage row has been used ZERO times --
-          // which is the single most useful thing this list can tell you, so
-          // it says so rather than being left out for want of a number.
-          const week = r ? r.count : 0;
-          const per = r ? r.per_week : 0;
-          return `<tr>
+      <span class="muted">· ${chosen.length} · drag a row, or type its priority</span></summary>
+      <table style="width:100%" id="traintbl">
+        <tr><td><b>Priority</b></td><td><b>Shortcut</b></td><td><b>Does what</b></td>
+            <td><b>Per week</b></td><td><b>Total</b></td><td></td></tr>
+        ${chosen.map((id, i) => {
+          const c = cnt(id);
+          const d = desc[id] || corpusDesc(id);
+          // A chosen shortcut never used reads 0 -- the most useful thing this
+          // list can say -- rather than being left out for want of a number.
+          const per = c ? c.per_week : 0, tot = c ? c.count : 0;
+          return `<tr draggable="true" data-trow="${esc(id)}" style="cursor:grab">
+            <td style="white-space:nowrap"><span class="muted" title="drag to reorder">⠿</span>
+              <input type="number" min="1" max="${chosen.length}" value="${i+1}"
+                data-tprio="${esc(id)}" style="width:3.2rem"></td>
             <td style="font-family:ui-monospace,monospace">${esc(id)}</td>
-            <td class="muted">${d ? esc(d.text) : '<i>not in any set</i>'}</td>
-            <td${week ? '' : ' style="color:var(--warn)"'}>${week}</td>
-            <td>${per}</td>
-            <td><a class="mlink" data-untrain="${esc(id)}"
-                   title="stop practising this">✕</a></td></tr>`;}).join('')}
+            <td class="muted">${d ? esc(d.text) + (d.app ? ` <span style="font-size:.72rem">· ${esc(d.app)}</span>` : '')
+                 : (refData('corpus') ? '<i>not in any set</i>' : '<i>reading the shortcut sets…</i>')}</td>
+            <td${per ? '' : ' style="color:var(--warn)"'}>${haveU ? per : '—'}</td>
+            <td class="muted">${haveU ? tot : '—'}</td>
+            <td style="white-space:nowrap"><a class="mlink" data-tknow="${esc(id)}"
+                   title="I already know this one — stop practising it">✓ know it</a>
+                <a class="mlink" data-untrain="${esc(id)}" title="stop practising this">✕</a></td></tr>`;}).join('')}
       </table>
-      <p class="muted" style="font-size:.75rem">A zero in <b>This week</b> is
-        the point of the list: it is a shortcut you decided to learn and have
-        not reached for.</p>
+      <p class="muted" style="font-size:.75rem">A zero in <b>Per week</b> is the point of the list:
+        a shortcut you decided to learn and have not reached for.${haveU ? '' : ' Load Usage for the counts.'}</p>
     </details>`;
-
-  el.innerHTML = chosenHTML + `
+  // The bonus picks not yet chosen, known, or missing from the sets here.
+  const picks = R_EDIT_PICKS.filter(([ch]) => !chosen.includes(ch) && !isKnown(ch));
+  const picksHTML = !picks.length ? '' : `
+    <details style="margin-bottom:.5rem"><summary style="cursor:pointer">
+      <b>Suggested for your editing</b> <span class="muted">· RStudio: find &amp; replace,
+      refactoring, multiple cursors · ${picks.length}</span></summary>
+      <table style="width:100%">${picks.map(([ch, why]) => { const d = corpusDesc(ch);
+        return `<tr><td style="font-family:ui-monospace,monospace">${esc(ch)}</td>
+          <td>${esc(why)}${d ? `<div class="muted" style="font-size:.72rem">${esc(d.text)}</div>` : ''}</td>
+          <td><a class="mlink" data-tadd="${esc(ch)}">＋ practise</a></td></tr>`;}).join('')}</table>
+    </details>`;
+  const known = (cfg && cfg.kbd_known) || [];
+  const knownHTML = !known.length ? '' : `<p class="muted" style="font-size:.76rem">✓ ${known.length}
+    marked "I already know this" — untick them in What to track to practise again.</p>`;
+  const bind = () => {
+    el.querySelectorAll('[data-untrain]').forEach(a => a.onclick = () => {
+      setTrained(a.dataset.untrain, false); renderTraining(); renderTrack();});
+    el.querySelectorAll('[data-tknow]').forEach(a => a.onclick = () => {
+      setKnown(a.dataset.tknow, true); renderTraining(); renderTrack();
+      toast('marked as known: ' + a.dataset.tknow);});
+    el.querySelectorAll('[data-tadd]').forEach(a => a.onclick = () => {
+      setTrained(a.dataset.tadd, true); renderTraining(); renderTrack();});
+    el.querySelectorAll('[data-tprio]').forEach(inp => inp.onchange = () => {
+      setTrainPriority(inp.dataset.tprio, (+inp.value || 1) - 1); renderTraining();});
+    let dragId = null;
+    el.querySelectorAll('[data-trow]').forEach(tr => {
+      tr.ondragstart = e => { dragId = tr.dataset.trow; e.dataTransfer.effectAllowed = 'move'; };
+      tr.ondragover = e => { e.preventDefault(); };
+      tr.ondrop = e => { e.preventDefault();
+        if(!dragId || dragId === tr.dataset.trow) return;
+        setTrainPriority(dragId, (cfg.kbd_train || []).indexOf(tr.dataset.trow));
+        renderTraining(); };});};
+  if(typeof renderPracticeKbd === 'function') renderPracticeKbd();
+  if(!haveU){
+    el.innerHTML = chosenHTML + picksHTML + knownHTML
+      + '<p class="muted">Load the Usage tab for your most- and least-used lists.</p>';
+    bind(); return;}
+  el.innerHTML = chosenHTML + picksHTML + knownHTML + `
     <p class="muted" style="font-size:.8rem">Two lists, because "use it more"
     and "delete it" are both good outcomes for something you configured and
     never press.</p>
@@ -6756,6 +6961,7 @@ function renderTraining(){
         </tr>`).join('')}</table>`
         : '<p class="muted">Nothing under once a week — either you use everything, or there is not much history yet.</p>'}
     </details>`;
+  bind();
   el.querySelectorAll('[data-ugo]').forEach(a =>
     a.onclick = () => usageGoto(a.dataset.ugo, a.dataset.uid));
   // 26.1: open the row's device breakdown in place.
@@ -7468,7 +7674,7 @@ function heldEffects(dev){
       if(!pc||pc.mods!==bits)continue;
       add('key:'+pc.canon,{
         kind:'shortcut',
-        tone:isTracked(c.file,chord)?'inuse':(isTrained(chord)?'learn':''),
+        tone:(isTracked(c.file,chord)||isKnown(chord))?'inuse':(isTrained(chord)?'learn':''),
         label:desc,
         detail:(c.name||c.file)+(c.os?' · '+c.os:'')});}}
   return out;}
@@ -14421,7 +14627,7 @@ function switchTab(t){
   if(t==='log')renderChangelog();
   // 21.0: Usage fetches on first open, not on connect -- statistics are the
   // least urgent thing on a 9 KB/s channel.
-  if(t==='usage'){ if(!usageData&&device)loadUsage(); renderUsage(); renderTrack(); renderTraining(); }
+  if(t==='usage'){ if(!usageData&&device)loadUsage(); renderUsage(); renderTrack(); renderTraining(); renderPracticeKbd(); }
   // 24.5: renderPerf asks the Pi for nothing, so it needs no `device` guard --
   // the tab is readable with the engine disconnected, which is exactly when
   // someone is most likely to be wondering what is costing what.
