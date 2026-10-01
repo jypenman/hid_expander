@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.1.2</title>
+<title>HID Config 29.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1302,7 +1302,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   </div>
 </div>
 
-<div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div></div>
+<div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div>
+  <details class="panel" id="mwsec" data-uikey="mousewrite">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">✍ Mouse writing — type, and the mouse draws it
+      <span class="muted" id="mwstate" style="font-weight:400;font-size:.8rem"></span></h3></summary>
+    <div id="mwbody"></div>
+  </details></div>
 
 <div id="page-exp" style="display:none">
   <div class="panel">
@@ -1723,6 +1728,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.2',d:'2026-10-01',items:[
+   {t:'Mouse writing: tap Ctrl+Alt+Cmd/Win twice, then type — the mouse draws each letter. Cmd+arrows change speed and size live; three fonts (sans, handwriting, serif). Macros tab → ✍ Mouse writing',k:'mousewrite'}]},
+ {v:'29.1.3',d:'2026-10-01',items:[
+   {t:'Select a layer, then a modifier (e.g. LShift): mouse buttons now show their modifier rule — “\\c” instead of “//c” — and a rule written for one layer no longer shows on the others',k:'devcards'}]},
  {v:'29.1.2',d:'2026-10-01',items:[
    {t:'Modifier + mouse button shortcuts: select Shift (or Ctrl, Alt, Win), then Shift-click a button — or the other way round. On a layer the rule belongs to that layer and starts from what the button already does there',k:'devcards'}]},
  {v:'29.1.1',d:'2026-09-30',items:[
@@ -2376,6 +2385,7 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
       else if(curFile===8){testRuns=(obj&&obj.runs)||[];testHistMeta=obj||{};renderTestHistory();}
       else if(curFile===3){
         lastEng=obj;adoptEffective(obj);updateConStat();
+        if($('mwsec')&&$('mwsec').open)try{renderMouseWrite();}catch(e){}   // 29.2
         // 26.5: the Test tab asks for a FRESH status at the start and end of
         // a run; resolve anyone waiting on this read.
         try{const w=window._engWaiters||[];window._engWaiters=[];w.forEach(r=>r(obj));}catch(_){}
@@ -4080,7 +4090,7 @@ function render(){
   p.title=layerTriggers(i).length?`layer ${i} — opened by ${layerTriggers(i).join(', ')}`
     :`layer ${i} — nothing opens it yet`;
   p.onclick=()=>{layer=i;render();};L.appendChild(p);});
-  renderStage();try{renderWfLegend();}catch(e){console.warn('legend',e);}try{renderPalm();}catch(e){console.warn('palm',e);}renderMacros();renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
+  renderStage();try{renderWfLegend();}catch(e){console.warn('legend',e);}try{renderPalm();}catch(e){console.warn('palm',e);}renderMacros();try{renderMouseWrite();}catch(e){console.warn('mouse writing',e);}renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
   renderHeldBar();
   requestAnimationFrame(drawChords);
 }
@@ -4350,7 +4360,8 @@ function renderLayoutKbd(d,w){
         +(k.label||btnLabel(b))+_hpb.chip
         +(b===0?`<span class="chip" title="Baseline: this physical button is disabled">∅</span>`
           :b!==bPhys?`<span class="chip" title="Baseline: this physical button reports as ${esc(btnLabel(b))}">≡${b}</span>`:'')
-        +(eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
+        +(_hpb.chord!=null?`<span class="chip heldchip" title="${esc(_hpb.chordTip)}">${esc(String(_hpb.chord).slice(0,22))}</span>`
+          :eff!==undefined?`<span class="chip">${esc(actShort(eff))}</span>`:'')
         +elLayerBadge('btn',b,d.id);
       if(editing)bindEditKey(el,d,idx);
       else el.onclick=e=>{
@@ -7683,6 +7694,11 @@ function heldPaint(id,kind,dev){
     _heldCache=heldEffects(dev);_heldCacheDev=dev;}
   const list=_heldCache.get(kind+':'+id)||[];
   const bits=heldModBits(heldInputs());
+  // 29.2: a BUTTON with a modifier rule REPLACES what it shows -- with Shift
+  // held it no longer does its plain mapping, so showing both is wrong.
+  if(kind==='btn'){const c=list.find(x=>x.kind==='chord');
+    if(c)return {center:null,chord:c.label,chip:'',
+      chordTip:`${c.label}  (${c.detail})`};}
   let center=kind==='key'?heldCenter(id,bits):null;
   if(!list.length)return {center,chip:''};
   // 27.9 (B.a): with Ctrl / Alt / Win held -- anything beyond Shift alone --
@@ -7764,12 +7780,28 @@ function heldEffects(dev){
     if(macRows)for(const r of OPT_CHARS){
       const act=(bits===aB&&r[4])?['dead',r[2]]:['char',bits===aB?r[2]:r[3]];
       add('key:'+r[0],{kind:'chord',tone:'',label:actShort(act),detail:modsName(bits)+' [Mac mode]'});}
+    // 29.2: a chord belongs to a LAYER (or to every layer, -1). Josh,
+    // 2026-10-01: with layer 6 selected and LShift picked, the buttons kept
+    // showing their layer-6 "//u" / "//c" instead of the Shift rules "\\u" /
+    // "\\c". The sweep ignored the layer field and the key-only tag never
+    // reached a button. The layer is the one a held key opens, else the one
+    // being viewed -- the same question the wireframe is already answering.
+    const cL=L!=null?L:layer;
+    const pick=new Map();          // tag -> {act,o,l}; a layer rule beats -1
     for(const[o,tbl]of tbls)for(const[k,act]of Object.entries(tbl)){
-      const[,m,u]=k.split(',').map(Number);
-      if(m!==bits)continue;
+      const[l,m,u]=k.split(',').map(Number);
+      if(m!==bits||(l!==-1&&l!==cL))continue;
       if(macRows&&act&&(act[0]==='char'||act[0]==='dead'))continue;
-      add('key:'+u,{kind:'chord',tone:'',label:actShort(act)||'∅',
-                    detail:modsName(bits)+(o?' ['+o+' only]':'')});}}
+      const tag=isBtnMc(u)?'btn:'+(u-BTN_MC):'key:'+u;
+      // 21.7, as the engine does it: an any-layer BUTTON rule yields to a
+      // mapping the active layer gives that button.
+      if(l===-1&&cL>0&&isBtnMc(u)&&effMouse(d,cL,u-BTN_MC)!=null)continue;
+      const prev=pick.get(tag);
+      if(prev&&prev.l!==-1&&l===-1)continue;
+      pick.set(tag,{act,o,l});}
+    for(const[tag,{act,o,l}]of pick)
+      add(tag,{kind:'chord',tone:'',label:actShort(act)||'∅',
+               detail:modsName(bits)+(l>=0?' · '+layerName(l):'')+(o?' ['+o+' only]':'')});}
 
   // ---- 3. COMBOS whose members INCLUDE everything held: the remaining
   //         members are the keys that would complete one.
@@ -9948,6 +9980,58 @@ function macroUsersHTML(list){
         +`">${esc(u.label)}${bits?' <span class="muted">'+esc(bits)+'</span>':''}</span>`;})
     .join('')+'</div>';}
 
+/* ===== 29.2: MOUSE WRITING =================================================
+   Josh, 2026-10-01: "Set up a bunch of macros (or whatever is most
+   efficient) to be able to quickly draw by moving the mouse. This is for use
+   in drawing programs, when I want to write notes."
+   The engine does the drawing (mouse_write.py); this panel explains the keys
+   and edits cfg.mouse_write {font, size, speed} -- the STARTING values. The
+   keys change size and speed live; "Keep" copies those back here. Reads
+   never create cfg.mouse_write (§2.5 rule 5); only the inputs below do. */
+const MW_FONTS={sans:'Sans (Hershey Futura Light)',script:'Handwriting (Hershey Script)',
+  serif:'Serif (Hershey Times Roman)'};
+const MW_DEF={font:'sans',size:40,speed:300};
+function _mwSet(k,v){cfg.mouse_write=cfg.mouse_write||{};cfg.mouse_write[k]=v;profileTouched();}
+function renderMouseWrite(){
+  const el=$('mwbody');if(!el||!cfg)return;
+  const c=Object.assign({},MW_DEF,cfg.mouse_write||{});
+  const st=lastEng&&lastEng.mouse_write;
+  $('mwstate').textContent=st?(st.on?'— ON':'— off'):'';
+  const fonts=(st&&st.fonts&&st.fonts.length?st.fonts:Object.keys(MW_FONTS));
+  const live=st?`<p style="font-size:.82rem">Now: <b>${st.on?'ON':'off'}</b> · size <b>${st.size}</b>
+      · speed <b>${st.speed}</b> counts/s${st.queued?` · ${st.queued} waiting`:''}${st.drawn?` · ${st.drawn} drawn`:''}
+      ${st.dropped?` · <span style="color:var(--err)">${st.dropped} refused (queue full)</span>`:''}
+      ${st.missing?` · <span style="color:var(--warn)">${st.missing} with no glyph</span>`:''}
+      ${st.font_error?`<br><span style="color:var(--err)">${esc(st.font_error)}</span>`:''}</p>`
+    :'<p class="muted" style="font-size:.8rem">Live size and speed show here once the engine has reported.</p>';
+  el.innerHTML=`<p style="font-size:.82rem">Put the pointer where the writing should start, in a drawing
+    app with a pen tool. Tap <b>Ctrl + Alt + Cmd/Win</b> together twice (within 0.6 s) to start. Then type:
+    each key is drawn with the mouse, left button held for each stroke. The host never sees the keys.</p>
+    <table style="font-size:.8rem">
+      <tr><td><b>Cmd/Win + → / ←</b></td><td>faster / slower by 25% of the current speed</td></tr>
+      <tr><td><b>Cmd/Win + Shift + → / ←</b></td><td>by 1%</td></tr>
+      <tr><td><b>Cmd/Win + ↑ / ↓</b></td><td>bigger / smaller by 25%</td></tr>
+      <tr><td><b>Cmd/Win + Shift + ↑ / ↓</b></td><td>by 1%</td></tr>
+      <tr><td><b>Enter</b></td><td>new line, back under where you started</td></tr>
+      <tr><td><b>Backspace</b></td><td>takes back the last letter not drawn yet (drawn ones stay)</td></tr>
+      <tr><td><b>Escape</b>, or the double tap again</td><td>stop — anything not yet drawn is dropped</td></tr>
+    </table>
+    <p class="muted" style="font-size:.76rem">Speed changes work mid-word. Every mouse report is the same
+      length, so pointer acceleration keeps letters in shape but changes their size with speed — turn off
+      “Enhance pointer precision” (Windows) for sizes that don't move when you change speed.</p>
+    ${live}
+    <div class="row"><div>
+      <label>Font</label><select id="mwfont">${fonts.map(f=>`<option value="${esc(f)}" ${f===c.font?'selected':''}>${esc(MW_FONTS[f]||f)}</option>`).join('')}</select>
+      <label>Starting size (capital height, mouse counts)</label><input type="number" id="mwsize" min="6" max="2000" step="1" value="${+c.size}">
+      <label>Starting speed (mouse counts per second)</label><input type="number" id="mwspeed" min="20" max="20000" step="10" value="${+c.speed}">
+      ${st?`<button id="mwkeep" style="margin-top:.4rem">Keep the current size and speed as the starting ones</button>`:''}
+    </div></div>`;
+  $('mwfont').onchange=e=>{_mwSet('font',e.target.value);toast('font set — ⬆ Save to device');};
+  $('mwsize').onchange=e=>{_mwSet('size',+e.target.value||MW_DEF.size);toast('starting size set — ⬆ Save to device');};
+  $('mwspeed').onchange=e=>{_mwSet('speed',+e.target.value||MW_DEF.speed);toast('starting speed set — ⬆ Save to device');};
+  if($('mwkeep'))$('mwkeep').onclick=()=>{_mwSet('size',st.size);_mwSet('speed',st.speed);
+    renderMouseWrite();toast('kept size '+st.size+' and speed '+st.speed+' — ⬆ Save to device');};}
+
 function renderMacros(){
   const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)</h2>';
   if(!cfg.macro_names)cfg.macro_names={};
@@ -11419,6 +11503,15 @@ function liveRaw(txt){
 function liveOut(txt){
   // 28.7.1: a Right Alt tap, seen the moment it happens rather than at the
   // next status read (which waits for input to go quiet).
+  // 29.2: mouse writing on/off, and live speed/size, the same way.
+  const mw=/^mouse_write (ON|OFF|speed|size)\s*([\d.]+)?/.exec(txt);
+  if(mw){
+    if(lastEng){lastEng.mouse_write=lastEng.mouse_write||{};
+      if(mw[1]==='ON'||mw[1]==='OFF')lastEng.mouse_write.on=mw[1]==='ON';
+      else lastEng.mouse_write[mw[1]]=+mw[2];}
+    if($('mwsec')&&$('mwsec').open)renderMouseWrite();
+    toast(mw[1]==='ON'?'✍ mouse writing ON — type to draw; Escape stops'
+      :mw[1]==='OFF'?'✍ mouse writing off':`✍ ${mw[1]} ${mw[2]}`);return;}
   const om=/^option characters (ON|OFF)/.exec(txt);
   if(om){if(lastEng)lastEng.option_mode=om[1]==='ON';
     heldPaintReset();renderStage();
