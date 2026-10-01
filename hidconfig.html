@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.1</title>
+<title>HID Config 29.1.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1723,6 +1723,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.1.2',d:'2026-10-01',items:[
+   {t:'Modifier + mouse button shortcuts: select Shift (or Ctrl, Alt, Win), then Shift-click a button — or the other way round. On a layer the rule belongs to that layer and starts from what the button already does there',k:'devcards'}]},
+ {v:'29.1.1',d:'2026-09-30',items:[
+   {t:'Swap: every layer follows, including layers where the other side had nothing; a tap of “click” clicks the button it now belongs to; and a device’s own button mappings are no longer folded away when the page re-reads after Save',k:'devcards'}]},
  {v:'29.1',d:'2026-09-28',items:[
    {t:'Right Alt now switches Mac mode (every Mac character, nothing to tick) and Windows mode (ordinary Alt, except the characters you ticked) — explained in the ⌥ panel; the engine starts in Windows mode',k:'optsec'},
    {t:'Without Show key presses, the keys you press in the browser drive the wireframe and the practice keyboard',k:'devcards'},
@@ -3384,7 +3388,7 @@ function harvestSlot(slot,scope){
   if(scope!=='baseline'){
     if(slot.kind==='btn'){
       const th=_thLookup(slot.id,slot.dev);
-      if(th){b.layer=th[1];b.tapAct=th[0];}
+      if(th){b.layer=th[1];b.tapAct=th[0];b.fromBtn=slot.id;}
       if(scope==='devcustom')_thFor(slot,scope)[slot.id]=null;  // vacate HERE
       else delete _thFor(slot,scope)[slot.id];
     }else{
@@ -3410,6 +3414,17 @@ function _xAct(v,toKind){
   return{v:a};}
 
 function writeSlot(slot,b,notes,scope){
+  // 29.1.1: "this device only" must not let the SHARED table show through a
+  // layer where the other side had nothing -- that is how Josh's button kept
+  // an old layer-2 mapping after a swap. Present-but-null means "explicitly
+  // nothing here" (CLAUDE.md §2) and the engine honours it.
+  if(scope==='devcustom'){
+    const shared=slot.kind==='btn'?(cfg.mouse_mappings||{}):(cfg.kbd_mappings||{});
+    const id=slot.kind==='btn'?slot.id:slot.canon;
+    for(const L of allLayers()){
+      const k=`${L},${id}`;
+      if((b.map[L]===undefined||b.map[L]===null)&&shared[k]!==undefined&&shared[k]!==null)
+        _kmapFor(slot,scope)[k]=null;}}
   for(const[L,v]of Object.entries(b.map)){
     const r=_xAct(v,slot.kind);
     if(r.note){notes.push(`layer ${L}: ${r.note}`);continue;}
@@ -3437,6 +3452,9 @@ function writeSlot(slot,b,notes,scope){
   if(b.layer!=null){
     if(slot.kind==='btn'){
       let tap=b.tapAct;
+      // 29.1.1: "click" means click THIS button. A tap of ['btn', 5] moved to
+      // button 4 would click button 5 (Forward) -- what his swap produced.
+      if(tap&&tap[0]==='btn'&&b.fromBtn!=null&&+tap[1]===+b.fromBtn)tap=['btn',slot.id];
       if(!tap){const r=_xAct(b.map[0],'btn');tap=(r.v&&Array.isArray(r.v))?r.v:['btn',slot.id];}
       _thFor(slot,scope)[slot.id]=[tap,b.layer];
     }else _lkFor(slot.dev,scope==='devcustom')[slot.canon]=b.layer;}
@@ -3864,14 +3882,16 @@ function migrateDevices(){
     devs.push({id,name:m.label||s.pin,kind:s.kind,pin:s.pin,mac:m.mac||'',wireframe:'ansi'});}
   cfg.devices=devs;}
 function migrateByDevice(){
-  // kbd_mappings_by_device is now a supported PORT-SCOPED Custom overlay
-  // (see custom_kbd in the engine), so it is preserved as-is. Only the
-  // long-dead mouse_mappings_by_device transitional table is folded in.
-  cfg.kbd_mappings_by_device=cfg.kbd_mappings_by_device||{};
-  const t=cfg.mouse_mappings_by_device;if(!t)return;
-  for(const[dev,m]of Object.entries(t))for(const[k,v]of Object.entries(m)){
-    if(cfg.mouse_mappings[k]===undefined)cfg.mouse_mappings[k]=v;}
-  delete cfg.mouse_mappings_by_device;}
+  // 29.1.1: THIS NO LONGER TOUCHES mouse_mappings_by_device. It used to fold
+  // that table into the shared one and DELETE it, on every read -- written
+  // when the table was "long-dead", and never removed after 20.8.2 BF2 made
+  // it the real per-device table the engine reads. CLAUDE.md §3 lists exactly
+  // this ("merged into the shared table on load") as rejected, and it is a
+  // load-time edit (§5). Josh, 2026-09-30: "I just swapped some buttons, but
+  // the layer 2 assignments didn't follow" -- the swap wrote the E9's own
+  // table, the read-back after Save folded layers 3 and 5 into EVERY device's
+  // table, dropped layers 1 and 2, and deleted the rest.
+  cfg.kbd_mappings_by_device=cfg.kbd_mappings_by_device||{};}
 function connRank(d){return !d.mac?1:(btStat[d.mac]===true?0:(btStat[d.mac]===false?2:1));}
 function allDevices(){
   if(!cfg)return[];
@@ -4336,16 +4356,17 @@ function renderLayoutKbd(d,w){
       else el.onclick=e=>{
         if(e.shiftKey&&!e.altKey&&layerJump({type:'btn',id:b,phys:bPhys,
             label:k.label||'',dev:d.id})){e.preventDefault();return;}
-        if(e.shiftKey||e.altKey){
-          // 20.9.8 #1: combos and typed sequences are built from CANONICAL
-          // KEYS -- the engine feeds only keys to the combo detector, so a
-          // mouse button can never be a member. Silently ignoring the click
-          // made that look like a bug in the wireframe. Say it, and point at
-          // the mechanism that does work.
-          toast('Combos and sequences are key-only: the engine\'s combo '
-            +'detector is fed canonical keys and never sees mouse buttons. '
-            +'For “button + button”, give one button Hold → Layer and map '
-            +'the other on that layer.', true);
+        if(e.shiftKey&&!e.altKey){
+          // 29.1.2: Shift-click a button after a modifier (or a modifier
+          // after a button) makes a MODIFIER + BUTTON rule -- a mod-chord
+          // whose key is the button. Josh, 2026-10-01: refusing it was
+          // "pretty off from a user perspective". addComboSel still refuses
+          // button-in-a-combo, with the reason.
+          addComboSel(d.id,null,BTN_MC+b);return;}
+        if(e.altKey){
+          // 20.9.8 #1: typed sequences are built from keys; a button has no
+          // character to contribute. Say it rather than ignore the click.
+          toast('Typed sequences are key-only — a mouse button types nothing.',true);
           return;}
         const me={type:'btn',id:b,phys:bPhys,label:k.label||'',dev:d.id};
         if(swapPick)return doSwapPick(d.id,me);
@@ -4843,9 +4864,23 @@ function splitMods(keys){
     else plain.push(u);}
   return{mods,plain};}
 function mcKey(mods,canon,L){return `${L===undefined?-1:L},${mods},${canon}`;}
+// 29.1.2: a mouse button as the key of a mod-chord. Same constant as the
+// engine's BTN_CHORD_BASE: buttons sit above every HID usage, so a button
+// rule can never be read as a key rule.
+const BTN_MC=0x10000;
+function isBtnMc(u){return +u>=BTN_MC;}
+function mcName(u){return isBtnMc(u)?btnLabel(u-BTN_MC):(KEYS[u]||MODS[u]||'?');}
 function mcTable(os){return scopeTable(os||'','mod_chords');}
 // find an existing mod-chord for these mods+key, in any OS scope
-function findModChord(mods,canon){
+function findModChord(mods,canon,exactKey){
+  // 29.1.2: a selection that already names its rule (sel.mcKey) is found by
+  // that key first. A layer-6 button rule opened from the rules list while
+  // viewing layer 0 was otherwise not found, and the editor would have
+  // written a second, any-layer rule.
+  if(exactKey){
+    if((cfg.mod_chords||{})[exactKey]!==undefined)return{key:exactKey,os:'',action:cfg.mod_chords[exactKey]};
+    for(const[os,p]of Object.entries(cfg.os_profiles||{}))
+      if(p&&p.mod_chords&&p.mod_chords[exactKey]!==undefined)return{key:exactKey,os,action:p.mod_chords[exactKey]};}
   for(const L of[-1,layer]){
     const k=mcKey(mods,canon,L);
     if((cfg.mod_chords||{})[k]!==undefined)return{key:k,os:'',action:cfg.mod_chords[k]};
@@ -4887,6 +4922,12 @@ function layerJump(target){
   const L=layerOfSel(sel);
   if(L==null)return false;                               // first is not a layer
   if(layerOfSel(target)!=null)return false;              // both layers: combo
+  // 29.1.2: already ON a layer, a layer button + a MODIFIER is "Shift +
+  // (layer 6 + right button)", not "show me Shift on layer 2". On a non-zero
+  // layer the button's own mapping wins over its hold (25.2), so it is not
+  // acting as a layer key here.
+  if(layer>0&&sel.type==='btn'&&target.type==='key'
+     &&isModUsage(baselineOf(target.dev||'',target.id)))return false;
   const from=sel.label||(sel.type==='btn'?btnLabel(sel.id):(KEYS[sel.id]||'key'));
   // Open the editor straight away: "use the layer functionality" means
   // being ready to assign, not one more click away from it.
@@ -4895,9 +4936,16 @@ function layerJump(target){
     ?btnLabel(target.id):(KEYS[target.id]||'this key'))} does there, then ⬆ Save`);
   return true;}
 
-function addComboSel(dev,u){
+function addComboSel(dev,u,canonIn){
   if(seqSel.length){toast('finish or cancel the sequence first',true);return;}
-  const canon=baselineOf(dev,u);
+  const canon=canonIn!=null?canonIn:baselineOf(dev,u);
+  // 29.1.2: a button can join a MODIFIER rule, never a combo. Refuse before
+  // anything below deletes the combo being extended.
+  const BTN_NO_COMBO='A mouse button can join a modifier (Shift + button), '
+    +'but not a combo: holding every click back for the combo window would '
+    +'delay that button. For “button + button”, give one button Hold → Layer '
+    +'and map the other on that layer.';
+  if(isBtnMc(canon)&&sel&&sel.type==='combo'){toast(BTN_NO_COMBO,true);return;}
   window._comboMemberDevs=window._comboMemberDevs||{};
   // ---- extend / shrink the CURRENT selection -------------------------------
   let keys=[],md={},curOs='',curAction=null,curWin=60,curDev=null;
@@ -4921,6 +4969,8 @@ function addComboSel(dev,u){
   }else{
     // ---- start a NEW selection, seeding from the selected single key -------
     if(sel&&sel.type==='key'){const sd=sel.dev||'',sc=baselineOf(sd,sel.id);keys.push(sc);md[sc]=sd;}
+    else if(sel&&sel.type==='btn'){keys.push(BTN_MC+sel.id);md[BTN_MC+sel.id]=sel.dev||'';}
+    else if(sel&&sel.type==='held'&&isBtnMc(canon))keys.push(...sel.keys.filter(k=>!keys.includes(k)));
     if(!keys.includes(canon)){keys.push(canon);md[canon]=dev;}
     if(keys.length<2){toast('click a key first, then Shift-click another to combine them',true);return;}
     // If these keys already have a rule, SELECT it instead of making a duplicate
@@ -4928,7 +4978,7 @@ function addComboSel(dev,u){
     if(sp0.mods&&sp0.plain.length===1){
       const ex=findModChord(sp0.mods,sp0.plain[0]);
       if(ex){sel={type:'modchord',mods:sp0.mods,canon:sp0.plain[0],keys,mcKey:ex.key,os:ex.os};
-        render();toast('editing existing '+modsName(sp0.mods)+'+'+(KEYS[sp0.plain[0]]||'?')+' rule');return;}
+        render();toast('editing existing '+modsName(sp0.mods)+'+'+mcName(sp0.plain[0])+' rule');return;}
     }else{
       const exId=comboIdFor(keys);
       if((cfg.combos||{})[exId]){sel={type:'combo',id:exId};render();
@@ -4960,13 +5010,24 @@ function addComboSel(dev,u){
     if(plain.length!==1){
       toast('a modifier rule needs exactly one non-modifier key (e.g. Cmd + `)',true);
       render();return;}
-    const canon2=plain[0],k=mcKey(mods,canon2,-1);
+    const canon2=plain[0];
+    // 29.1.2: a BUTTON rule is written for the layer being viewed -- "Shift +
+    // (layer 6 + right button)" -- and starts from what the button already
+    // does there, so adding Shift is one step, not a re-pick. Key rules
+    // stay any-layer, as before.
+    const bL=isBtnMc(canon2)&&layer>0?layer:-1;
+    const k=mcKey(mods,canon2,bL);
+    if(!curAction&&isBtnMc(canon2)){
+      const own=effMouse(md[canon2]||'',layer,canon2-BTN_MC);
+      if(Array.isArray(own))curAction=own.slice();}
     const t=mcTable(curOs);
     t[k]=curAction||['suppress'];
     sel={type:'modchord',mods,canon:canon2,keys,mcKey:k,os:curOs};
     render();
-    toast(modsName(mods)+' + '+(KEYS[canon2]||'?')+' rule ready — set its action, then ⬆ Save');
+    toast(modsName(mods)+' + '+(bL>0?layerName(bL)+' + ':'')+mcName(canon2)
+      +' rule ready — set its action, then ⬆ Save');
     return;}
+  if(keys.some(isBtnMc)){toast(BTN_NO_COMBO,true);render();return;}
   // ---- otherwise a plain multi-key combo ----------------------------------
   const id=comboIdFor(keys);
   cfg.combos=cfg.combos||{};
@@ -5042,13 +5103,13 @@ function renderMapTable(){
   for(const[os,tbl]of mcSources)
     for(const[k,act]of Object.entries(tbl)){
       const[L,m,u]=k.split(',').map(Number);
-      ch+=`<div>⌘ ${esc(modsName(m))}+${esc(KEYS[u]||MODS[u]||'?')} → ${esc(actShort(act)||'(swallow)')}`
+      ch+=`<div>⌘ ${L>=0?esc(layerName(L))+' · ':''}${esc(modsName(m))}+${esc(mcName(u))} → ${esc(actShort(act)||'(swallow)')}`
         +(os?` <span class="muted">[${esc(os)} only]</span>`:'')+noteBadge(noteKey('mc',k))
         +` <a class="mlink" onclick='sel={type:"modchord",mods:${m},canon:${u},keys:[${u}],mcKey:${JSON.stringify(k)},os:${JSON.stringify(os)}};render()'>edit</a></div>`;}
   cb.innerHTML=ch;}
 
 /* ============ assignment table (HID-Remapper style, editable) ============ */
-function asgKeyName(u){return MODS[u]||KEYS[u]||('0x'+(+u).toString(16));}
+function asgKeyName(u){return isBtnMc(u)?btnLabel(u-BTN_MC):(MODS[u]||KEYS[u]||('0x'+(+u).toString(16)));}
 function asgActLabel(a){if(a===undefined)return'';if(a===null)return'—';
   return typeof a==='number'?(a===0?'∅ suppress':(KEYS[a]||MODS[a]||'?')):actShort(a);}
 function asgSearchResults(q,isBtn,allowExp){
@@ -8835,15 +8896,16 @@ function comboScopeDev(id,c){
    combo this fires from the engine's mod-chord table, which is the only path
    that can see held modifiers. */
 function renderModChordEd(ed){
-  const cur=findModChord(sel.mods,sel.canon);
+  const cur=findModChord(sel.mods,sel.canon,sel.mcKey);
   const os=cur?cur.os:(sel.os||'');
   const key=cur?cur.key:mcKey(sel.mods,sel.canon,-1);
   const a=(cur&&cur.action)||['suppress'];
   const ui=actionToUI(a);
-  const title=modsName(sel.mods)+' + '+(KEYS[sel.canon]||MODS[sel.canon]||'?');
+  const kL=+String(key).split(',')[0];
+  const title=modsName(sel.mods)+' + '+(kL>=0?layerName(kL)+' + ':'')+mcName(sel.canon);
   ed.innerHTML=`<h2 style="font-size:1rem">${esc(title)}</h2>
     <p class="muted" style="font-size:.78rem">Fires whenever <b>${esc(modsName(sel.mods))}</b> is held and
-    <b>${esc(KEYS[sel.canon]||'?')}</b> is pressed, on any layer and any device. The held modifier is
+    <b>${esc(mcName(sel.canon))}</b> is pressed, ${kL>=0?'on <b>'+esc(layerName(kL))+'</b> only':'on any layer'} and any device. The held modifier is
     <i>not</i> passed through — the action below replaces it entirely.
     <b>Shift-click</b> another key to change the combination.<br>
     <b>Pass through unchanged</b> is the exception: it means “this exact combination is deliberately
@@ -8857,6 +8919,7 @@ function renderModChordEd(ed){
         <option value="key" ${a[0]==='key'?'selected':''}>Key (no modifiers)…</option>
         <option value="macro" ${a[0]==='macro'?'selected':''}>Macro…</option>
         <option value="text" ${a[0]==='text'?'selected':''}>Type text…</option>
+        ${a[0]==='expansion'?`<option value="expansion" selected>Expansion: ${esc(a[2]||'')}</option>`:''}
       </select><div id="mcargwrap"></div>
       <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
@@ -8878,7 +8941,7 @@ function renderModChordEd(ed){
       <input type="checkbox" data-mcmod="${b}" ${m&b?'checked':''}>${n}</label>`).join('');
   const refresh=()=>{
     const k=$('mcact').value,w=$('mcargwrap');
-    const c2=(findModChord(sel.mods,sel.canon)||{}).action||['suppress'];
+    const c2=(findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action||['suppress'];
     const outKey=c2[0]==='keymods'||c2[0]==='key'?c2[1]:(ui.pressKey||0x28);
     const outMods=c2[0]==='keymods'?(c2[2]||0):0;
     w.innerHTML=
@@ -8886,12 +8949,13 @@ function renderModChordEd(ed){
       k==='key'?`<select id="mcarg">${keyOpts(outKey)}</select>`:
       k==='macro'?`<select id="mcarg">${macOpts(c2[0]==='macro'?c2[1]:(ui.pressMacro||1))}</select>`:
       k==='text'?`<input type="text" id="mcarg" value="${esc(c2[0]==='text'?(c2[1]||''):'')}" placeholder="text">`:'';
-    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress')?'':'none';
+    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress'||k==='expansion')?'':'none';
     bindArgs();};
   const commit=()=>{
     const k=$('mcact').value,el=$('mcarg'),v=el?el.value:null;
     let act;
     if(k==='suppress')act=['suppress'];
+    else if(k==='expansion')act=(findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action||['suppress'];
     else if(k==='passthru')act=['passthru'];
     else if(k==='text')act=['text',v==null?'':v];
     else if(k==='macro')act=['macro',+v||1];
