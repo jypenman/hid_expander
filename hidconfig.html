@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.4.2</title>
+<title>HID Config 29.5</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1760,6 +1760,8 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.5',d:'2026-10-07',items:[
+   {t:'Right Alt mode now decides the Mac Option shortcuts too: Windows mode leaves Alt+←/→ as Back/Forward; Mac mode moves by word. Alt no longer opens the ribbon after one',k:'optsec'}]},
  {v:'29.4.2',d:'2026-10-07',items:[
    {t:'Option characters on Windows (≈ and others typed as an Alt code) are no longer cut in half when you let go of the keys; that was also what moved focus to the ribbon',k:'optsec'}]},
  {v:'29.4.1',d:'2026-10-07',items:[
@@ -11793,7 +11795,7 @@ function liveOut(txt){
   if(om){if(lastEng)lastEng.option_mode=om[1]==='ON';
     heldPaintReset();renderStage();
     if(typeof renderOptChars==='function'&&$('optsec')&&$('optsec').open)renderOptChars();
-    toast('Right Alt: '+(om[1]==='ON'?'Mac mode — every Mac character':'Windows mode — Alt is Windows Alt (ticked characters still type)'));return;}
+    toast('Right Alt: '+(om[1]==='ON'?'Mac mode — every Mac character, and Option+arrows move by word':'Windows mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
   if(txt.startsWith('expand')){expandFlash=Date.now()+600;return;}
