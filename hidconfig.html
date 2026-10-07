@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.2</title>
+<title>HID Config 29.4.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -602,14 +602,23 @@ align-items:center;justify-content:center}
 .wfbody.editing .kabs{cursor:crosshair}
 .rubber{position:absolute;border:1px dashed var(--hi);background:rgba(59,130,246,.15);
   pointer-events:none;z-index:50}
+/* 29.3: no `position` here. This used to say position:relative, which beat
+   `.kabs .key{position:absolute}` (same specificity, later rule), so every
+   selected key dropped out of the absolute layout into normal flow and
+   stacked one line below the last -- Josh's "stair-step". Absolute keys
+   take z-index as they are. */
 .key.multisel{outline:3px solid var(--hi)!important;outline-offset:2px;
-  box-shadow:inset 0 0 0 2px rgba(59,130,246,.55)!important;
-  position:relative;z-index:8}
+  box-shadow:inset 0 0 0 2px rgba(59,130,246,.55)!important;z-index:8}
 .wfbody.editing .key.multisel{background:rgba(59,130,246,.22)!important}
 #palette{position:fixed;right:1.1rem;bottom:1.1rem;z-index:60;background:Canvas;color:CanvasText;
 border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.35);
 padding:.8rem .9rem;width:250px;display:none}
 #palette h3{margin:.1rem 0 .3rem;font-size:.9rem}
+/* 29.3: a number input's default width is ~147px; three in a row in a 250px
+   palette put Height past the right edge, where its spinner could not be
+   reached. Let the row share the width instead. */
+#palette label{min-width:0}
+#palette input[type=number]{width:100%;min-width:0;box-sizing:border-box}
 #palette hr{border:none;border-top:1px solid var(--line);margin:.55rem 0}
 #maprow{display:flex;gap:.8rem;align-items:flex-start}
 #rightcol{flex:0 0 300px;position:sticky;top:.5rem;max-height:calc(100vh - 1rem);
@@ -627,6 +636,15 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 #btlogpane>summary{cursor:pointer;padding:.55rem .8rem;font-weight:600;white-space:nowrap;font-size:.85rem}
 @media(max-width:1000px){#maprow{flex-direction:column}
 #rightcol{flex:1 1 auto;position:static;max-height:none;width:100%}}
+/* 29.2.1: syntax primers -- one compact strip, categories open below */
+.primer{font-size:.78rem;margin:.3rem 0}
+.primer .pq{display:flex;flex-wrap:wrap;gap:.15rem .9rem;align-items:baseline}
+.primer code{background:var(--panel2);padding:0 .25rem;border-radius:3px;white-space:nowrap}
+.primer .pcats{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.25rem}
+.primer .pcat{cursor:pointer;border:1px solid var(--line);border-radius:999px;padding:0 .5rem;font-size:.74rem;background:transparent;color:inherit}
+.primer .pcat.on{background:var(--hi);color:var(--bg)}
+.primer table{border-collapse:collapse;margin-top:.3rem;width:100%}
+.primer td{padding:.1rem .4rem;border-top:1px solid var(--line);vertical-align:top}
 </style></head><body>
 
 <div class="bar topbar" id="topbar">
@@ -667,6 +685,13 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <span id="toasterr" style="display:none;color:var(--err);font-size:.85rem"
     title="The last error stays until you clear it or another replaces it (27.7)"><span id="toasterrtxt"></span>
     <button id="toasterrx" style="padding:0 .35rem;margin-left:.25rem" title="Clear">×</button></span>
+  <span id="qnotewrap" style="position:relative;display:inline-block;margin-left:auto">
+    <textarea id="qnote" rows="1" spellcheck="true"
+      placeholder="✎ New HID Note — ⌘/Ctrl+Enter saves"
+      title="Type a note; ⌘+Enter (Ctrl+Enter) saves it to HID Notes on the Pi, timestamped, exactly as ;;n;; does. Grows as you type, up to half the screen; drag the corner to resize. Esc leaves it; the draft is kept in this browser."
+      style="width:17rem;min-height:1.6rem;max-height:50vh;resize:both;font:inherit;font-size:.82rem;
+             padding:.2rem .4rem;vertical-align:middle;background:var(--bg);color:var(--fg);
+             border:1px solid var(--line);border-radius:6px"></textarea></span>
   <span style="position:relative;display:inline-block">
     <button id="msglogbtn" title="Every message this page has shown since it was loaded, with the time. Kept in this page's memory only — nothing is read from or sent to the Pi.">🗒</button>
     <div id="msglog" style="display:none;position:absolute;top:100%;right:0;z-index:60;
@@ -828,8 +853,10 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
  <div id="maprow">
  <div style="flex:1;min-width:0">
   <div class="bar" style="margin:.2rem 0;align-items:center;flex-wrap:wrap;gap:.4rem">
+    <b style="font-size:.85rem" title="Pick a layer to see and edit what every key does while that layer is held">Layers:</b>
     <div class="pills" id="layers" style="margin:0"></div>
-    <button id="showkeys" style="margin-left:auto">▶ Show key presses</button>
+    <span id="brkeys" class="muted" style="margin-left:auto;font-size:.76rem;cursor:help"></span>
+    <button id="showkeys">▶ Show key presses</button>
     <span class="muted" id="showkeysinfo"></span>
   </div>
   <div id="chordbar">
@@ -1302,12 +1329,15 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   </div>
 </div>
 
-<div id="page-macros" style="display:none"><div class="panel" id="macrolist"></div>
+<div id="page-macros" style="display:none"><div style="display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap">
+ <div style="flex:1 1 30rem;min-width:0"><div class="panel" id="macrolist"></div>
   <details class="panel" id="mwsec" data-uikey="mousewrite">
     <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">✍ Mouse writing — type, and the mouse draws it
       <span class="muted" id="mwstate" style="font-weight:400;font-size:.8rem"></span></h3></summary>
     <div id="mwbody"></div>
   </details></div>
+ <div class="panel primer" id="macprimer" data-primer="mac" style="flex:0 1 24rem;position:sticky;top:.5rem;max-height:92vh;overflow:auto"></div>
+</div></div>
 
 <div id="page-exp" style="display:none">
   <div class="panel">
@@ -1471,7 +1501,9 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="bar"><button id="expread" disabled>⬇ Read expansions</button>
     <button id="expwrite" class="primary" disabled>⬆ Save expansions</button>
     <span class="muted">Expansions now also auto-load when you Connect.</span></div>
+  <div class="primer" id="expprimer1" data-primer="exp"></div>
   <table style="width:100%" id="exptable"></table>
+  <div class="primer" id="expprimer2" data-primer="exp"></div>
   <div class="bar" style="margin-top:.4rem">
     <button onclick="addExpRow('','')">+ row</button>
     <!-- 22.7: the same Save as the top bar. The list is long enough now that
@@ -1728,6 +1760,22 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.4.2',d:'2026-10-07',items:[
+   {t:'Option characters on Windows (≈ and others typed as an Alt code) are no longer cut in half when you let go of the keys; that was also what moved focus to the ribbon',k:'optsec'}]},
+ {v:'29.4.1',d:'2026-10-07',items:[
+   {t:'A mouse button Baselined to a key can be a layer key (E9 "7" as the layer 7 key no longer types 7)',k:'devcards'}]},
+ {v:'29.4',d:'2026-10-07',items:[
+   {t:'The wireframe follows a held layer key or mouse layer button, with Show key presses off; mouse-writing and Right Alt notices arrive live too',k:'brkeys'},
+   {t:'Mouse writing: the pointer is the top-left corner of the text; a small circle on entering, a wiggle on leaving',k:'mousewrite'}]},
+ {v:'29.3',d:'2026-10-01',items:[
+   {t:'Layout editor: multi-selected keys no longer jump into a stair-step; W/H/↻ apply to every selected element; the fields fit the palette',k:'devcards'},
+   {t:'The page no longer rewrites mapping groups when it loads (now fix_config.py --only group-wildcards)',k:'devcards'}]},
+ {v:'29.2.2',d:'2026-10-01',items:[
+   {t:'Quick-note box at the top right: type, ⌘/Ctrl+Enter saves to HID Notes',k:'qnote'},
+   {t:'Mouse writing now starts on keyboards whose Baseline swaps modifiers (the Fintie)',k:'mousewrite'}]},
+ {v:'29.2.1',d:'2026-10-01',items:[
+   {t:'Syntax primers: Expansions (above and below the list) and Macros (right column). Backslash is the escape character; {{…}} takes every macro key name; unknown names are no longer dropped silently',k:'exptable'},
+   {t:'“Layers:” label, and a chip saying whether this browser is listening to your keys',k:'layers'}]},
  {v:'29.2',d:'2026-10-01',items:[
    {t:'Mouse writing: tap Ctrl+Alt+Cmd/Win twice, then type — the mouse draws each letter. Cmd+arrows change speed and size live; three fonts (sans, handwriting, serif). Macros tab → ✍ Mouse writing',k:'mousewrite'}]},
  {v:'29.1.3',d:'2026-10-01',items:[
@@ -2326,6 +2374,7 @@ function onReport(e){
     window._evbuf=(window._evbuf||'')+piece;
     if(more)return;
     const txt=window._evbuf; window._evbuf='';
+    if(txt.startsWith('ST:')){liveState(txt.slice(3));return;}   // 29.4
     if(txt.startsWith('OUT:')){const raw=txt.slice(4);log(annotate(raw),'tx','outlog');liveOut(raw);}
     else if(NOTICE_RX.test(txt))log(txt,'ev','linklog');   // 24.9
     else{log(annotate(txt),'ev','log');liveRaw(txt);}}
@@ -2678,6 +2727,7 @@ $('evon').onclick=e=>{eventsOn(60);clickFx(e.target);};
 let _showKeysState=0;
 function showKeysIdle(){        // 19.2 BF2 #4i: single place that resets the button
   _showKeysState=0;clearTimeout(_showKeysTimer);
+  try{brKeysState();}catch(_){}
   const b=$('showkeys');if(!b)return;
   b.classList.remove('rec');b.textContent='▶ Show key presses';
   $('showkeysinfo').textContent='';
@@ -2727,6 +2777,7 @@ function updateCurProf(){
   el.className='status'+(nm?' on':'');}
 function pfResult(text){
   if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
+  if(text.startsWith('NOTE ')){qnoteDone(text);return;}                   // 29.2.2
   if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
   if(text.startsWith('CORPUS')){
     try{ corpusData=JSON.parse(text.slice(text.indexOf('\n')+1));
@@ -3054,7 +3105,7 @@ function normalize(){for(const k of['macros','mouse_mappings','kbd_mappings','wh
 'port2_kbd','tap_hold','button_inputs','button_labels',
 'baseline','combos','mapping_groups','stepper_by_layer',
 'kbd_mappings_by_device','os_profiles','layer_keys'])if(!cfg[k])cfg[k]={};
-migrateDevices();migrateByDevice();repairGroupMembers();
+migrateDevices();migrateByDevice();
 /* 21.0 BF1: THE UI NO LONGER EDITS YOUR CONFIG ON LOAD.
    ------------------------------------------------------
    Four things used to run right here, silently rewriting the config the
@@ -3072,21 +3123,10 @@ migrateDevices();migrateByDevice();repairGroupMembers();
    renderer indexes into, so drawing a page cannot throw. Nothing is
    invented, nothing is repaired, nothing is seeded. */
 if(!cfg.dynamic_triggers)cfg.dynamic_triggers={};}
-/* 19.4 #1.4 repair: earlier imports filed combos and modifier shortcuts under
-   "kbd:*,<key>" -- a wildcard matching that key on EVERY layer.  That is why
-   unrelated rules (CapsLock+Right) turned up inside imported groups.  Drop
-   those wildcards from any group that also holds real chord/combo members,
-   which is the signature of the bad import. */
-function repairGroupMembers(){
-  let fixed=0;
-  for(const[name,g]of Object.entries(cfg.mapping_groups||{})){
-    const mem=g.members||[];
-    const hasRules=mem.some(m=>m.startsWith('mc:')||m.startsWith('combo:'));
-    if(!hasRules)continue;
-    const clean=mem.filter(m=>!/^(kbd|mouse):\*,/.test(m));
-    if(clean.length!==mem.length){fixed+=mem.length-clean.length;g.members=clean;}}
-  if(fixed)setTimeout(()=>toast(`cleaned ${fixed} over-broad group member${fixed>1?'s':''} — ⬆ Save to device`),400);
-  return fixed;}
+/* 29.3: repairGroupMembers() lived here and ran inside normalize() on every
+   read, rewriting mapping_groups and toasting "cleaned N over-broad group
+   members — Save" -- a load-time edit, which CLAUDE.md §5 forbids. It is now
+   `fix_config.py --only group-wildcards` (dry run by default). */
 
 /* ============ names ============ */
 const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:'H',0x0c:'I',
@@ -3101,6 +3141,9 @@ const KEYS={0x04:'A',0x05:'B',0x06:'C',0x07:'D',0x08:'E',0x09:'F',0x0a:'G',0x0b:
 0x65:'Menu',0x76:'Props',0x78:'Stop',0x79:'Again',0x7a:'Undo',0x7b:'Cut',
 0x7c:'Copy',0x7d:'Paste',0x7e:'Find'};
 for(let i=0;i<12;i++)KEYS[0x3a+i]='F'+(i+1);
+// 29.2.1: F13-F23 named too. Macro 34 holds F17; with no name, its text
+// form lost the usage page and re-saving it would have broken the step.
+for(let i=13;i<=23;i++)KEYS[0x68+i-13]='F'+i;
 KEYS[0x73]='F24';
 const MODS={0xe0:'LCtrl',0xe1:'LShift',0xe2:'LAlt',0xe3:'LWin',0xe4:'RCtrl',0xe5:'RShift',0xe6:'RAlt',0xe7:'RWin'};
 const NAME2KEY={};for(const[u,n]of Object.entries(KEYS))NAME2KEY[n.toLowerCase()]=+u;
@@ -3111,7 +3154,9 @@ Object.assign(NAME2KEY,{up:0x52,down:0x51,left:0x50,right:0x4f,pageup:0x4b,
   pagedown:0x4e,'page up':0x4b,'page down':0x4e,backspace:0x2a,delete:0x4c,
   escape:0x29,return:0x28,spacebar:0x2c,space:0x2c,tab:0x2b,insert:0x49,
   plus:0x2e,minus:0x2d,'+':0x2e});
-const NAME2MOD={ctrl:0xe0,lctrl:0xe0,shift:0xe1,lshift:0xe1,alt:0xe2,lalt:0xe2,win:0xe3,lwin:0xe3,cmd:0xe3,rctrl:0xe4,rshift:0xe5,ralt:0xe6,rwin:0xe7};
+const NAME2MOD={ctrl:0xe0,lctrl:0xe0,shift:0xe1,lshift:0xe1,alt:0xe2,lalt:0xe2,win:0xe3,lwin:0xe3,cmd:0xe3,rctrl:0xe4,rshift:0xe5,ralt:0xe6,rwin:0xe7,
+  // 29.2.1: the names an expansion's {{...}} already took, so the two agree
+  meta:0xe3,gui:0xe3,lcmd:0xe3,rcmd:0xe7,altgr:0xe6,option:0xe2,opt:0xe2};
 // evdev -> HID usage (for RAW highlight); common subset
 const EV2HID={30:0x04,48:0x05,46:0x06,32:0x07,18:0x08,33:0x09,34:0x0a,35:0x0b,23:0x0c,36:0x0d,
 37:0x0e,38:0x0f,50:0x10,49:0x11,24:0x12,25:0x13,16:0x14,19:0x15,31:0x16,20:0x17,22:0x18,
@@ -4249,7 +4294,31 @@ document.addEventListener('keyup',e=>{
   const u=BROWSER_CODE2HID[e.code];if(u===undefined||!_browserHeld.has(u))return;
   _browserHeld.delete(u);holdKey(u,false,'');});
 // Leaving the window mid-chord never delivers the keyup: let go of everything.
-window.addEventListener('blur',()=>{for(const u of [..._browserHeld]){_browserHeld.delete(u);holdKey(u,false,'');}});
+window.addEventListener('blur',()=>{for(const u of [..._browserHeld]){_browserHeld.delete(u);holdKey(u,false,'');}
+  brKeysState();});
+window.addEventListener('focus',()=>brKeysState());
+/* 29.2.1: SAY WHETHER THE BROWSER IS LISTENING. Josh, 2026-10-01: "One thing
+   I thought I had gotten, but apparently haven't, is the browser-wireframes
+   show-off what keys will look like when a button is pressed while captured,
+   without having to have the engine in debug mode." It worked only while
+   this page had focus and no text box was active, and nothing said so -- so
+   a click elsewhere silently turned it off. The chip says which state it is
+   in. The second limit is structural: a key the Pi keeps for itself (a layer
+   key, a mouse button's hold-to-layer) never reaches the computer, so no
+   browser can see it. 29.4: the engine now says so -- see liveState(). */
+function brKeysState(){
+  const el=$('brkeys');if(!el)return;
+  const on=document.hasFocus()&&_showKeysState===0;
+  el.textContent=_showKeysState>0?'⌨ keys: from the Pi'
+    :on?'⌨ keys: this browser is listening':'⌨ keys: click here to listen';
+  el.style.color=on||_showKeysState>0?'var(--ok)':'';
+  el.title=_showKeysState>0
+    ?'Show key presses is on: the wireframe follows the keys the Pi sees, including layer keys.'
+    :'Hold a key (Shift, Ctrl, …) and the wireframe shows what the next key would do. '
+     +'Works while this page has focus and no text box is active. '
+     +'Layer keys and mouse layer buttons are handled on the Pi; the Pi tells this page '
+     +'when a layer is held, so the wireframe follows them either way.';}
+setInterval(brKeysState,1500);
 function holdBtn(box,on){
   if(on)_heldBtns.add(box);else _heldBtns.delete(box);
   const r=document.querySelector(`#mousesvg [data-btn="${box}"]`);if(r)r.classList.toggle('held',on);
@@ -4577,6 +4646,9 @@ function bindMarquee(div,d,lay,unit,offx,offy){
     window.addEventListener('pointerup',done);};}
 function bindEditKey(el,d,idx){
   el.style.opacity='';
+  // 29.3: every element kind shows it is in the selection, not only keys
+  // (buttons, wheels and pads never got the class).
+  if(editMulti.has(idx))el.classList.add('multisel');
   el.onpointerdown=e=>{
     e.preventDefault();
     try{el.setPointerCapture(e.pointerId);}catch(_){}
@@ -4685,6 +4757,14 @@ function renderPalette(){
   if(!d){p.style.display='none';return;}
   const lay=editableLayout(d);
   const selk=editSel!=null?lay.keys[editSel]:null;
+  // 29.3: "Edit selected" applies to EVERY selected element. Josh,
+  // 2026-09-28: "enable the "edit selected" to be able to apply when multiple
+  // elements are selected (s, for example, I can change height for multiple
+  // keys at once)". A field the selection disagrees on shows "mixed" and is
+  // left alone unless you type into it.
+  const selIdx=editMulti.size>1?[...editMulti].filter(i=>lay.keys[i]):[];
+  const selAll=selIdx.map(i=>lay.keys[i]);
+  const same=f=>{const v=selAll.map(f);return v.every(x=>x===v[0])?v[0]:null;};
   const keyOptsHtml=[...Object.entries(KEYS),...Object.entries(MODS)]
     .map(([u,n])=>`<option value="${u}">${esc(n)}</option>`).join('');
   const selKind=selk?(selk.wheel?'wheel':selk.stepper?'stepper':selk.pad?'pad':(selk.btn!=null?'btn':'key')):null;
@@ -4709,7 +4789,13 @@ function renderPalette(){
     <label style="flex:1;margin:0">H<input type="number" id="palh" value="1" step="0.25" min="0.5"></label></div>
   <button id="paladd" class="primary" style="margin-top:.4rem;width:100%">＋ Add element</button>
   <button id="paltp" style="margin-top:.35rem;width:100%">＋ Trackpad cluster</button>
-  ${selk?`<hr><b>Selected:</b> ${esc(selLabel)} <span class="muted">(${selKind})</span>
+  ${selAll.length?`<hr><b>Selected:</b> ${selAll.length} elements
+   <div style="display:flex;gap:.4rem;margin-top:.3rem">
+     <label style="flex:1;margin:0">W<input type="number" id="palmw" value="${same(k=>k.w||1)??''}" placeholder="mixed" step="0.25" min="0.5"></label>
+     <label style="flex:1;margin:0">H<input type="number" id="palmh" value="${same(k=>k.h||1)??''}" placeholder="mixed" step="0.25" min="0.5"></label>
+     <label style="flex:1;margin:0">↻°<input type="number" id="palmr" value="${same(k=>k.rot||0)??''}" placeholder="mixed" step="15"></label></div>
+   <button id="palmdel" style="margin-top:.4rem;width:100%">🗑 Remove ${selAll.length} elements</button>`
+  :selk?`<hr><b>Selected:</b> ${esc(selLabel)} <span class="muted">(${selKind})</span>
    <div style="display:flex;gap:.4rem;margin-top:.3rem">
      <label style="flex:1;margin:0">W<input type="number" id="palsw" value="${selk.w||1}" step="0.25" min="0.5"></label>
      <label style="flex:1;margin:0">H<input type="number" id="palsh" value="${selk.h||1}" step="0.25" min="0.5"></label>
@@ -4764,7 +4850,15 @@ function renderPalette(){
     else if(kind==='stepper')base.stepper=1;
     lay.keys.push(base);editSel=lay.keys.length-1;render();};
   $('paltp').onclick=()=>{addTrackpadCluster(lay);render();};
-  if(selk){
+  if(selAll.length){
+    const setAll=(id,f,dflt)=>{$(id).onchange=()=>{const raw=$(id).value;if(raw==='')return;
+      const v=+raw;selAll.forEach(k=>f(k,isFinite(v)?v:dflt));render();};};
+    setAll('palmw',(k,v)=>k.w=v||1,1);
+    setAll('palmh',(k,v)=>k.h=v||1,1);
+    setAll('palmr',(k,v)=>k.rot=v||0,0);
+    $('palmdel').onclick=()=>{selIdx.sort((a,b)=>b-a).forEach(i=>lay.keys.splice(i,1));
+      editMulti.clear();editSel=null;render();toast('removed '+selIdx.length+' elements');};}
+  else if(selk){
     $('palsw').onchange=()=>{selk.w=+$('palsw').value||1;render();};
     $('palsh').onchange=()=>{selk.h=+$('palsh').value||1;render();};
     $('palsr').onchange=()=>{selk.rot=+$('palsr').value||0;render();};
@@ -8875,7 +8969,8 @@ function bindEditorCommon(applyAction){
       const v=nmi.value.trim();
       if(v)cfg.macro_names[n]=v;else delete cfg.macro_names[n];};
     if(nmi)nmi.focus();};
-  window.finishInline=n=>{cfg.macros[n]=textToMacro($('im').value);
+  window.finishInline=n=>{{const bad=macroTextBad($('im').value);if(bad.length){macroBadToast(bad);return;}}
+    cfg.macros[n]=textToMacro($('im').value);
     const nmi=$('imname');
     if(nmi){cfg.macro_names=cfg.macro_names||{};const v=nmi.value.trim();
       if(v)cfg.macro_names[n]=v;else delete cfg.macro_names[n];}
@@ -9909,11 +10004,28 @@ if(u&MACRO_DOWN)return usageName(u&~(MACRO_DOWN|MACRO_UP))+'_down';
 if(u&MACRO_UP)return usageName(u&~(MACRO_DOWN|MACRO_UP))+'_up';
 const p=u>>>16,x=u&0xffff;
 if(p===9)return'btn'+x;if(u===0x00010038)return'wheel';
-if(p===7)return(MODS[x]||KEYS[x]||'0x'+x.toString(16)).toLowerCase();
-if(p===12&&KEYS[u])return KEYS[u].toLowerCase();   // 26.4: consumer-page steps
+// 29.2.1: an unnamed key is written WITH its page, so it parses back to
+// the same usage (a bare 0x6c read back as page 0).
+if(p===7)return(MODS[x]||KEYS[x]||'0x'+u.toString(16)).toLowerCase();
+if(p===12&&KEYS[u])return mediaToken(KEYS[u]);   // 26.4 / 29.2.1: consumer-page steps
 return'0x'+u.toString(16);}
 function macroToText(s){return s.map(x=>x.length?x.map(usageName).join('+'):'.').join('\n');}
-function textToMacro(t){const steps=[];
+/* 29.2.1: names the parser does not know. They used to be dropped in
+   silence -- "ctlr+c" saved as a bare C (CLAUDE.md §2). Every caller now
+   checks this first and refuses to save, naming them. */
+// A media key's face is "♪ Vol+" -- a "+" that would split the step, and a
+// space. Its macro token is the plain form: volup, voldown, playpause, mute.
+function mediaToken(n){return String(n).replace(/^♪\s*/,'').toLowerCase()
+  .replace(/\+$/,'up').replace(/[−-]$/,'down').replace(/[^a-z0-9]/g,'');}
+let _mediaNames=null;
+function _mediaByName(){
+  if(!_mediaNames){_mediaNames={};
+    for(const[u,n]of Object.entries(KEYS))if(+u>0xffff)_mediaNames[mediaToken(n)]=+u;}
+  return _mediaNames;}
+function macroTextBad(t){textToMacro(t);return textToMacro.bad;}
+function macroBadToast(bad){toast('not saved — unknown step name'+(bad.length>1?'s':'')+': '
+  +bad.join(', ')+'. See “How macros are written” for the names.',true);}
+function textToMacro(t){const steps=[],bad=textToMacro.bad=[];
 for(let line of t.split('\n')){line=line.trim().toLowerCase();if(!line)continue;
 if(line==='.'){steps.push([]);continue;}const us=[];
 for(let tok of line.split('+').map(x=>x.trim()).filter(Boolean)){
@@ -9921,11 +10033,17 @@ let fl=0;
 if(/_down$/.test(tok)){fl=MACRO_DOWN;tok=tok.slice(0,-5);}
 else if(/_up$/.test(tok)){fl=MACRO_UP;tok=tok.slice(0,-3);}
 const n0=us.length;
-if(tok.startsWith('btn'))us.push(0x00090000+ +tok.slice(3));
+if(/^btn\d+$/.test(tok))us.push(0x00090000+ +tok.slice(3));
 else if(tok==='wheel')us.push(0x00010038);
 else if(NAME2MOD[tok]!==undefined)us.push(0x00070000+NAME2MOD[tok]);
 else if(NAME2KEY[tok]!==undefined)us.push(0x00070000+NAME2KEY[tok]);
-else if(tok.startsWith('0x'))us.push(parseInt(tok,16));
+// 29.2.1: media keys. usageName() writes a consumer step as its name
+// ("mute") but nothing parsed the name back, so re-saving any macro with a
+// media key in it silently dropped that key. KEYS carries them with their
+// page already set ((0x0C<<16)|usage), so the value is used as it is.
+else if(_mediaByName()[tok]!==undefined)us.push(_mediaByName()[tok]);
+else if(/^0x[0-9a-f]+$/.test(tok))us.push(parseInt(tok,16));
+else bad.push(tok);
 if(fl&&us.length>n0)us[us.length-1]=(us[us.length-1]|fl)>>>0;}
 steps.push(us);}return steps;}
 // 23.5: which bindings fire a given macro.
@@ -10032,12 +10150,147 @@ function renderMouseWrite(){
   if($('mwkeep'))$('mwkeep').onclick=()=>{_mwSet('size',st.size);_mwSet('speed',st.speed);
     renderMouseWrite();toast('kept size '+st.size+' and speed '+st.speed+' — ⬆ Save to device');};}
 
+/* ===== 29.2.1: SYNTAX PRIMERS =============================================
+   Josh, 2026-10-01: "For the expansions section, can you write (and keep
+   updating if we add features) a very concise syntax primer, with any special
+   words? ... Make sure at the beginning you mention what the escape character
+   is ... Make the how-to compact, so I get high-level information and
+   frequently used items at first in a grid one or two lines tall; and can
+   click to see more ... Make something similar for the "Macro" space".
+
+   KEEP THESE IN STEP WITH THE ENGINE. The expansion markup lives in
+   s4_expansions.render() and s5_hid_output (emit_value, parse_combo,
+   ESC_MAP); the macro grammar in textToMacro() above. The key-name lists are
+   built from NAME2KEY / NAME2MOD at render time, and test_expansion_keys
+   checks that every one of them works inside {{...}} -- so the names cannot
+   drift; the prose can, and is this comment's job. */
+function _primerKeyNames(){
+  const seen=new Set(),out=[];
+  for(const n of Object.keys(NAME2KEY)){
+    const u=NAME2KEY[n];if(u>0xffff||n.length<2||seen.has(u))continue;
+    seen.add(u);out.push(n);}
+  return out.sort();}
+function _primerMediaNames(){return Object.keys(_mediaByName()).sort();}
+const PRIMERS={
+ exp:{title:'Expansion syntax',
+  quick:[['\\{  \\}  \\$','escape: type the character itself'],
+         ['{{ctrl+c}}','press keys'],['{^}','cursor ends here'],
+         ['$1','regex group 1'],['{YYYY}-{MM}-{DD}','today'],['{{#2*3}}','calculate']],
+  cats:()=>[
+   {name:'Escape & literal',rows:[
+     ['\\{  \\}  \\$','The escape character is a backslash, before { } or $. \\{{ctrl+c\\}} types {{ctrl+c}}; \\$1 types $1.'],
+     ['\\ (anything else)','Just a backslash: C:\\Users and \\n are typed as written.'],
+     ['Literal (item option)','Types the whole value exactly as stored — no markup at all. Copy/Paste entries are always literal.']]},
+   {name:'Keys {{…}}',rows:[
+     ['{{ctrl+c}}','Press keys together, then release. Same names as macro steps, any case.'],
+     ['{{cmd+shift+t}}','Modifiers: ctrl shift alt win cmd meta gui option opt; left/right: lctrl rctrl lshift rshift lalt ralt altgr lwin rwin lcmd rcmd.'],
+     ['{{enter}} {{tab}} {{esc}}','A single key. Also any one character: {{a}}, {{/}}.'],
+     ['Hi{{enter}}Bye','Text and keys mix freely; they happen in order.'],
+     ['{{ctlr+c}}','An unknown name presses nothing: the markup is typed as written and logged, so the typo shows.'],
+     ['Key names',_primerKeyNames().join(' · ')]]},
+   {name:'Cursor & regex',rows:[
+     ['{^}','After typing, the cursor moves back to here.'],
+     ['$1 … $9','Regex triggers only: what the trigger\'s ( ) groups matched.'],
+     ['Regex / Case (item options)','Regex makes the trigger a pattern; Case “ignore” matches any case.']]},
+   {name:'Dates',rows:[
+     ['{YYYY} {MM} {DD}','Today\'s year, month, day.'],
+     ['{{dayDelta=+7}}','Shift the date by days (+ or −). Typed as nothing.'],
+     ['{{refDate=2026-10-01}}','Count from this date instead of today. {{refDate=$1}} uses a regex group.']]},
+   {name:'Calculate',rows:[
+     ['{{#2*(3+4)}}','Numbers with + − * / % ** and ( ). Safe: arithmetic only.'],
+     ['{{#ROUND(10/3,2)}}','Round to N digits.'],
+     ['{{#$1*1.2}}','Use a regex group in the sum.']]},
+   {name:'Lists & durations',rows:[
+     ['{{~SORT(c|a|b)}}','a, b, c — one per line.'],
+     ['{{~UNIQ(a|b|a)}}','Remove repeats, keep order.'],
+     ['{{~SORTU(b|a|b)}}','Sort and remove repeats.'],
+     ['{{~DUR(12:08:28, 12:08:30)}}','Time between two times: 2s.'],
+     ['{{~BIZ(Mar 4, Mar 8)}}','Business days between two dates.']]},
+   {name:'Notes',rows:[
+     [';;n;;text;;/n;;','Save “text” as a line in Copy/Paste → HID Notes.'],
+     [';;!n;;text;;/n;;','The same, then erase what you typed.']]},
+   {name:'Order',rows:[
+     ['1 → 6','$1 groups → date directives → {YYYY} → {{#…}} → lists, durations → {^}. Keys {{…}} are pressed last, while typing. Escaped characters are left alone by all of them.']]}]},
+ mac:{title:'How macros are written',
+  quick:[['one line','= one 12 ms step'],['ctrl+c','keys held together'],['.','empty step (12 ms pause)'],
+         ['btn1','click'],['btn1_down … btn1_up','hold across steps'],['wheel','one scroll detent']],
+  cats:()=>[
+   {name:'Steps & timing',rows:[
+     ['ctrl+c','Everything on one line is held for that step (12 ms), then released.'],
+     ['.','An empty step: a 12 ms pause. Repeat it for longer pauses — ten dots ≈ 120 ms.'],
+     ['(no escape)','Macro steps are key names, not text. To type text, use an expansion or a “Type text” action.'],
+     ['Unknown name','The macro is not saved and the toast names the word, so ctlr+c can’t become a bare C.']]},
+   {name:'Modifiers',rows:[
+     ['ctrl shift alt win cmd','Left-hand keys. meta, gui, lcmd = win; option, opt = alt.'],
+     ['rctrl rshift ralt rwin','Right-hand keys. altgr = ralt; rcmd = rwin.']]},
+   {name:'Keys',rows:[
+     ['Names',_primerKeyNames().join(' · ')],
+     ['Media',_primerMediaNames().join(' · ')||'—'],
+     ['0x70004','Raw HID usage (page in the top bits) for anything without a name.']]},
+   {name:'Mouse',rows:[
+     ['btn1 … btn5','Left, right, middle, back, forward: pressed for the step.'],
+     ['wheel','One detent of scroll up.']]},
+   {name:'Hold & release',rows:[
+     ['btn1_down','Press and KEEP holding from this step on.'],
+     ['btn1_up','Let go. Works for keys too: shift_down … shift_up.'],
+     ['(end)','Anything still held is released when the macro ends.']]}]}};
+function _primerOpen(k){try{return localStorage.getItem('hc.primer.'+k)||'';}catch(_){return'';}}
+function _primerSetOpen(k,v){try{localStorage.setItem('hc.primer.'+k,v);}catch(_){}}
+function renderPrimers(){
+  document.querySelectorAll('[data-primer]').forEach(el=>{
+    const k=el.dataset.primer,p=PRIMERS[k];if(!p)return;
+    const cats=p.cats(),open=_primerOpen(k),cat=cats.find(c=>c.name===open);
+    el.innerHTML=`<div class="pq"><b>${esc(p.title)}:</b>${p.quick.map(([c,d])=>
+        `<span><code>${esc(c)}</code> ${esc(d)}</span>`).join('')}</div>
+      <div class="pcats">${cats.map(c=>`<button class="pcat${c===cat?' on':''}" data-pc="${esc(c.name)}">${esc(c.name)}</button>`).join('')}</div>
+      ${cat?`<table>${cat.rows.map(([c,d])=>`<tr><td><code>${esc(c)}</code></td><td>${esc(d)}</td></tr>`).join('')}</table>`:''}`;
+    el.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{
+      _primerSetOpen(k,b.dataset.pc===open?'':b.dataset.pc);renderPrimers();});});}
+
+/* ===== 29.2.2: QUICK NOTE ==================================================
+   Josh, 2026-10-01 13:28: "Can we have an even easier to open "HIDNotes"?
+   Perhaps like; a space at top right where I can immediately start writing a
+   new entry (that expands as I fill it up, within reason (up to half the
+   screen!) and which I can resize, and it saves to HID Notes when I hit
+   command+enter?"
+   The Pi does the writing (s0 `note`): the same locked, fsynced, read-back
+   append ;;n;; uses, timestamped, into the clip the drain empties. The box
+   clears only when the Pi says it landed. The unsent draft is kept in this
+   browser, a per-viewer convenience -- never the note's only copy once sent. */
+(function(){
+  const t=$('qnote');if(!t)return;
+  try{t.value=localStorage.getItem('hc.qnote')||'';}catch(_){}
+  const grow=()=>{if(t.dataset.sized)return;   // a hand-resize wins
+    t.style.height='auto';t.style.height=Math.min(t.scrollHeight+2,(window.innerHeight||800)*0.5)+'px';
+    t.style.width=t.value.length>40?'min(38rem,60vw)':'17rem';};
+  t.addEventListener('mousedown',e=>{const r=t.getBoundingClientRect();
+    if(e.clientX>r.right-16&&e.clientY>r.bottom-16)t.dataset.sized='1';});
+  t.addEventListener('input',()=>{grow();try{localStorage.setItem('hc.qnote',t.value);}catch(_){}});
+  t.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){t.blur();return;}
+    if(e.key!=='Enter'||!(e.metaKey||e.ctrlKey))return;
+    e.preventDefault();
+    const v=t.value.trim();
+    if(!v){toast('nothing to save',true);return;}
+    if(!device){toast('connect first — the note is kept here until then',true);return;}
+    t.disabled=true;window._qnoteSent=v;pfCmd('note '+v);});
+  try{grow();}catch(_){}})();
+function qnoteDone(text){
+  const t=$('qnote');if(t)t.disabled=false;
+  if(text==='NOTE saved'){
+    if(t&&t.value.trim()===window._qnoteSent){t.value='';delete t.dataset.sized;
+      t.style.height='';t.style.width='17rem';}
+    try{localStorage.removeItem('hc.qnote');}catch(_){}
+    toast('✎ saved to HID Notes');}
+  else toast('✗ '+text.replace(/^NOTE /,'')+' — the note is still in the box',true);}
+
 function renderMacros(){
   const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)</h2>';
-  if(!cfg.macro_names)cfg.macro_names={};
+  // 29.2.1: read, don't create -- this used to add macro_names on render.
+  const names=cfg.macro_names||{};
   const users=macroUsers();
   for(const n of macroSlots()){const s=(cfg.macros&&cfg.macros[n])||[];
-  const nm=cfg.macro_names[n]||'';
+  const nm=names[n]||'';
   h+=`<details class="macro" id="macro-${n}"><summary><b>${nm?nm+' (M'+n+')':'Macro '+n}</b> — ${s.length?
   macroToText(s).split('\n').filter(l=>l!=='.').slice(0,3).join(' · '):'<span class="muted">empty</span>'}</summary>
   <label>Name (optional)</label><input type="text" data-mn="${n}" value="${nm.replace(/"/g,'&quot;')}" placeholder="e.g. Copy">
@@ -10054,8 +10307,14 @@ function renderMacros(){
   h+=`<div class="bar" style="margin-top:.5rem"><button id="macroadd">＋ Add macro</button>
     <span class="muted">${macroMax()} slots · the engine has no fixed limit</span></div>`;
   el.innerHTML=h;
-  el.querySelectorAll('textarea[data-m]').forEach(t=>t.onchange=()=>{cfg.macros[t.dataset.m]=textToMacro(t.value);});
+  try{renderPrimers();}catch(e){console.warn('primers',e);}
+  el.querySelectorAll('textarea[data-m]').forEach(t=>t.onchange=()=>{
+    const bad=macroTextBad(t.value);
+    t.style.outline=bad.length?'2px solid var(--err)':'';
+    if(bad.length){macroBadToast(bad);return;}
+    cfg.macros[t.dataset.m]=textToMacro(t.value);});
   el.querySelectorAll('input[data-mn]').forEach(i=>i.onchange=()=>{
+    cfg.macro_names=cfg.macro_names||{};
     if(i.value.trim())cfg.macro_names[i.dataset.mn]=i.value.trim();
     else delete cfg.macro_names[i.dataset.mn];});
   const add=$('macroadd');
@@ -10939,6 +11198,7 @@ function renderNoteTable(){
 
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
+  try{renderPrimers();}catch(e){console.warn('primers',e);}   // 29.2.1
   renderNoteTable();
   // 21.0 BF1: normalising READS the two shapes and hands the renderer one;
   // it no longer writes the normalised form back into cfg. Opening the
@@ -11500,6 +11760,23 @@ function liveRaw(txt){
   }
   const u=EV2HID[code];if(!u)return;
   holdKey(u,down,rdev);}
+/* 29.4: the engine's STATE notices. Josh chose option A (2026-10-01): the
+   engine says "ST:layer N" once per layer CHANGE -- never per keystroke --
+   and the Pi forwards it with Show key presses off. So the wireframe follows
+   a held layer key or mouse layer button the browser itself never sees, the
+   same way it follows a clicked layer pill, and goes back to the clicked
+   layer on release. An open mapping editor is never moved: it was opened
+   AT a layer, and changing the layer under it would point the next edit at
+   a different layer from the one on screen when the user started it. */
+let _stFrom=null;
+function liveState(txt){
+  const m=/^layer (\d+)/.exec(txt);if(!m)return;
+  const L=+m[1];
+  if(sel&&sel.edit){if(L===0)_stFrom=null;return;}
+  if(L>0){if(_stFrom===null)_stFrom=layer;layer=L;}
+  else if(_stFrom!==null){layer=_stFrom;_stFrom=null;}
+  else return;
+  render();}
 function liveOut(txt){
   // 28.7.1: a Right Alt tap, seen the moment it happens rather than at the
   // next status read (which waits for input to go quiet).
@@ -12134,7 +12411,8 @@ window.osMacroEdit=(o,n)=>{const p=osProf(o);p.macros=p.macros||{};
   const v=prompt(`${o} override for Macro ${n}\n(one step per line: ctrl+c / btn1 / wheel / . ; blank = inherit base)`,cur);
   if(v===null)return;
   if(v.trim()===''||v===macroToText(cfg.macros[n]||[]))delete p.macros[n];
-  else p.macros[n]=textToMacro(v);
+  else{const bad=macroTextBad(v);if(bad.length){macroBadToast(bad);return;}
+    p.macros[n]=textToMacro(v);}
   renderOsTab();toast('⬆ Save to device to apply');};
 window.osRemove=(o)=>{if(o==='win'||o==='mac'){toast('win/mac are built-in',true);return;}
   if(!confirm('Remove OS "'+o+'" and its overrides?'))return;
