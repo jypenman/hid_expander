@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.5</title>
+<title>HID Config 29.9</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -497,6 +497,11 @@ select option{background:Field;color:FieldText}
 button.rec{background:var(--err);border-color:var(--err);color:#fff;font-weight:600}
 button.rec::before{content:'●';margin-right:.35rem;animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+/* 29.9: a Save button shows it is saving until the Pi answers */
+.spin{display:inline-block;width:.75em;height:.75em;margin-right:.3em;vertical-align:-.05em;
+  border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+  animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 button.clicked{animation:clickflash .45s ease-out}
 @keyframes clickflash{0%{background:var(--hi);border-color:var(--hi);color:#fff}100%{}}
 textarea{font-family:ui-monospace,monospace;font-size:.85rem}
@@ -1330,12 +1335,17 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </div>
 
 <div id="page-macros" style="display:none"><div style="display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap">
- <div style="flex:1 1 30rem;min-width:0"><div class="panel" id="macrolist"></div>
+ <div style="flex:1 1 30rem;min-width:0">
+  <!-- 29.7: first on the page, closed (Josh, 2026-10-07 13:45: "Move
+       Mousewriting section to top of the Macro's page (default closed of
+       course)") -->
   <details class="panel" id="mwsec" data-uikey="mousewrite">
     <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">✍ Mouse writing — type, and the mouse draws it
       <span class="muted" id="mwstate" style="font-weight:400;font-size:.8rem"></span></h3></summary>
     <div id="mwbody"></div>
-  </details></div>
+  </details>
+  <div class="panel" id="macrolist"></div>
+</div>
  <div class="panel primer" id="macprimer" data-primer="mac" style="flex:0 1 24rem;position:sticky;top:.5rem;max-height:92vh;overflow:auto"></div>
 </div></div>
 
@@ -1760,6 +1770,20 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.9',d:'2026-10-07',items:[
+   {t:'Save buttons show Saving… with a spinner until the Pi confirms; the quick note says Saving… then Saved',k:'write'},
+   {t:'The mapping editor says when other inputs press the same button or key ("Also pressed by: Extra button, key 2")',k:'editor'}]},
+ {v:'29.8',d:'2026-10-07',items:[
+   {t:'Scroll: a lone wheel click sends exactly 1 unit (Exact first click); fast scrolling still accelerates',k:'osscroll'},
+   {t:'Scroll test beside the acceleration settings: lines per click and per flick, columns and pixels, and a guided walk-through that suggests a value',k:'osscroll'},
+   {t:'The per-device scroll acceleration fields appear at last (they never showed since 23.8)',k:'osscroll'},
+   {t:'Usage names layer keys by what they did, then how: "Right (L1 L)"; fix_usage_ids.py renames old rows',k:'page-usage'}]},
+ {v:'29.7',d:'2026-10-07',items:[
+   {t:'Mouse writing: cleaner letters at high speed -- every report the same length, even through corners, at up to 250 a second',k:'mousewrite'},
+   {t:'Mouse writing: Enter and Space move the pointer straight away (4x faster jumps), and Backspace takes them back',k:'mousewrite'},
+   {t:'Mouse writing: straighter lines of text, whole strokes (no chopped ends), fewer pen lifts, a nudge for each speed/size change (Ctrl works too); the section is now first on the Macros page',k:'mousewrite'}]},
+ {v:'29.6',d:'2026-10-07',items:[
+   {t:'Option characters on Windows: press the same one twice quickly and it is retyped the Office way (U+code, Alt+X)',k:'optsec'}]},
  {v:'29.5',d:'2026-10-07',items:[
    {t:'Right Alt mode now decides the Mac Option shortcuts too: Windows mode leaves Alt+←/→ as Back/Forward; Mac mode moves by word. Alt no longer opens the ribbon after one',k:'optsec'}]},
  {v:'29.4.2',d:'2026-10-07',items:[
@@ -2376,6 +2400,7 @@ function onReport(e){
     window._evbuf=(window._evbuf||'')+piece;
     if(more)return;
     const txt=window._evbuf; window._evbuf='';
+    if(_lab)labFeed(txt);                                        // 29.8
     if(txt.startsWith('ST:')){liveState(txt.slice(3));return;}   // 29.4
     if(txt.startsWith('OUT:')){const raw=txt.slice(4);log(annotate(raw),'tx','outlog');liveOut(raw);}
     else if(NOTICE_RX.test(txt))log(txt,'ev','linklog');   // 24.9
@@ -2547,12 +2572,14 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
     // "Saved (hot-reloads in 2s)" and looked like the UI had written
     // something. It reports what actually happened now.
     toast(_lastOp==='put'?'✓ saved (hot-reloads ~2s)':'✓ done');
+    if(_lastOp==='put'&&--_putPending<=0)saveDone();             // 29.9
     _lastOp=null;}
   else if(t===ERR){const m=new TextDecoder().decode(d.slice(1)).replace(/\0+$/,'');
     // 29.1: the old engine's wording, explained for as long as one runs.
     const sm=/^save short (\d+)\/(\d+)/.exec(m);
     toast('✗ '+(sm?`save arrived incomplete (${sm[1]} of ${sm[2]} bytes) — nothing was written; press ⬆ Save to device again`
-      :m==='length mismatch'?'save arrived incomplete — nothing was written; press ⬆ Save to device again':m),true);_readDone();}
+      :m==='length mismatch'?'save arrived incomplete — nothing was written; press ⬆ Save to device again':m),true);_readDone();
+    if(_putPending)saveDone('not saved');}                       // 29.9
 }
 let _readQ=[],_reading=false,_readTimer=null,_setsChannelOk=false;
 // What the pending ack belongs to, so the toast can tell the truth.
@@ -2606,8 +2633,30 @@ function putFile(fid,obj){
   const p=_putChain.then(run,run);
   _putChain=p.catch(()=>{});
   return p;}
+/* 29.9: SAVING SHOWS ON THE BUTTON. Josh, 2026-10-07 13:26: "Whenever the
+   user clicks on a "save" button, have it convert into a "saving" button
+   with a little indicator twirling around until the save completes."
+   One place for every Save: a click on any button labelled Save is noted,
+   and a write that starts within a moment of it turns that button into
+   "Saving…" with a spinner until the Pi ACKs every write it started (a Save
+   can send several files), errors, or 20 s pass with no answer. */
+let _saveBtn=null,_saveClickAt=0,_putPending=0,_saveTimer=null;
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button');
+  if(b&&/save/i.test(b.textContent)){_saveBtn=b;_saveClickAt=Date.now();}},true);
+function saveBusy(){
+  const b=_saveBtn;if(!b||Date.now()-_saveClickAt>1500)return;
+  if(!b.dataset.label){b.dataset.label=b.innerHTML;b.innerHTML='<span class="spin"></span>Saving…';b.disabled=true;}
+  clearTimeout(_saveTimer);_saveTimer=setTimeout(()=>saveDone('no answer'),20000);}
+function saveDone(err){
+  const b=_saveBtn;clearTimeout(_saveTimer);_putPending=0;
+  if(!b||!b.dataset.label)return;
+  b.innerHTML=err?'✗ '+esc(err):'✓ Saved';
+  setTimeout(()=>{if(b.dataset.label){b.innerHTML=b.dataset.label;delete b.dataset.label;}
+    b.disabled=false;},err?2500:1200);
+  _saveBtn=null;}
 async function _putFileNow(fid,obj){
   _lastOp='put';
+  _putPending++;saveBusy();                                       // 29.9
   const data=new TextEncoder().encode(JSON.stringify(obj));
   await send([PUT_BEGIN,data.length&255,(data.length>>8)&255,(data.length>>16)&255,(data.length>>24)&255,fid]);
   let seq=0;
@@ -9331,7 +9380,44 @@ function renderCaptureEditor(ed){
     if(seqSel.some(x=>!charForUsage(x.canon))){toast('sequences need character keys only',true);return;}
     exps=exps||{};exps[trig]=$('sqval').value;seqSel=[];window._seqDraft=null;
     render();renderExp();toast(`expansion "${trig}" added — ⬆ Save expansions to apply`);};}
+/* 29.9: SAY WHEN ONE BUTTON IS PRESSED BY MORE THAN ONE INPUT. Josh,
+   2026-10-07: changing E9 "7" to layer 7 also changed "2", because the
+   Baseline made both of them logical button 5 -- one row, two physical
+   inputs, and nothing on screen said so (his "15. B"). Read-only: it only
+   lists, from the Baseline and button_inputs, what else arrives here. */
+const _kname=u=>KEYS[u]||MODS[u]||('0x'+(+u).toString(16));
+const _EVBTN_NAME={272:'Left button',273:'Right button',274:'Middle button',275:'Side button (evdev 275)',276:'Extra button (evdev 276)'};
+function sharedInputs(s){
+  const dev=s.dev||'',bl=((cfg.baseline||{})[dev])||{},out=[];
+  const asKey=new Set(Object.keys(bl).filter(k=>k.startsWith('btnkey:')&&bl[k]).map(k=>+k.slice(7)));
+  if(s.type==='btn'){
+    const N=+s.id;
+    for(const [k,v] of Object.entries(cfg.button_inputs||{})){
+      const code=+String(k).replace(/^btn:/,'');
+      const own=bl['btn:'+code];
+      if((own!==undefined?+own:+v)===N&&String(k).startsWith('btn:')&&!asKey.has(code))
+        out.push(_EVBTN_NAME[code]||('button evdev '+code));}
+    for(const [k,v] of Object.entries(bl))
+      if(k.startsWith('p2btn:')&&+v===N)out.push('key '+_kname(parseInt(k.slice(6),16)));}
+  else if(s.type==='key'){
+    // The key itself counts only on a KEYBOARD that still has it: a mouse
+    // has no "7" key of its own, only whatever is Baselined onto 7.
+    const K=+s.id,d=(cfg.devices||[]).find(x=>x.id===dev);
+    if(d&&d.kind==='kbd'&&(bl[K]===undefined||+bl[K]===K))out.push('key '+_kname(K));
+    for(const [k,v] of Object.entries(bl)){
+      if(/^\d+$/.test(k)&&+k!==K&&+v===K)out.push('key '+_kname(+k));
+      if(k.startsWith('btnkey:')&&+v===K)out.push(_EVBTN_NAME[+k.slice(7)]||('button evdev '+k.slice(7)));}}
+  return out;}
 function renderEditor(){
+  _renderEditorBody();
+  if(!sel||!sel.edit||(sel.type!=='btn'&&sel.type!=='key'))return;
+  const ins=sharedInputs(sel);if(ins.length<2)return;
+  const ed=$('editorbody');if(!ed)return;
+  ed.insertAdjacentHTML('afterbegin',`<div class="primer" id="sharedinputs" style="margin-bottom:.4rem">
+    ⚠ <b>Also pressed by:</b> ${ins.map(esc).join(', ')} — on this device these all arrive as the same
+    ${sel.type==='btn'?'button':'key'}, so a change here changes every one of them. To split them,
+    give one its own identity in Baseline.</div>`);}
+function _renderEditorBody(){
   const ed=$('editorbody');
   if(seqSel.length){return renderCaptureEditor(ed);}
   // 20.7.4 BF1 #4: a plain click SELECTS -- which is what draws the chord
@@ -10275,10 +10361,22 @@ function renderPrimers(){
     const v=t.value.trim();
     if(!v){toast('nothing to save',true);return;}
     if(!device){toast('connect first — the note is kept here until then',true);return;}
-    t.disabled=true;window._qnoteSent=v;pfCmd('note '+v);});
+    t.disabled=true;window._qnoteSent=v;qnoteStat('saving');pfCmd('note '+v);});
   try{grow();}catch(_){}})();
+/* 29.9: Josh, 2026-10-07 13:28: "whenever it saves, make sure to note
+   "saving" or "Saved" or something when the user hits the Ctrl+Enter ...
+   so the user knows it has succeeded." Shown in the box's own placeholder
+   spot, so it is where his eyes already are; the toast stays as well. */
+function qnoteStat(s){
+  const t=$('qnote');if(!t)return;
+  if(!t.dataset.ph)t.dataset.ph=t.placeholder;
+  clearTimeout(window._qnoteStatT);
+  t.placeholder=s==='saving'?'⏳ Saving to HID Notes…':s==='saved'?'✓ Saved to HID Notes':t.dataset.ph;
+  if(s==='saving')t.style.opacity='.6';else t.style.opacity='';
+  if(s==='saved')window._qnoteStatT=setTimeout(()=>qnoteStat(''),2500);}
 function qnoteDone(text){
   const t=$('qnote');if(t)t.disabled=false;
+  qnoteStat(text==='NOTE saved'?'saved':'');
   if(text==='NOTE saved'){
     if(t&&t.value.trim()===window._qnoteSent){t.value='';delete t.dataset.sized;
       t.style.height='';t.style.width='17rem';}
@@ -12168,6 +12266,10 @@ function renderOsTab(){
          the E9 could not both feel right. -->
     <div id="accelwrap" style="margin-top:.6rem"></div></td></tr>`;
   $('osscroll').innerHTML=sh;
+  // 29.8: renderAccel() was defined in 23.8 and never called, so the
+  // per-device acceleration fields never appeared. Found while adding the
+  // scroll test, which lives inside it.
+  renderAccel();
   // 27.6: Shift + wheel -> horizontal. Deleted rather than stored false when
   // unticked, the same shape as pan_accel -- which is why the engine now
   // resets its scroll options to defaults on every load.
@@ -12359,8 +12461,11 @@ window.osMapSet=(o,type,id,L,act,hasVal)=>{
 // that is the thing Josh is actually trying to dial in ("one click, one
 // line"). The rest govern how a sustained scroll builds.
 const ACCEL_FIELDS=[
-  ['slow1','First-click damping','Below this output, halve it. Raise to make a single detent smaller.'],
-  ['slow2','Second damping','Below this, halve again. The two together shape the very first click.'],
+  // 29.8: a lone click (no scrolling in the last ~70 ms) sends exactly this
+  // many units and skips the curve. Josh chose it as the default (1).
+  ['first_click','Exact first click','Units a lone click sends, skipping the curve. 0 = off (the curve decides, as before 29.8).'],
+  ['slow1','Start-of-run damping','Below this output, halve it. Shapes the first clicks of a run (and a lone click when Exact first click is 0).'],
+  ['slow2','Second damping','Below this, halve again.'],
   ['decay','Velocity decay','Per millisecond. Lower forgets a fast scroll sooner.'],
   ['cubic_gain','Acceleration gain','How hard fast scrolling ramps up.'],
   ['cubic_scale','Acceleration scale','Input scaling before the cubic term.'],
@@ -12392,7 +12497,9 @@ function renderAccel(){
         <span class="muted" style="font-size:.68rem">in force: ${
           live[k]!==undefined?esc(String(live[k])):'—'}</span></label>`;}
     h+='</div></div>';}
+  h+='<div id="scrolllab"></div>';
   host.innerHTML=h;
+  renderScrollLab();
   host.querySelectorAll('[data-accel]').forEach(inp=>inp.onchange=()=>{
     const dev=inp.dataset.accel,k=inp.dataset.ak,v=inp.value.trim();
     cfg.scroll_accel=cfg.scroll_accel||{};
@@ -12402,6 +12509,133 @@ function renderAccel(){
     if(v==='')delete t[k]; else t[k]=parseFloat(v);
     if(!Object.keys(t).length)delete cfg.scroll_accel[dev];
     toast('scroll acceleration changed — Save to device to apply');});}
+
+/* 29.8: THE SCROLL TEST, beside the settings it tests. Josh, 2026-10-07:
+   "Have the page measure and show lines per click and per flick right next
+   to where I adjust settings (so I can adjust and immediately try out
+   different things). My actual thought was to have a guided process ...
+   how far they get; how fast things scroll; horizontal as well as
+   vertical; and in horizontal scrolling, scrolling by columns (like excel
+   does ...), and scrolling by (pixel?)".
+
+   Three boxes: lines (vertical), columns (snaps to 64 px columns, like a
+   spreadsheet) and pixels. Wheel CLICKS and the UNITS the Pi sent come from
+   the event stream ("wheel delta=" / "pan delta=" raw, "mouse ... wheel="
+   out), so the test turns the event monitor on while it runs and off again
+   if it started it. What the box moved is measured here. One gesture ends
+   after 400 ms of quiet. Changing a setting needs ⬆ Save to device before
+   the next try feels different -- the Pi runs the curve, not the page. */
+const LAB_LINE=20,LAB_COL=64,LAB_QUIET=400;
+let _lab=null;
+const LAB_STEPS=[
+  ['v','One slow click','In the Lines box: scroll ONE click, wait a second, and do it twice more.'],
+  ['v','A fast flick','In the Lines box: flick the wheel fast, once.'],
+  ['c','Columns (like Excel)','In the Columns box: one click with Shift held (or tilt the wheel), then a flick.'],
+  ['p','Pixels (most other apps)','In the Pixels box: one click with Shift held (or tilt the wheel), then a flick.']];
+function labBoxes(){
+  let lines='';for(let i=1;i<=400;i++)lines+=`<div style="height:${LAB_LINE}px;line-height:${LAB_LINE}px">${i}</div>`;
+  let cols='';for(let i=0;i<200;i++){let n='',k=i;do{n=String.fromCharCode(65+k%26)+n;k=Math.floor(k/26)-1;}while(k>=0);
+    cols+=`<div style="flex:0 0 ${LAB_COL}px;scroll-snap-align:start;border-right:1px solid var(--line);text-align:center">${n}</div>`;}
+  let px='';for(let i=0;i<60;i++)px+=`<div style="flex:0 0 100px;border-left:1px solid var(--line);font-size:.7rem;padding-left:2px">${i*100}px</div>`;
+  const box='border:1px solid var(--line);background:var(--panel2);font-family:monospace;font-size:.75rem';
+  return `<div style="display:flex;gap:.6rem;flex-wrap:wrap;margin:.3rem 0">
+    <div style="flex:0 0 7rem"><div class="muted">Lines</div>
+      <div id="labv" data-lab="v" style="${box};height:180px;overflow-y:auto">${lines}</div></div>
+    <div style="flex:1 1 16rem;min-width:0"><div class="muted">Columns (snaps like a spreadsheet)</div>
+      <div id="labc" data-lab="c" style="${box};height:60px;overflow-x:auto;display:flex;scroll-snap-type:x mandatory">${cols}</div>
+      <div class="muted" style="margin-top:.4rem">Pixels</div>
+      <div id="labp" data-lab="p" style="${box};height:60px;overflow-x:auto;display:flex">${px}</div></div></div>`;}
+function renderScrollLab(){
+  const host=$('scrolllab');if(!host)return;
+  if(!_lab){host.innerHTML=`<div style="margin-top:.4rem"><b style="font-size:.85rem">Scroll test</b>
+      <span class="muted">· try a setting and see it, or be guided</span>
+      <button id="labstart" style="margin-left:.4rem">▶ Start scroll test</button>
+      <button id="labguide">🧭 Guide me</button></div>`;
+    $('labstart').onclick=()=>labStart(false);$('labguide').onclick=()=>labStart(true);return;}
+  host.innerHTML=`<div style="margin-top:.4rem"><b style="font-size:.85rem">Scroll test</b>
+      <button id="labstop" style="margin-left:.4rem">■ Stop</button>
+      <button id="labclear">Clear</button>
+      <label class="inl muted" style="margin-left:.6rem">want lines per click
+        <input id="labwant" type="number" min="1" step="1" value="${_lab.want}" style="width:3.5rem"></label></div>
+    <div id="labguidebox"></div>${labBoxes()}<div id="labres"></div>`;
+  $('labstop').onclick=labStop;$('labclear').onclick=()=>{_lab.g=[];labShow();};
+  $('labwant').onchange=e=>{_lab.want=Math.max(1,+e.target.value||1);labShow();};
+  host.querySelectorAll('[data-lab]').forEach(b=>{
+    b._lp=b.scrollTop+b.scrollLeft;
+    b.addEventListener('scroll',()=>{const k=b.dataset.lab,now=k==='v'?b.scrollTop:b.scrollLeft;
+      const d=Math.abs(now-(b._lp||0));b._lp=now;if(!d)return;
+      const g=labGesture();g.box=g.box||k;if(g.box===k)g.moved+=d;});});
+  labShow();}
+function labStart(guided){
+  _lab={g:[],cur:null,want:1,step:guided?0:-1,mine:!$('evon').classList.contains('rec')};
+  if(_lab.mine)eventsOn(0);
+  renderScrollLab();}
+function labStop(){
+  if(_lab&&_lab.mine)$('evoff').click();
+  clearTimeout(_lab&&_lab.t);_lab=null;renderScrollLab();}
+function labGesture(){
+  const now=Date.now();
+  if(!_lab.cur)_lab.cur={t0:now,t1:now,clicks:0,units:0,moved:0,box:null,dev:'',lone:true};
+  const g=_lab.cur;g.t1=now;clearTimeout(_lab.t);
+  _lab.t=setTimeout(labEnd,LAB_QUIET);return g;}
+function labEnd(){
+  const g=_lab&&_lab.cur;if(!g)return;_lab.cur=null;
+  if(!g.clicks&&!g.moved)return;
+  _lab.g.push(g);if(_lab.g.length>12)_lab.g.shift();labShow();}
+function labFeed(txt){
+  if(!_lab)return;
+  let m=/^(wheel|pan) delta=(-?\d+)(?: dev=(\S+))?/.exec(txt);
+  if(m){const g=labGesture();g.clicks+=Math.abs(+m[2]);if(m[3])g.dev=m[3];return;}
+  m=/^OUT:mouse .*wheel=(-?\d+) pan=(-?\d+)/.exec(txt);
+  if(m){const u=Math.abs(+m[1])+Math.abs(+m[2]);if(u){labGesture().units+=u;}}}
+function labUnit(box){return box==='v'?LAB_LINE:box==='c'?LAB_COL:1;}
+function labWord(box){return box==='v'?'lines':box==='c'?'columns':'px';}
+function labShow(){
+  const res=$('labres');if(!res)return;
+  const rows=_lab.g.slice().reverse().map(g=>{
+    const n=g.moved/labUnit(g.box||'v'),secs=Math.max(.05,(g.t1-g.t0)/1000);
+    const per=g.clicks?(n/g.clicks):null;
+    return `<tr><td>${esc(labWord(g.box||'v'))}</td><td>${g.clicks||'?'}</td><td>${g.units||'?'}</td>
+      <td>${n.toFixed(g.box==='p'?0:1)}</td><td>${per==null?'—':per.toFixed(g.box==='p'?0:2)}</td>
+      <td>${g.clicks>1?(n/secs).toFixed(0)+'/s':'—'}</td></tr>`;}).join('');
+  res.innerHTML=`<table class="tbl" style="font-size:.75rem;margin-top:.3rem"><tr><th>box</th><th>clicks</th>
+    <th>units sent</th><th>moved</th><th>per click</th><th>speed</th></tr>${rows||
+    '<tr><td colspan="6" class="muted">scroll in a box -- each gesture is one row</td></tr>'}</table>`;
+  labGuideShow();}
+/* The guided half: four steps, then a suggestion. The suggestion is only
+   about the lone click, which is what "Exact first click" sets: lines per
+   UNIT is measured (what the computer does with one unit), so the units a
+   lone click should send are want / lines-per-unit. If one unit already
+   moves more lines than wanted, no Pi setting can fix it -- that is the
+   computer's own "lines to scroll at a time", and the page says so. */
+function labGuideShow(){
+  const box=$('labguidebox');if(!box||!_lab||_lab.step<0){if(box)box.innerHTML='';return;}
+  const s=_lab.step;
+  if(s<LAB_STEPS.length){const [,t,how]=LAB_STEPS[s];
+    box.innerHTML=`<div class="primer" style="margin:.3rem 0"><b>Step ${s+1} of ${LAB_STEPS.length}: ${esc(t)}</b>
+      — ${esc(how)} <button id="labnext">Next ▶</button></div>`;
+    $('labnext').onclick=()=>{_lab.step++;labShow();};return;}
+  const v=_lab.g.filter(g=>g.box==='v'&&g.clicks===1&&g.units);
+  let html='<div class="primer" style="margin:.3rem 0"><b>Result</b> ';
+  if(!v.length){html+='— no single clicks measured in the Lines box (is the Pi connected?). '
+    +'<button id="labagain">Start again</button></div>';box.innerHTML=html;
+    $('labagain').onclick=()=>{_lab.step=0;_lab.g=[];labShow();};return;}
+  const lpu=v.reduce((a,g)=>a+g.moved/LAB_LINE/g.units,0)/v.length;
+  const units=v.reduce((a,g)=>a+g.units,0)/v.length;
+  const sugg=Math.max(1,Math.round(_lab.want/lpu));
+  const dev=(v[v.length-1].dev)||'';
+  html+=`— one lone click sent ${units.toFixed(1)} unit(s); the computer scrolls ${lpu.toFixed(1)} line(s) per unit. `;
+  if(lpu>_lab.want+0.25)html+=`One unit is already more than ${_lab.want} line(s): no Pi setting can go lower. `
+    +`Set the computer's "lines to scroll at a time" to ${_lab.want} (Windows: Settings → Bluetooth &amp; devices → Mouse), then run this again. `;
+  html+=`Suggested <b>Exact first click = ${sugg}</b>${dev?' for '+esc(dev):''}. `
+    +(dev?`<button id="labapply">Use ${sugg}</button> `:'')+'<button id="labagain">Start again</button></div>';
+  box.innerHTML=html;
+  $('labagain').onclick=()=>{_lab.step=0;_lab.g=[];labShow();};
+  if($('labapply'))$('labapply').onclick=()=>{
+    cfg.scroll_accel=cfg.scroll_accel||{};
+    const t=cfg.scroll_accel[dev]=cfg.scroll_accel[dev]||{};t.first_click=sugg;
+    const keep=_lab;renderAccel();_lab=keep;renderScrollLab();
+    toast('Exact first click = '+sugg+' — ⬆ Save to device to apply');};}
 
 window.osScrollSet=(o,dev,on)=>{const p=osProf(o);p.scroll_invert=p.scroll_invert||{};
   if(on)p.scroll_invert[dev]=true;else delete p.scroll_invert[dev];
