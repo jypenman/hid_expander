@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.15</title>
+<title>HID Config 29.16</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1786,6 +1786,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.16',d:'2026-10-08',items:[
+   {t:'Practice keyboard: colour by stage (unused, learning, learned), app buttons with matching key outlines, descriptions inside the keys',k:'practicekbd'},
+   {t:'Practice keyboard: one shortcut to focus on, with a change… list; each chosen shortcut can have its natural rate',k:'practicekbd'},
+   {t:'Mouse writing: the Shapes and keys section no longer closes by itself',k:'mousewrite'}]},
  {v:'29.15',d:'2026-10-08',items:[
    {t:'Mac mode: Left Alt (Option) never reaches Windows, so Option characters no longer move focus; Right Alt is Windows Alt; DOUBLE-tap Right Alt to switch modes',k:'optsec'},
    {t:'The Fintie wireframe shows what its modifiers really send (a Baselined modifier skips the Ctrl/Win swap, as in the engine)',k:'devcards'},
@@ -2830,6 +2834,14 @@ $('evon').onclick=e=>{eventsOn(60);clickFx(e.target);};
 let _showKeysState=0;
 function showKeysIdle(){        // 19.2 BF2 #4i: single place that resets the button
   _showKeysState=0;clearTimeout(_showKeysTimer);
+  // 29.17: the stream has stopped, so no release will ever arrive for a
+  // key held at that moment. Josh, 2026-10-08 09:40: "If a key is held down
+  // when the 60-second "show keypresses" ends, they remain held down in the
+  // UI Wireframe." Let go of everything the Pi's stream was holding (the
+  // browser's own keys have their own keyup and are left alone).
+  try{for(const k of [..._heldKeys]){const [u,dev]=k.split('|');
+        if(dev||!_browserHeld.has(+u))holdKey(+u,false,dev);}
+      for(const bx of [..._heldBtns])holdBtn(bx,false);}catch(_){}
   try{brKeysState();}catch(_){}
   const b=$('showkeys');if(!b)return;
   b.classList.remove('rec');b.textContent='▶ Show key presses';
@@ -7187,15 +7199,48 @@ const PK_ROWS=[
  [['Caps',0x39,1.7],['a',0x04],['s',0x16],['d',0x07],['f',0x09],['g',0x0a],['h',0x0b],['j',0x0d],['k',0x0e],['l',0x0f],[';',0x33],["'",0x34],['Enter',0x28,1.9]],
  [['Shift',0xe1,2.2],['z',0x1d],['x',0x1b],['c',0x06],['v',0x19],['b',0x05],['n',0x11],['m',0x10],[',',0x36],['.',0x37],['/',0x38],['Shift',0xe5,2.4]],
  [['Ctrl',0xe0,1.4],['Win',0xe3,1.2],['Alt',0xe2,1.2],['Space',0x2c,5.2],['Alt',0xe6,1.2],['Ctrl',0xe4,1.2],null,['←',0x50],['↑',0x52],['↓',0x51],['→',0x4f],null,['PgUp',0x4b,1.1],['PgDn',0x4e,1.1],['Home',0x4a,1.1],['End',0x4d,1.1]]];
+/* 29.16: the practice keyboard, rebuilt around how he learns. Josh,
+   2026-10-08 07:32: "ii) make the description for keys I'm trying to learn
+   fit within the key (non-bold font; wrap) iii) ... buttons for each app
+   that has checked items for training, and have the keyboard change what it
+   shows based on those selections ... color the keys with outlines ... that
+   correspond to the buttons v) color-coding ... grey for "not used at all",
+   to Bright Green for those that are on the cusp of "fluency", and a light
+   green ... that appear learned ... vi) Highlight a single key combination
+   for me to focus on ... with a "change" button ... vi.2) a way to indicate
+   on any given shortcut that I'm using it at it's 'natural rate'".
+
+   STAGE is per week against a target: his own "natural rate" for that
+   shortcut if he set one (cfg.kbd_rate), else PK_TARGET. 0 = unused (grey);
+   below 70 % of the target = learning (bright green, stronger as it nears);
+   at or above = learned (light green). The Usage window is weeks, so a
+   learned shortcut left unused drifts back down by itself. Only his clicks
+   write cfg (focus, rate, which apps show is per browser). */
+const PK_TARGET=5;
+const PK_PALETTE=['#2563eb','#d97706','#7c3aed','#0891b2','#db2777','#65a30d'];
+function pkStage(id,counts){
+  const c=counts.get(_chordNorm(id)),per=c?c.per_week:0;
+  const t=+(((cfg&&cfg.kbd_rate)||{})[id])||PK_TARGET;
+  if(!per)return {s:'unused',r:0,per,t};
+  const r=per/t;return {s:r>=0.7?'learned':'learning',r,per,t};}
+function pkStageBg(st){
+  return st.s==='unused'?'rgba(128,128,128,.25)':st.s==='learned'?'rgba(134,239,172,.35)'
+    :`rgba(34,197,94,${(0.35+0.5*Math.min(1,st.r/0.7)).toFixed(2)})`;}
 function renderPracticeKbd(){
   const el=$('practicekbd');if(!el)return;
   const chosen=(cfg&&cfg.kbd_train)||[];
   if(!chosen.length){el.innerHTML='';return;}
-  // key usage -> [{chord, mods, desc}]
+  const counts=_usageByNorm();
+  let hide=new Set();try{hide=new Set(JSON.parse(localStorage.getItem('hc.pkhide')||'[]'));}catch(_){}
+  const appOf=ch=>{const d=corpusDesc(ch);return (d&&d.app)||'(no set)';};
+  const apps=[...new Set(chosen.map(appOf))];
+  const col=a=>PK_PALETTE[apps.indexOf(a)%PK_PALETTE.length];
   const by=new Map();
   for(const ch of chosen){const pc=parseCorpusChord(ch);if(!pc)continue;
+    const app=appOf(ch);if(hide.has(app))continue;
     const d=corpusDesc(ch);
-    (by.get(pc.canon)||by.set(pc.canon,[]).get(pc.canon)).push({ch,mods:pc.mods,d:d?d.text.replace(/^[^—]{1,40}—\s*/,''):''});}
+    (by.get(pc.canon)||by.set(pc.canon,[]).get(pc.canon)).push({ch,app,mods:pc.mods,
+      st:pkStage(ch,counts),d:d?d.text.replace(/^[^—]{1,40}—\s*/,''):''});}
   const bits=heldModBits(heldInputs());
   const U=40;
   const rowHTML=r=>r.map(k=>{
@@ -7203,17 +7248,62 @@ function renderPracticeKbd(){
     const[lab,u,w]=k,list=by.get(u)||[];
     const live=bits?list.filter(x=>x.mods===bits):list;
     const isHeldMod=usageIsMod(u)&&heldInputs().keys.includes(u);
-    const face=bits&&live.length?esc(live[0].d.slice(0,10)||live[0].ch):esc(lab);
-    const tip=list.length?list.map(x=>`${x.ch} — ${x.d||'(no description)'}`).join('\n'):'';
-    const bg=isHeldMod?'rgba(239,68,68,.55)':live.length?(bits?'rgba(34,197,94,.45)':'rgba(234,179,8,.35)'):'transparent';
+    const top=live[0];
+    // ii: the description, in the key, normal weight, wrapped
+    const face=bits&&top?esc(top.d||top.ch):esc(lab);
+    const tip=list.length?list.map(x=>`${x.ch} — ${x.d||'(no description)'} [${x.app} · ${x.st.per}/wk of ${x.st.t}]`).join('\n'):'';
+    const bg=isHeldMod?'rgba(239,68,68,.55)':top?pkStageBg(top.st):'transparent';
+    const outline=top?`box-shadow:inset 0 0 0 2px ${col(top.app)};`:'';
     return `<span title="${esc(tip)}" style="display:inline-flex;align-items:center;justify-content:center;
       position:relative;width:${Math.round((w||1)*U)}px;height:${U-8}px;margin:1px;border:1px solid var(--line);
-      border-radius:4px;font-size:.62rem;line-height:1;overflow:hidden;background:${bg};color:var(--fg);
-      ${live.length?'font-weight:600':''}">${face}${list.length&&!bits?`<sup style="position:absolute;right:2px;top:1px;font-size:.5rem">${list.length}</sup>`:''}</span>`;}).join('');
+      border-radius:4px;font-size:${bits&&top?'.5rem':'.62rem'};line-height:1.05;overflow:hidden;background:${bg};color:var(--fg);
+      white-space:normal;text-align:center;word-break:break-word;font-weight:400;${outline}">${face}${list.length&&!bits?`<sup style="position:absolute;right:2px;top:1px;font-size:.5rem">${list.length}</sup>`:''}</span>`;}).join('');
+  // vi: one shortcut to focus on -- his choice, else the top-priority one
+  // not yet learned
+  let focus=(cfg.kbd_focus&&chosen.includes(cfg.kbd_focus))?cfg.kbd_focus:null;
+  if(!focus)focus=chosen.find(id=>pkStage(id,counts).s!=='learned')||chosen[0];
+  const fd=corpusDesc(focus),fst=pkStage(focus,counts);
+  const side=`<div style="flex:0 0 11rem;font-size:.72rem;margin-left:.5rem">
+    <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.4rem">${apps.map(a=>
+      `<button data-pkapp="${esc(a)}" style="font-size:.66rem;padding:.05rem .35rem;border:2px solid ${col(a)};
+        ${hide.has(a)?'opacity:.45':`background:${col(a)};color:#fff`}" title="Show or hide ${esc(a)} on the keyboard">${esc(a)}</button>`).join('')}</div>
+    <div style="border:2px solid var(--hi);border-radius:6px;padding:.3rem .4rem">
+      <div class="muted">Focus on</div>
+      <div style="font-family:ui-monospace,monospace;font-size:.85rem;font-weight:600">${esc(focus)}</div>
+      <div>${esc(fd?fd.text:'')}</div>
+      <div class="muted">${fst.per}/week of ${fst.t} · ${fst.s}</div>
+      <button id="pkchange" style="font-size:.7rem;margin-top:.2rem">change…</button></div>
+    <div class="muted" style="margin-top:.3rem;line-height:1.3">
+      <span style="background:rgba(128,128,128,.25);padding:0 .25rem">unused</span>
+      <span style="background:rgba(34,197,94,.7);padding:0 .25rem">learning</span>
+      <span style="background:rgba(134,239,172,.35);padding:0 .25rem">learned</span></div></div>`;
   el.innerHTML=`<div class="muted" style="font-size:.7rem;margin-bottom:.15rem">Practising ${chosen.length} ·
-    ${bits?`holding <b>${esc(modsName(bits))}</b> — green keys do something you are learning`
-          :'lit keys finish a chord you are learning (hover for them); hold a modifier to see what each does'}</div>
-    <div style="font-family:ui-monospace,monospace;white-space:nowrap;overflow-x:auto">${PK_ROWS.map(r=>`<div>${rowHTML(r)}</div>`).join('')}</div>`;}
+    ${bits?`holding <b>${esc(modsName(bits))}</b> — each key shows what it would do`
+          :'hold a modifier to see what each key does; colour = how far along you are'}</div>
+    <div style="display:flex;align-items:flex-start"><div style="font-family:ui-monospace,monospace;white-space:nowrap;overflow-x:auto">${
+      PK_ROWS.map(r=>`<div>${rowHTML(r)}</div>`).join('')}</div>${side}</div>`;
+  el.querySelectorAll('[data-pkapp]').forEach(b=>b.onclick=()=>{
+    const a=b.dataset.pkapp;if(hide.has(a))hide.delete(a);else hide.add(a);
+    try{localStorage.setItem('hc.pkhide',JSON.stringify([...hide]));}catch(_){}
+    renderPracticeKbd();});
+  const ch=$('pkchange');if(ch)ch.onclick=()=>pkChooseFocus();}
+// vi: the "change" dialog -- every chosen shortcut, with its app and the
+// section its set gives it ("Source — …"), and its stage.
+function pkChooseFocus(){
+  const p=$('popover');if(!p)return;
+  const counts=_usageByNorm(),chosen=(cfg&&cfg.kbd_train)||[];
+  p.innerHTML=`<b>Focus on…</b><div style="max-height:22rem;overflow:auto;margin-top:.3rem">${chosen.map(id=>{
+    const d=corpusDesc(id),st=pkStage(id,counts);
+    const sec=d&&/^([^—]{1,40})\s—\s/.exec(d.text);
+    return `<div style="padding:.15rem 0;border-bottom:1px solid var(--line)"><a class="mlink" data-pkf="${esc(id)}"
+      style="font-family:ui-monospace,monospace">${esc(id)}</a> <span class="muted">${esc((d&&d.app)||'')}${sec?' · '+esc(sec[1]):''}
+      · ${st.per}/wk · ${st.s}</span><div style="font-size:.74rem">${esc(d?d.text.replace(/^[^—]{1,40}—\s*/,''):'')}</div></div>`;}).join('')}</div>`;
+  p.style.maxWidth='28rem';placePopover(p,$('practicekbd').getBoundingClientRect());
+  p.querySelectorAll('[data-pkf]').forEach(a=>a.onclick=e=>{e.stopPropagation();
+    cfg.kbd_focus=a.dataset.pkf;profileTouched();p.style.display='none';renderPracticeKbd();
+    toast('focus: '+a.dataset.pkf+' — ⬆ Save to device to keep it');});
+  setTimeout(()=>{const close=ev=>{if(p.contains(ev.target))return;p.style.display='none';
+    document.removeEventListener('click',close);};document.addEventListener('click',close);},50);}
 
 /* ===== 28.9: TRAINING -- R SHORTCUTS THIS WEEK ===========================
    Josh, 2026-09-28: "make the training things highest priority: I want to
@@ -7312,7 +7402,10 @@ function renderTraining(){
             <td style="font-family:ui-monospace,monospace">${esc(id)}</td>
             <td class="muted">${d ? esc(d.text) + (d.app ? ` <span style="font-size:.72rem">· ${esc(d.app)}</span>` : '')
                  : (refData('corpus') ? '<i>not in any set</i>' : '<i>reading the shortcut sets…</i>')}</td>
-            <td${per ? '' : ' style="color:var(--warn)"'}>${haveU ? per : '—'}</td>
+            <td${per ? '' : ' style="color:var(--warn)"'}>${haveU ? per : '—'}
+              <input type="number" min="0.1" step="0.5" data-trate="${esc(id)}" style="width:3.4rem;margin-left:.2rem"
+                value="${((cfg.kbd_rate||{})[id])||''}" placeholder="${PK_TARGET}"
+                title="Its natural rate: how often a week you would use it once learned (default ${PK_TARGET}). Colours on the practice keyboard measure against this."></td>
             <td class="muted">${haveU ? tot : '—'}</td>
             <td style="white-space:nowrap"><a class="mlink" data-tknow="${esc(id)}"
                    title="I already know this one — stop practising it">✓ know it</a>
@@ -7345,6 +7438,13 @@ function renderTraining(){
       setTrained(a.dataset.tadd, true); renderTraining(); renderTrack();});
     el.querySelectorAll('[data-tprio]').forEach(inp => inp.onchange = () => {
       setTrainPriority(inp.dataset.tprio, (+inp.value || 1) - 1); renderTraining();});
+    // 29.16 (vi.2): his "natural rate" for a shortcut -- written on his edit
+    el.querySelectorAll('[data-trate]').forEach(inp => inp.onchange = () => {
+      cfg.kbd_rate = cfg.kbd_rate || {};
+      const v = +inp.value;
+      if(v > 0) cfg.kbd_rate[inp.dataset.trate] = v; else delete cfg.kbd_rate[inp.dataset.trate];
+      if(!Object.keys(cfg.kbd_rate).length) delete cfg.kbd_rate;
+      profileTouched(); renderPracticeKbd(); toast('natural rate set — ⬆ Save to device');});
     let dragId = null;
     el.querySelectorAll('[data-trow]').forEach(tr => {
       tr.ondragstart = e => { dragId = tr.dataset.trow; e.dataTransfer.effectAllowed = 'move'; };
