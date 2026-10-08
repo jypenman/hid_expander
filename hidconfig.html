@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.20</title>
+<title>HID Config 29.20.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1830,6 +1830,12 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.20.2',d:'2026-10-08',items:[
+   {t:'Debug monitor: each raw key shows the time since the previous one (+ms), from the kernel\'s own timestamp -- to tell the Fintie\'s built-in chords from typed ones',k:'debugmon'}]},
+ {v:'29.20.1',d:'2026-10-08',items:[
+   {t:'✎ Layout: Capture in order reads the Pi only (it turns Show key presses on while it runs), so keys the computer never sees are captured too',k:'wfsection'},
+   {t:'✎ Layout: rename any element -- a Label box for the selected key, button or captured chord',k:'wfsection'},
+   {t:'✎ Layout: captured and typed-in elements use the W and H you set, and the setting stays put',k:'wfsection'}]},
  {v:'29.20',d:'2026-10-08',items:[
    {t:'Every open section heading and table header row now sticks to the top while you scroll its content, stacked under the ones above it',k:'remappanel'},
    {t:'⌥ panel: the Option-character checkboxes tick again (they had stopped in 29.17); Check all and Uncheck collisions buttons',k:'optsec'},
@@ -2400,6 +2406,7 @@ let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 // because render() reads them and must never meet them in their TDZ.
 let _lcap=null,_typeAdd=true,_typeAddRow=null,_masg=null;
 let _groupEnableBoxes=false;
+const _palWH={w:1,h:1};           // 29.20.1: size for new layout elements
 const _asgGrpSel=new Set();        // 29.20: selected Group cells (member ids)
 try{_groupEnableBoxes=localStorage.getItem('hc.grpenbox')==='1';}catch(_){}
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
@@ -3392,7 +3399,15 @@ function annotate(txt){
   if(cm)return txt+`  ⚠ consumer-page key — needs a Consumer HID interface to reach the host`;
   // RAW: "key code=125 val=1 port2=False" -> append [Name]
   let m=txt.match(/^key code=(\d+) val=(\d+)/);
-  if(m){const n=ev2name(+m[1]);return txt+(n?` [${n}]`:' [?]');}
+  if(m){const n=ev2name(+m[1]);
+    // 29.20.2: the engine stamps each raw key with the kernel's time (t=,
+    // ms); show the gap since the previous one, which is what tells a chord
+    // the keyboard sent by itself from one typed by hand.
+    const tm=/ t=([\d.]+)/.exec(txt);let dt='';
+    if(tm){const t=+tm[1];
+      if(annotate._t!=null&&t>=annotate._t&&t-annotate._t<10000)dt=` +${(t-annotate._t).toFixed(1)} ms`;
+      annotate._t=t;}
+    return txt+(n?` [${n}]`:' [?]')+dt;}
   // SENT kbd: "kbd mods=0x0c keys=['0x73', '0x2c']" -> append readable names
   m=txt.match(/^kbd mods=(0x[0-9a-f]+) keys=\[(.*?)\]?$/);
   if(m){
@@ -5300,13 +5315,22 @@ function _lcapSlotLabel(s){
   const m=s.filter(i=>i.u!=null&&usageIsMod(i.u)),o=s.filter(i=>!m.includes(i));
   return [...m,...o].map(_lcapItemName).join('+');}
 // The element a captured slot becomes, at (x,y).
+// 29.20.1: every element takes the palette's W and H ("Make sure that the
+// keys it creates all follow the size settings for new keys (mine were of
+// varying widths...)" -- Josh, 13:10). A chord's width used to follow its
+// label's length.
+function _lcapSize(){
+  const w=_palWH.w||1,h=_palWH.h||1;
+  return{w,h:h===1?undefined:h};}
 function lcapElement(s,x,y){
-  if(!s.length)return{note:1,ghost:1,x,y,w:1,label:'—',
+  const {w,h}=_lcapSize();
+  const sz=h?{w,h}:{w};
+  if(!s.length)return{note:1,ghost:1,x,y,...sz,label:'—',
     title:'captured: this key sent nothing'};
-  if(s.length===1)return s[0].b!=null?{btn:s[0].b,x,y,w:1,label:btnLabel(s[0].b)}
-    :{u:s[0].u,x,y,w:1};
+  if(s.length===1)return s[0].b!=null?{btn:s[0].b,x,y,...sz,label:btnLabel(s[0].b)}
+    :{u:s[0].u,x,y,...sz};
   const l=_lcapSlotLabel(s);
-  return{note:1,x,y,w:Math.min(3,Math.max(1,Math.ceil(l.length/7*4)/4)),label:l,
+  return{note:1,x,y,...sz,label:l,
     title:'captured: this key sends '+l+'. HIDConfig cannot tell that from you '
       +'pressing '+l+', so it is shown here but cannot be remapped.'};}
 function _layBottom(lay){
@@ -5314,8 +5338,7 @@ function _layBottom(lay){
 function layoutCaptureHtml(){
   if(_lcap){
     const all=[..._lcap.slots,...(_lcap.cur.length?[_lcap.cur]:[])];
-    return `<div class="muted" style="font-size:.74rem">⏺ Capturing${
-      _lcap.dev?'':' from this browser'} — press each key, then <b>${esc(_lcap.delim[2])}</b>.
+    return `<div class="muted" style="font-size:.74rem">⏺ Capturing from the Pi — press each key, then <b>${esc(_lcap.delim[2])}</b>.
       ${esc(_lcap.delim[2])} twice leaves a greyed gap.</div>
       <div id="lcaplist" style="font-size:.74rem;max-height:7rem;overflow:auto;margin:.25rem 0">${
         all.length?all.map((s,i)=>`<span class="pill" style="${s.length?'':'opacity:.5'}">${
@@ -5330,22 +5353,32 @@ function layoutCaptureHtml(){
     <select id="lcapdelim" style="width:100%;margin-top:.3rem" title="what separates one key from the next">${
         LCAP_DELIMS.map(d=>`<option value="${d[0]}${d[1]}" ${d===cur?'selected':''}>between keys: ${esc(d[2])}</option>`).join('')}</select>
     <button id="lcapgo" style="width:100%;margin-top:.3rem" title="Press keys (media keys, chords, mouse buttons) one after another with the chosen key between them; each becomes an element, in order, in a new row">⏺ Capture in order</button>
-    <div class="muted" style="font-size:.72rem;margin-top:.2rem">${
-      _showKeysState>0?'From the Pi (Show key presses is on): keys, media keys and mouse buttons.'
-      :'From this browser: keys and media keys only. Turn on Show key presses for mouse buttons and the device.'
-        +(cur[0]==='b'?' <b>A mouse button between keys needs Show key presses on.</b>':'')}</div>`;}
+    <div class="muted" style="font-size:.72rem;margin-top:.2rem">Capture reads the Pi (it turns Show key
+      presses on while it runs), so it sees every key, media key and mouse button the device sends,
+      even one the computer never receives.</div>`;}
 function bindLayoutCapture(d,lay){
   if($('paltypeadd'))$('paltypeadd').onchange=()=>{_typeAdd=$('paltypeadd').checked;};
   if($('lcapdelim'))$('lcapdelim').onchange=()=>{
     try{localStorage.setItem('hc.capdelim',$('lcapdelim').value);}catch(_){}};
+  // 29.20.1: Josh, 13:10: "The "Capture in order" should read from the
+  // Debug monitor Input ONLY; that way it can define a key even if it
+  // doesn't show up to the OS; ensure it starts the debug monitor". So it
+  // reads the Pi's stream, never this browser, and turns Show key presses
+  // on ("until stopped") for as long as it runs -- and off again after, if
+  // it was the one that turned it on.
+  const keysOff=c=>{if(c&&c.startedKeys&&_showKeysState>0){_showKeysState=2;$('showkeys').click();}};
   if($('lcapgo'))$('lcapgo').onclick=()=>{
+    if(!device){toast('Capture in order reads the Pi — connect first',true);return;}
     editMulti.clear();editSel=null;     // so Delete/Backspace are keys, not "remove"
-    _lcap={dev:_showKeysState>0?d.id:'',delim:_lcapDelim(),slots:[],cur:[],
-           mods:new Set(),t0:Date.now(),last:null};
+    let started=false;
+    if(_showKeysState!==2){_showKeysState=1;$('showkeys').click();started=true;}
+    _lcap={dev:d.id,delim:_lcapDelim(),slots:[],cur:[],
+           mods:new Set(),t0:Date.now(),last:null,startedKeys:started};
     render();};
-  if($('lcapcancel'))$('lcapcancel').onclick=()=>{_lcap=null;render();toast('capture cancelled');};
+  if($('lcapcancel'))$('lcapcancel').onclick=()=>{keysOff(_lcap);_lcap=null;render();toast('capture cancelled');};
   if($('lcapdone'))$('lcapdone').onclick=()=>{
     const c=_lcap;_lcap=null;if(!c)return;
+    keysOff(c);
     // The click on this button reaches the Pi as a left click before the
     // page sees it. Drop it if it is the last thing captured.
     if(c.last&&c.last.b===1&&Date.now()-c.last.t<1500&&c.cur.length
@@ -5353,7 +5386,7 @@ function bindLayoutCapture(d,lay){
     const slots=[...c.slots,...(c.cur.length?[c.cur]:[])];
     if(!slots.length){render();toast('nothing captured');return;}
     const y=_layBottom(lay);let x=0;
-    for(const s of slots){const e=lcapElement(s,x,y);lay.keys.push(e);x+=e.w||1;}
+    for(const s of slots){const e=lcapElement(s,x,y);lay.keys.push(e);x+=(e.w||1)+0.05;}
     render();toast('added '+slots.length+' element'+(slots.length>1?'s':'')
       +' in a new row — drag into place, then 💾 Save layout');};}
 // One press or release from either source. Returns true if it was used.
@@ -5379,21 +5412,26 @@ function layoutKeyEvent(ev){
   if(!_typeAddRow||_typeAddRow.dev!==d.id||_typeAddRow.lay!==lay)
     _typeAddRow={dev:d.id,lay,x:0,y:_layBottom(lay)};
   const e=lcapElement([ev.b!=null?{b:ev.b}:{u:ev.u}],_typeAddRow.x,_typeAddRow.y);
-  _typeAddRow.x+=1;lay.keys.push(e);render();
+  _typeAddRow.x+=(e.w||1)+0.05;lay.keys.push(e);render();
   toast('added '+(e.label||KEYS[e.u]||MODS[e.u]||'key')+' to the layout — drag it into place');
   return true;}
 // Browser source for the layout editor: only while Show key presses is off
 // (otherwise the Pi's stream reports the same press, with its device).
 function _layoutBrowserKey(e,down){
+  if(_lcap&&!e.repeat){const t=e.target,tn=(t&&t.tagName||'').toLowerCase();
+    if(tn!=='input'&&tn!=='textarea'&&tn!=='select'){e.preventDefault();return;}}
   if(!editDev||_showKeysState>0||e.repeat)return;
   const t=e.target,tn=(t&&t.tagName||'').toLowerCase();
   if(tn==='input'||tn==='textarea'||tn==='select'||(t&&t.isContentEditable))return;
   let u=BROWSER_CODE2HID[e.code];
   if(u===undefined&&BROWSER_MEDIA2USAGE[e.code]!==undefined)u=(0x0c<<16)|BROWSER_MEDIA2USAGE[e.code];
   if(u===undefined)return;
+  // 29.20.1: a capture reads the Pi only. The browser's copy of the same
+  // press is swallowed (so Space does not scroll the page), never counted.
+  if(_lcap){e.preventDefault();return;}
   // Delete/Backspace with a selection removes it (handled elsewhere)
-  if(!_lcap&&(u===0x4c||u===0x2a)&&(editMulti.size||editSel!=null))return;
-  if(layoutKeyEvent({u,down,dev:''})&&_lcap)e.preventDefault();}
+  if((u===0x4c||u===0x2a)&&(editMulti.size||editSel!=null))return;
+  layoutKeyEvent({u,down,dev:''});}
 document.addEventListener('keydown',e=>_layoutBrowserKey(e,true));
 document.addEventListener('keyup',e=>_layoutBrowserKey(e,false));
 function renderPalette(){
@@ -5431,8 +5469,8 @@ function renderPalette(){
       <option value="stepper">Stepper</option></select></div>
   <div id="palvalwrap" style="margin-top:.3rem"></div>
   <div style="display:flex;gap:.4rem;margin-top:.3rem">
-    <label style="flex:1;margin:0">W<input type="number" id="palw" value="1" step="0.25" min="0.5"></label>
-    <label style="flex:1;margin:0">H<input type="number" id="palh" value="1" step="0.25" min="0.5"></label></div>
+    <label style="flex:1;margin:0">W<input type="number" id="palw" value="${_palWH.w}" step="0.05" min="0.25"></label>
+    <label style="flex:1;margin:0">H<input type="number" id="palh" value="${_palWH.h}" step="0.05" min="0.25"></label></div>
   <button id="paladd" class="primary" style="margin-top:.4rem;width:100%">＋ Add element</button>
   <button id="paltp" style="margin-top:.35rem;width:100%">＋ Trackpad cluster</button>
   ${fintieFrowKeys(lay)?`<button id="palfintie" style="margin-top:.35rem;width:100%"
@@ -5450,6 +5488,8 @@ function renderPalette(){
      <label style="flex:1;margin:0">W<input type="number" id="palsw" value="${selk.w||1}" step="0.25" min="0.5"></label>
      <label style="flex:1;margin:0">H<input type="number" id="palsh" value="${selk.h||1}" step="0.25" min="0.5"></label>
      <label style="flex:1;margin:0">↻°<input type="number" id="palsr" value="${selk.rot||0}" step="15"></label></div>
+   <label style="margin-top:.3rem">Label <span class="muted" style="font-weight:400">(what the key shows; empty = its name)</span></label>
+   <input type="text" id="palslbl" value="${esc(selk.label||'')}" placeholder="${esc(MODS[selk.u]||KEYS[selk.u]||'')}" maxlength="40" style="width:100%">
    <button id="paldel" style="margin-top:.4rem;width:100%">🗑 Remove element</button>`:''}
   <button id="palnav" style="margin-top:.35rem;width:100%">＋ Back / Forward buttons</button>
   <button id="palscroll" style="margin-top:.35rem;width:100%"
@@ -5486,6 +5526,10 @@ function renderPalette(){
       kind==='btn'?`<div style="display:flex;gap:.4rem"><select id="palbtn" style="flex:1">${Array.from({length:15},(_,i)=>`<option value="${i+1}">${esc(btnLabel(i+1))}</option>`).join('')}</select><input type="text" id="pallbl" placeholder="label" style="width:70px"></div>`:
       '';};
   $('palkind').onchange=valRefresh;valRefresh();
+  // 29.20.1: the size for new elements survives a re-render (every
+  // captured key re-renders the palette, which reset it to 1 x 1).
+  $('palw').onchange=()=>{_palWH.w=+$('palw').value||1;};
+  $('palh').onchange=()=>{_palWH.h=+$('palh').value||1;};
   $('paladd').onclick=()=>{
     const kind=$('palkind').value;
     const maxy=lay.keys.length?Math.max(...lay.keys.map(k=>k.y+(k.h||1))):0;
@@ -5523,6 +5567,13 @@ function renderPalette(){
     $('palsw').onchange=()=>{selk.w=+$('palsw').value||1;render();};
     $('palsh').onchange=()=>{selk.h=+$('palsh').value||1;render();};
     $('palsr').onchange=()=>{selk.rot=+$('palsr').value||0;render();};
+    // 29.20.1: rename any element (Josh, 13:10: "we get "Lalt+D", then
+    // next it's going to need to be able to be renamed to "Home"").
+    // Drawing only: the label is in the layout, not the mapping.
+    $('palslbl').onchange=()=>{const v=$('palslbl').value.trim();
+      if(v)selk.label=v;else delete selk.label;
+      if(selk.note&&!v)selk.label='—';
+      render();};
     $('paldel').onclick=()=>{lay.keys.splice(editSel,1);editSel=null;render();};}
   $('palansi').onclick=()=>{if(confirm('Replace this layout with the ANSI template?')){layouts[d.id]=ansiLayout();editSel=null;render();}};
   $('palsplit').onclick=()=>{if(confirm('Replace this layout with the split template?')){layouts[d.id]=splitLayout();editSel=null;render();}};
