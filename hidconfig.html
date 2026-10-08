@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.17</title>
+<title>HID Config 29.19</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -620,6 +620,13 @@ align-items:center;justify-content:center}
 .kabs .key{overflow:visible}
 .key.editsel{outline:2px solid var(--warn);outline-offset:1px;z-index:3}
 .wfbody.editing .key{cursor:grab;touch-action:none}
+/* 29.18: label-only elements -- a chord a key sends (shown, not mappable), a
+   greyed gap where a captured key sent nothing, and a row label. */
+.kabs .key.knote{border-style:dashed;font-size:.64rem;line-height:1.05;color:var(--mut);
+  overflow:hidden;white-space:normal}
+.kabs .key.kghost{opacity:.35;border-style:dotted}
+.kabs .key.krowlbl{border-color:transparent;background:transparent;justify-content:flex-end;
+  font-weight:600;color:var(--fg)}
 .wfbody.editing .kabs{cursor:crosshair}
 .rubber{position:absolute;border:1px dashed var(--hi);background:rgba(59,130,246,.15);
   pointer-events:none;z-index:50}
@@ -1786,15 +1793,27 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.19',d:'2026-10-08',items:[
+   {t:'Macros: ⌨ Assign… next to each macro -- press the key, modifier + key or mouse button that should run it; it says what it replaces before writing',k:'macrolist'},
+   {t:'Usage: "Does what" names what a row sends -- layer1+Shift+L is Shift+→ (the layer key with Shift carried), a layer chord rule before the layer key, and an unmapped layer key says it is the key itself',k:'page-usage'},
+   {t:'A key-with-modifiers mapping reads "Ctrl+←" everywhere, not the word "keymods"',k:'page-usage'},
+   {t:'Usage: keys the engine records as hex (layer3+0x39) are understood',k:'page-usage'}]},
+ {v:'29.18',d:'2026-10-08',items:[
+   {t:'Fintie wireframe: the function row as three short rows -- For Win, For Android, For iOS -- with a key that is the same in several modes drawn once across them (✎ Layout → ＋ Fintie mode rows, or the Fintie template)',k:'devcards'},
+   {t:'✎ Layout: a key or button you press that is not on the wireframe is added to it',k:'devcards'},
+   {t:'✎ Layout → Capture in order: press keys, media keys, chords or mouse buttons one after another with a separator you choose (Space, Enter, Tab, Comma or a mouse button); a key that sends nothing becomes a greyed gap',k:'devcards'},
+   {t:'Mac option/alt mode: Right Alt is Windows Alt, and so is Left Alt with Ctrl or Cmd/Win held (choose which in the ⌥ panel); the held-key preview follows',k:'optsec'},
+   {t:'Every page string says "Mac option/alt mode" / "Windows option/alt mode" ("Mac mode" now means only the Active OS)',k:'optsec'},
+   {t:'Media keys light up on the wireframe when pressed',k:'devcards'}]},
  {v:'29.17',d:'2026-10-08',items:[
-   {t:'⌥ panel: the Mac mode list -- what Option takes over from Windows and where each moved (Back = Cmd+[ …), your Mac-mode-only rules, and your macros 35–38 one click away',k:'optsec'},
+   {t:'⌥ panel: the Mac option/alt mode list -- what Option takes over from Windows and where each moved (Back = Cmd+[ …), your Mac option/alt mode only rules, and your macros 35–38 one click away',k:'optsec'},
    {t:'Keys held when Show key presses ends are let go on the wireframe',k:'legend'}]},
  {v:'29.16',d:'2026-10-08',items:[
    {t:'Practice keyboard: colour by stage (unused, learning, learned), app buttons with matching key outlines, descriptions inside the keys',k:'practicekbd'},
    {t:'Practice keyboard: one shortcut to focus on, with a change… list; each chosen shortcut can have its natural rate',k:'practicekbd'},
    {t:'Mouse writing: the Shapes and keys section no longer closes by itself',k:'mousewrite'}]},
  {v:'29.15',d:'2026-10-08',items:[
-   {t:'Mac mode: Left Alt (Option) never reaches Windows, so Option characters no longer move focus; Right Alt is Windows Alt; DOUBLE-tap Right Alt to switch modes',k:'optsec'},
+   {t:'Mac option/alt mode: Left Alt (Option) never reaches Windows, so Option characters no longer move focus; Right Alt is Windows Alt; DOUBLE-tap Right Alt to switch modes',k:'optsec'},
    {t:'The Fintie wireframe shows what its modifiers really send (a Baselined modifier skips the Ctrl/Win swap, as in the engine)',k:'devcards'},
    {t:'The version badge opens every time, and "show more" expands it',k:'uiver'},
    {t:'Scroll walk-through: Guide me first and highlighted; honest browser numbers; Exact first click below 1; a target for a strong flick sets the acceleration',k:'osscroll'}]},
@@ -1829,7 +1848,7 @@ const VERSION_HISTORY=[
  {v:'29.6',d:'2026-10-07',items:[
    {t:'Option characters on Windows: press the same one twice quickly and it is retyped the Office way (U+code, Alt+X)',k:'optsec'}]},
  {v:'29.5',d:'2026-10-07',items:[
-   {t:'Right Alt mode now decides the Mac Option shortcuts too: Windows mode leaves Alt+←/→ as Back/Forward; Mac mode moves by word. Alt no longer opens the ribbon after one',k:'optsec'}]},
+   {t:'Right Alt mode now decides the Mac Option shortcuts too: Windows option/alt mode leaves Alt+←/→ as Back/Forward; Mac option/alt mode moves by word. Alt no longer opens the ribbon after one',k:'optsec'}]},
  {v:'29.4.2',d:'2026-10-07',items:[
    {t:'Option characters on Windows (≈ and others typed as an Alt code) are no longer cut in half when you let go of the keys; that was also what moved focus to the ribbon',k:'optsec'}]},
  {v:'29.4.1',d:'2026-10-07',items:[
@@ -1855,7 +1874,7 @@ const VERSION_HISTORY=[
  {v:'29.1.1',d:'2026-09-30',items:[
    {t:'Swap: every layer follows, including layers where the other side had nothing; a tap of “click” clicks the button it now belongs to; and a device’s own button mappings are no longer folded away when the page re-reads after Save',k:'devcards'}]},
  {v:'29.1',d:'2026-09-28',items:[
-   {t:'Right Alt now switches Mac mode (every Mac character, nothing to tick) and Windows mode (ordinary Alt, except the characters you ticked) — explained in the ⌥ panel; the engine starts in Windows mode',k:'optsec'},
+   {t:'Right Alt now switches Mac option/alt mode (every Mac character, nothing to tick) and Windows option/alt mode (ordinary Alt, except the characters you ticked) — explained in the ⌥ panel; the engine starts in Windows option/alt mode',k:'optsec'},
    {t:'Without Show key presses, the keys you press in the browser drive the wireframe and the practice keyboard',k:'devcards'},
    {t:'Saves queue one behind another (two at once arrived scrambled: “✗ length mismatch”); a short save now says so and what to do',k:'write'},
    {t:'⌥ panel: a chord on your practice or known list counts as a collision (Alt+O is RStudio’s Fold All)',k:'optsec'}]},
@@ -2331,6 +2350,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   try{initTopbarSync();}catch(e){console.warn('topbar sync failed',e);}});
 let btTotal=0,btGot={},pfGot={},pfTotal=0,pfN=0,_usageWait=false;
 let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
+// 29.18/29.19: layout capture-in-order, type-to-add, macro Assign. Up here
+// because render() reads them and must never meet them in their TDZ.
+let _lcap=null,_typeAdd=true,_typeAddRow=null,_masg=null;
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let editMulti=new Set();   // 19.1 #6: marquee-selected key indices in the layout editor
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
@@ -3861,6 +3883,9 @@ function setIdent(dev,ref,n){
 function macroLabel(n){const nm=(cfg.macro_names||{})[n];return nm?nm:('M'+n);}
 function actShort(a){if(!a)return'';const k=a[0];
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
+// 29.19: a key with modifiers -- was printed as the bare word "keymods"
+if(k==='keymods')return [[1,'Ctrl'],[8,'Win'],[4,'Alt'],[2,'Shift']].filter(([b])=>(+a[2]||0)&b)
+  .map(x=>x[1]).concat([KEYS[a[1]]||MODS[a[1]]||'?']).join('+');
 if(k==='macro')return macroLabel(a[1]);if(k==='macro_up')return macroLabel(a[1])+'↑';
 if(k==='macro_both')return macroLabel(a[1])+'/'+macroLabel(a[2])+'↑';
 if(k==='suppress')return'∅';if(k==='passthru')return'↷ as-is';
@@ -4222,9 +4247,112 @@ function e9Layout(){
     {u:0x1f,x:2.2,y:4.7,w:1,label:'2'},
     {u:0x20,x:3.3,y:4.7,w:1,label:'3'}];
   return{unit:42,keys};}
+/* 29.18: the Fintie's function row, one entry per physical key, Esc..F12.
+   Josh, 2026-10-08: "You can set up separate rows of keys for each item (if
+   they're identical between "For Win", "For Android" and "for iOS" just make
+   a single key that takes up the sapce of three (and note that these keys
+   are all about 75% the size of normal keys); That way I'll be able to
+   easily see which mode they are in."
+
+   [win, android, ios]. A NUMBER is a usage the engine receives and can map
+   (a consumer usage is page-tagged, (0x0C<<16)|id, as everywhere else). A
+   STRING is a chord the keyboard sends by itself: HIDConfig cannot tell it
+   from you pressing that chord, so it is drawn but is not mappable. null =
+   the key sent nothing. Android and iOS are from his captures of
+   2026-10-08 12:12 and 12:13. "For Win" was NOT captured, so that row shows
+   the F-key each position would be, and says so; replace it with a capture
+   ("Capture in order" in the Layout palette) when he has one. */
+const FINTIE_WIN_CAPTURED=false;
+const FINTIE_FROW=(()=>{const C=u=>(0x0c<<16)|u;return[
+  [0x29,C(0x223),C(0x223)],
+  [0x3a,'LShift+Space','LCtrl+Space'],
+  [0x3b,C(0x221),C(0x221)],
+  [0x3c,'LCtrl+A','LWin+A'],
+  [0x3d,'LCtrl+C','LWin+C'],
+  [0x3e,'LCtrl+V','LWin+V'],
+  [0x3f,'LCtrl+X','LWin+X'],
+  [0x40,C(0xb6),C(0xb6)],
+  [0x41,C(0xcd),C(0xcd)],
+  [0x42,C(0xb5),C(0xb5)],
+  [0x43,C(0xea),C(0xea)],
+  [0x44,C(0xe9),C(0xe9)],
+  [0x45,null,null]];})();
+const FINTIE_MODES=['For Win','For Android','For iOS'];
+// One element for what a mode row sends at one position.
+function fintieCell(v,x,y,w,h,mode){
+  if(typeof v==='number')return{u:v,x,y,w,h};
+  if(v==null)return{note:1,ghost:1,x,y,w,h,label:'—',
+    title:mode+': this key sent nothing when captured'};
+  // The keys are 0.75 wide: symbols, so "Ctrl+A" is not cut to "Ctrl+"
+  // (the full chord is in the tooltip).
+  const sh=v.replace('LShift+','⇧').replace('LCtrl+','⌃').replace('LWin+','⊞')
+    .replace('Space','␣');
+  return{note:1,x,y,w,h,label:sh,
+    title:mode+': the keyboard itself sends '+v+'. HIDConfig cannot tell that '
+      +'from you pressing '+v+', so it is shown here but cannot be remapped.'};}
+// The three rows for keys at the given x positions/widths. yTop is the top of
+// the For Win row; rows are 0.75 high on a 0.8 pitch. A position the same in
+// all three modes is ONE element spanning them; the same in Android and iOS
+// spans those two.
+function fintieRowElements(cols,yTop){
+  const P=0.8,H=0.75,out=[];
+  const minx=Math.min(...cols.map(c=>c.x));
+  FINTIE_MODES.forEach((m,r)=>out.push({note:1,rowlabel:1,x:minx-1.6,y:yTop+r*P,w:1.5,h:H,
+    label:m+(r===0&&!FINTIE_WIN_CAPTURED?' ?':''),
+    title:r===0&&!FINTIE_WIN_CAPTURED
+      ?'For Win was not captured yet: this row shows the F-key at each position'
+      :'what each key sends with the Fintie in '+m+' mode'}));
+  FINTIE_FROW.forEach(([win,an,ios],i)=>{
+    const c=cols[i];if(!c)return;
+    const x=c.x,w=c.w||1;
+    if(FINTIE_WIN_CAPTURED&&win===an&&an===ios){
+      out.push(fintieCell(win,x,yTop,w,2*P+H,'Every mode'));return;}
+    const wk=c.key?Object.assign(c.key,{y:yTop,h:H}):{u:win,x,y:yTop,w,h:H};
+    out.push(wk);
+    if(an===ios)out.push(fintieCell(an,x,yTop+P,w,P+H,'For Android and For iOS'));
+    else{out.push(fintieCell(an,x,yTop+P,w,H,'For Android'));
+         out.push(fintieCell(ios,x,yTop+2*P,w,H,'For iOS'));}});
+  return out;}
+// The F-row of a layout: Esc and F1..F12 above the number row. Returns them in
+// FINTIE_FROW order, or null if any is missing.
+function fintieFrowKeys(lay){
+  const top=lay.keys.find(k=>k.u===0x1e);
+  const lim=top?top.y:Infinity;
+  const ks=FINTIE_FROW.map(([u])=>lay.keys.find(k=>k.u===u&&k.y<lim&&!k.note));
+  return ks.every(Boolean)?ks:null;}
+// A consumer key already drawn above the number row that the mode rows will
+// now show (his Fintie layout has a stray Search there, added from a capture):
+// two elements for one usage overlapping in the same place is noise.
+function fintieDupes(lay){
+  const ks=fintieFrowKeys(lay);if(!ks)return[];
+  const top=lay.keys.find(k=>k.u===0x1e),lim=top?top.y:Infinity;
+  const inRows=new Set(FINTIE_FROW.flat().filter(v=>typeof v==='number'&&v>>16));
+  return lay.keys.filter(k=>!k.fintie&&!ks.includes(k)&&k.y<lim&&inRows.has(k.u));}
+// Replace a layout's F-row with the three mode rows, in place, keeping each
+// key's own x and width. Only ever called from a button (a user action).
+function applyFintieRows(lay){
+  const ks=fintieFrowKeys(lay);if(!ks)return false;
+  // the first time, the old F-row becomes the bottom (For iOS) row's line;
+  // again, the rows stay where they are
+  const again=lay.keys.some(k=>k.fintie);
+  const yTop=Math.min(...ks.map(k=>k.y))-(again?0:1.6);
+  const drop=new Set([...ks,...fintieDupes(lay)]);
+  // an earlier run's rows go too, so pressing it twice does not stack them
+  lay.keys=lay.keys.filter(k=>!drop.has(k)&&!k.fintie);
+  const els=fintieRowElements(ks.map(k=>({x:k.x,w:k.w||1,key:k})),yTop);
+  els.forEach(e=>{if(e.note||e.u!==undefined&&!ks.includes(e))e.fintie=1;});
+  lay.keys.push(...els);
+  return true;}
+function fintieLayout(){
+  const lay=ansiLayout();
+  // 0.75 wide, as his own Fintie layout already has them
+  fintieFrowKeys(lay).forEach((k,i)=>{k.w=0.75;k.x=i;});
+  applyFintieRows(lay);
+  return lay;}
 function layoutFor(d){
   if(layouts&&layouts[d.id])return layouts[d.id];
-  return d.wireframe==='split'?splitLayout():d.wireframe==='e9'?e9Layout():ansiLayout();}
+  return d.wireframe==='split'?splitLayout():d.wireframe==='e9'?e9Layout()
+    :d.wireframe==='fintie'?fintieLayout():ansiLayout();}
 function editableLayout(d){
   layouts=layouts||{};
   if(!layouts[d.id])layouts[d.id]=JSON.parse(JSON.stringify(layoutFor(d)));
@@ -4309,6 +4437,7 @@ function renderStage(){
         <option value="ansi" ${(d.wireframe||'ansi')==='ansi'?'selected':''}>ANSI</option>
         <option value="split" ${d.wireframe==='split'?'selected':''}>Split</option>
         <option value="e9" ${d.wireframe==='e9'?'selected':''}>E9 mouse</option>
+        <option value="fintie" ${d.wireframe==='fintie'?'selected':''}>Fintie (3 modes)</option>
       </select>
       ${canEdit?`<button class="editbtn" data-ed="${d.id}" title="edit the wireframe drawing only (key positions), not mappings">${editing?'💾 Save layout':'✎ Layout'}</button>`:''}
       ${canEdit&&editing?`<button class="cancelbtn" title="discard the layout changes you have made since pressing Layout, and leave the editor">✕ Cancel</button>`:''}
@@ -4505,6 +4634,15 @@ function renderLayoutKbd(d,w){
     if(k.rot)el.style.transform=`rotate(${k.rot}deg)`;
     const editing=editDev===d.id;
     // ---- special element kinds ----
+    // 29.18: label-only -- a chord a key sends by itself, a greyed gap, or a
+    // row label. Nothing to map, so no data-usage and no editor.
+    if(k.note){
+      el.className='key knote'+(k.ghost?' kghost':'')+(k.rowlabel?' krowlbl':'')
+        +(editing&&editSel===idx?' editsel':'');
+      el.textContent=k.label||'';
+      if(k.title)el.title=k.title;
+      if(editing)bindEditKey(el,d,idx);
+      div.appendChild(el);return;}
     if(kind==='pad'){el.className='key';el.style.opacity=.35;
       el.style.height=((k.h||1.6)*unit)+'px';el.textContent=k.label||'trackpad';
       if(editing)bindEditKey(el,d,idx);div.appendChild(el);return;}
@@ -4865,7 +5003,7 @@ function bindEditKey(el,d,idx){
 let _wfSnap=null;
 
 function toggleEdit(id){
-  editMulti.clear();
+  editMulti.clear();_lcap=null;_typeAddRow=null;   // 29.18
   if(editDev===id){
     editDev=null;editSel=null;_wfSnap=null;
     if(device)putFile(2,layouts||{});
@@ -4881,6 +5019,7 @@ function toggleEdit(id){
 
 function cancelEdit(){
   if(!editDev)return;
+  _lcap=null;_typeAddRow=null;                     // 29.18
   if(_wfSnap!=null){
     try{layouts[editDev]=JSON.parse(_wfSnap);}
     catch(_){}}                            // a corrupt snapshot must not trap you in the editor
@@ -4889,6 +5028,141 @@ function cancelEdit(){
   // Nothing is sent to the Pi: Cancel means the device never hears about it.
   render();
   toast('layout changes discarded');}
+/* 29.18: BUILDING A LAYOUT BY PRESSING KEYS.
+
+   Josh, 2026-10-08 11:56:58 (HID Notes): in edit-layout mode, pressing keys
+   not in the layout adds them one after another. And, 2026-10-08: "add a
+   interface in the "Layout" dialogue where I can add these media keys by
+   doing something like I just did; pressing them in order with a space in
+   between. (Have it skip the key by putting in a greyed out key whenever
+   there's something that doesn't send anything in betwee spaces (or
+   whatever key the user chooses to deliniate - make that user selectable as
+   well, and make mouse buttons part of the selection)"
+
+   Two modes, both only while ✎ Layout is open for a device:
+   * TYPE TO ADD (a checkbox, on by default): a key or button pressed that is
+     not on the wireframe is appended to a "new keys" row.
+   * CAPTURE IN ORDER: every press between two delimiter presses is one slot.
+     One key or button -> that element (mappable); several -> a label of the
+     chord it sent (not mappable: it cannot be told from pressing the chord);
+     nothing -> a greyed gap. The delimiter only counts when no modifier is
+     held, so a key that SENDS Shift+Space is a chord, not a delimiter -- the
+     Fintie's F1 in For Android mode did exactly that to the raw capture.
+
+   Source: the Pi's Show key presses stream when it runs (it knows the
+   device, media keys and mouse buttons); this browser otherwise (keys and
+   the media keys a browser reports; no mouse buttons, no device). */
+const LCAP_DELIMS=[['k',0x2c,'Space'],['k',0x28,'Enter'],['k',0x2b,'Tab'],['k',0x36,'Comma'],
+  ['b',1,'Left click'],['b',2,'Right click'],['b',3,'Middle click']];
+const BROWSER_MEDIA2USAGE={MediaPlayPause:0xcd,MediaTrackNext:0xb5,MediaTrackPrevious:0xb6,
+  MediaStop:0xb7,AudioVolumeUp:0xe9,AudioVolumeDown:0xea,AudioVolumeMute:0xe2,
+  BrowserHome:0x223,BrowserSearch:0x221,BrowserBack:0x224,BrowserForward:0x225};
+function _lcapDelim(){let v=null;try{v=localStorage.getItem('hc.capdelim');}catch(_){}
+  return LCAP_DELIMS.find(d=>d[0]+d[1]===v)||LCAP_DELIMS[0];}
+function _lcapItemName(it){
+  return it.b!=null?btnLabel(it.b):(MODS[it.u]||KEYS[it.u]||('0x'+it.u.toString(16)));}
+function _lcapSlotLabel(s){
+  if(!s.length)return'—';
+  // modifiers first, the way a chord is written
+  const m=s.filter(i=>i.u!=null&&usageIsMod(i.u)),o=s.filter(i=>!m.includes(i));
+  return [...m,...o].map(_lcapItemName).join('+');}
+// The element a captured slot becomes, at (x,y).
+function lcapElement(s,x,y){
+  if(!s.length)return{note:1,ghost:1,x,y,w:1,label:'—',
+    title:'captured: this key sent nothing'};
+  if(s.length===1)return s[0].b!=null?{btn:s[0].b,x,y,w:1,label:btnLabel(s[0].b)}
+    :{u:s[0].u,x,y,w:1};
+  const l=_lcapSlotLabel(s);
+  return{note:1,x,y,w:Math.min(3,Math.max(1,Math.ceil(l.length/7*4)/4)),label:l,
+    title:'captured: this key sends '+l+'. HIDConfig cannot tell that from you '
+      +'pressing '+l+', so it is shown here but cannot be remapped.'};}
+function _layBottom(lay){
+  return lay.keys.length?Math.round((Math.max(...lay.keys.map(k=>k.y+(k.h||1)))+0.25)*4)/4:0;}
+function layoutCaptureHtml(){
+  if(_lcap){
+    const all=[..._lcap.slots,...(_lcap.cur.length?[_lcap.cur]:[])];
+    return `<div class="muted" style="font-size:.74rem">⏺ Capturing${
+      _lcap.dev?'':' from this browser'} — press each key, then <b>${esc(_lcap.delim[2])}</b>.
+      ${esc(_lcap.delim[2])} twice leaves a greyed gap.</div>
+      <div id="lcaplist" style="font-size:.74rem;max-height:7rem;overflow:auto;margin:.25rem 0">${
+        all.length?all.map((s,i)=>`<span class="pill" style="${s.length?'':'opacity:.5'}">${
+          i+1}. ${esc(_lcapSlotLabel(s))}</span>`).join(' '):'<i class="muted">nothing yet</i>'}</div>
+      <div style="display:flex;gap:.4rem">
+        <button id="lcapdone" class="primary" style="flex:1">✓ Add ${all.length}</button>
+        <button id="lcapcancel" style="flex:1">✕ Cancel</button></div>`;}
+  const cur=_lcapDelim();
+  return `<label style="display:flex;gap:.35rem;align-items:center;font-weight:400;font-size:.78rem;margin:0">
+      <input type="checkbox" id="paltypeadd" ${_typeAdd?'checked':''}>
+      Add any key or button I press that isn't on this layout</label>
+    <select id="lcapdelim" style="width:100%;margin-top:.3rem" title="what separates one key from the next">${
+        LCAP_DELIMS.map(d=>`<option value="${d[0]}${d[1]}" ${d===cur?'selected':''}>between keys: ${esc(d[2])}</option>`).join('')}</select>
+    <button id="lcapgo" style="width:100%;margin-top:.3rem" title="Press keys (media keys, chords, mouse buttons) one after another with the chosen key between them; each becomes an element, in order, in a new row">⏺ Capture in order</button>
+    <div class="muted" style="font-size:.72rem;margin-top:.2rem">${
+      _showKeysState>0?'From the Pi (Show key presses is on): keys, media keys and mouse buttons.'
+      :'From this browser: keys and media keys only. Turn on Show key presses for mouse buttons and the device.'
+        +(cur[0]==='b'?' <b>A mouse button between keys needs Show key presses on.</b>':'')}</div>`;}
+function bindLayoutCapture(d,lay){
+  if($('paltypeadd'))$('paltypeadd').onchange=()=>{_typeAdd=$('paltypeadd').checked;};
+  if($('lcapdelim'))$('lcapdelim').onchange=()=>{
+    try{localStorage.setItem('hc.capdelim',$('lcapdelim').value);}catch(_){}};
+  if($('lcapgo'))$('lcapgo').onclick=()=>{
+    editMulti.clear();editSel=null;     // so Delete/Backspace are keys, not "remove"
+    _lcap={dev:_showKeysState>0?d.id:'',delim:_lcapDelim(),slots:[],cur:[],
+           mods:new Set(),t0:Date.now(),last:null};
+    render();};
+  if($('lcapcancel'))$('lcapcancel').onclick=()=>{_lcap=null;render();toast('capture cancelled');};
+  if($('lcapdone'))$('lcapdone').onclick=()=>{
+    const c=_lcap;_lcap=null;if(!c)return;
+    // The click on this button reaches the Pi as a left click before the
+    // page sees it. Drop it if it is the last thing captured.
+    if(c.last&&c.last.b===1&&Date.now()-c.last.t<1500&&c.cur.length
+       &&c.cur[c.cur.length-1].b===1)c.cur.pop();
+    const slots=[...c.slots,...(c.cur.length?[c.cur]:[])];
+    if(!slots.length){render();toast('nothing captured');return;}
+    const y=_layBottom(lay);let x=0;
+    for(const s of slots){const e=lcapElement(s,x,y);lay.keys.push(e);x+=e.w||1;}
+    render();toast('added '+slots.length+' element'+(slots.length>1?'s':'')
+      +' in a new row — drag into place, then 💾 Save layout');};}
+// One press or release from either source. Returns true if it was used.
+// ev = {u} or {b}, down, dev ('' = this browser, which knows no device).
+function layoutKeyEvent(ev){
+  if(!editDev||!cfg)return false;
+  if(ev.dev&&ev.dev!==editDev)return false;   // another device's keys
+  const d=allDevices().find(x=>x.id===editDev);if(!d)return false;
+  if(_lcap){
+    const c=_lcap;
+    if(ev.b===1&&Date.now()-c.t0<700)return true;   // the click on ⏺ itself
+    const isMod=ev.u!=null&&usageIsMod(ev.u);
+    if(!ev.down){if(isMod)c.mods.delete(ev.u);return true;}
+    const delim=c.delim[0]==='k'?ev.u===c.delim[1]:ev.b===c.delim[1];
+    if(delim&&!c.mods.size){c.slots.push(c.cur);c.cur=[];renderPalette();return true;}
+    if(isMod)c.mods.add(ev.u);
+    if(!c.cur.some(i=>i.u===ev.u&&i.b===ev.b))c.cur.push(ev.b!=null?{b:ev.b}:{u:ev.u});
+    c.last={b:ev.b,t:Date.now()};
+    renderPalette();return true;}
+  if(!_typeAdd||!ev.down)return false;
+  const lay=editableLayout(d);
+  if(lay.keys.some(k=>ev.b!=null?k.btn===ev.b:k.u===ev.u))return false;
+  if(!_typeAddRow||_typeAddRow.dev!==d.id||_typeAddRow.lay!==lay)
+    _typeAddRow={dev:d.id,lay,x:0,y:_layBottom(lay)};
+  const e=lcapElement([ev.b!=null?{b:ev.b}:{u:ev.u}],_typeAddRow.x,_typeAddRow.y);
+  _typeAddRow.x+=1;lay.keys.push(e);render();
+  toast('added '+(e.label||KEYS[e.u]||MODS[e.u]||'key')+' to the layout — drag it into place');
+  return true;}
+// Browser source for the layout editor: only while Show key presses is off
+// (otherwise the Pi's stream reports the same press, with its device).
+function _layoutBrowserKey(e,down){
+  if(!editDev||_showKeysState>0||e.repeat)return;
+  const t=e.target,tn=(t&&t.tagName||'').toLowerCase();
+  if(tn==='input'||tn==='textarea'||tn==='select'||(t&&t.isContentEditable))return;
+  let u=BROWSER_CODE2HID[e.code];
+  if(u===undefined&&BROWSER_MEDIA2USAGE[e.code]!==undefined)u=(0x0c<<16)|BROWSER_MEDIA2USAGE[e.code];
+  if(u===undefined)return;
+  // Delete/Backspace with a selection removes it (handled elsewhere)
+  if(!_lcap&&(u===0x4c||u===0x2a)&&(editMulti.size||editSel!=null))return;
+  if(layoutKeyEvent({u,down,dev:''})&&_lcap)e.preventDefault();}
+document.addEventListener('keydown',e=>_layoutBrowserKey(e,true));
+document.addEventListener('keyup',e=>_layoutBrowserKey(e,false));
 function renderPalette(){
   const p=$('palette');if(!p)return;
   if(!editDev||!cfg){p.style.display='none';return;}
@@ -4928,6 +5202,10 @@ function renderPalette(){
     <label style="flex:1;margin:0">H<input type="number" id="palh" value="1" step="0.25" min="0.5"></label></div>
   <button id="paladd" class="primary" style="margin-top:.4rem;width:100%">＋ Add element</button>
   <button id="paltp" style="margin-top:.35rem;width:100%">＋ Trackpad cluster</button>
+  ${fintieFrowKeys(lay)?`<button id="palfintie" style="margin-top:.35rem;width:100%"
+    title="Replace the function row (Esc–F12) with three short rows -- what each key sends in For Win, For Android and For iOS mode. A key that is the same in every mode is one key spanning them.">＋ Fintie mode rows (Win / Android / iOS)</button>`:''}
+  <hr><label>Build by pressing keys</label>
+  ${layoutCaptureHtml()}
   ${selAll.length?`<hr><b>Selected:</b> ${selAll.length} elements
    <div style="display:flex;gap:.4rem;margin-top:.3rem">
      <label style="flex:1;margin:0">W<input type="number" id="palmw" value="${same(k=>k.w||1)??''}" placeholder="mixed" step="0.25" min="0.5"></label>
@@ -4951,9 +5229,10 @@ function renderPalette(){
       title="add this interface's elements below what is already here">＋ ${esc(nodeShort(n.name).slice(0,34))}${
         n.role==='pointer'?' (mouse)':(n.keys?` (${n.keys.length} keys)`:'')}</button>`).join('');})()}
   <hr><label>Start over from template</label>
-  <div style="display:flex;gap:.4rem"><button id="palansi" style="flex:1">ANSI</button>
+  <div style="display:flex;flex-wrap:wrap;gap:.4rem"><button id="palansi" style="flex:1">ANSI</button>
   <button id="palsplit" style="flex:1">Split</button>
-  <button id="pale9" style="flex:1">E9 mouse</button></div>
+  <button id="pale9" style="flex:1">E9 mouse</button>
+  <button id="palfintietpl" style="flex:1">Fintie</button></div>
   ${(()=>{const lib=Object.keys((cfg&&cfg.layout_library)||{});
     return lib.length?`<div class="muted" style="font-size:.72rem;margin-top:.35rem">Saved layouts</div>
       <div style="display:flex;flex-wrap:wrap;gap:.3rem">${lib.map(n=>
@@ -4989,6 +5268,16 @@ function renderPalette(){
     else if(kind==='stepper')base.stepper=1;
     lay.keys.push(base);editSel=lay.keys.length-1;render();};
   $('paltp').onclick=()=>{addTrackpadCluster(lay);render();};
+  if($('palfintie'))$('palfintie').onclick=()=>{
+    const dup=fintieDupes(lay);
+    if(!confirm('Replace '+(d.name||d.id)+'\'s function row (Esc–F12) with three rows: '
+      +'For Win, For Android and For iOS?\n\nEach key keeps its position and width; '
+      +'the rows go above where the function row is now.'
+      +(dup.length?'\n\nAlso removes '+dup.map(k=>KEYS[k.u]||k.u).join(', ')
+        +' drawn above the function row -- the new rows already show it.':'')))return;
+    applyFintieRows(lay);editSel=null;editMulti.clear();render();
+    toast('Fintie mode rows added — 💾 Save layout to keep them');};
+  bindLayoutCapture(d,lay);
   if(selAll.length){
     const setAll=(id,f,dflt)=>{$(id).onchange=()=>{const raw=$(id).value;if(raw==='')return;
       const v=+raw;selAll.forEach(k=>f(k,isFinite(v)?v:dflt));render();};};
@@ -5005,6 +5294,7 @@ function renderPalette(){
   $('palansi').onclick=()=>{if(confirm('Replace this layout with the ANSI template?')){layouts[d.id]=ansiLayout();editSel=null;render();}};
   $('palsplit').onclick=()=>{if(confirm('Replace this layout with the split template?')){layouts[d.id]=splitLayout();editSel=null;render();}};
   $('pale9').onclick=()=>{if(confirm('Replace this layout with the E9 mouse template?')){layouts[d.id]=e9Layout();editSel=null;render();}};
+  $('palfintietpl').onclick=()=>{if(confirm('Replace this layout with the Fintie template (ANSI with the three-mode function row)?')){layouts[d.id]=fintieLayout();editSel=null;render();}};
   // quick-add the two navigation buttons (btn4/btn5) — easy to miss otherwise
   $('palnav').onclick=()=>{
     const maxy=lay.keys.length?Math.max(...lay.keys.map(k=>k.y+(k.h||1))):0;
@@ -6549,22 +6839,55 @@ function _cfgAct(v){
   if(v===undefined||v===null)return null;
   if(typeof v==='number')return v?['key',v]:['suppress'];
   return Array.isArray(v)?v:null;}
+/* 29.19 (URGENT, HID Notes 2026-10-08 10:53:12): "Why is the "Does What"
+   STILL Not at least showing the obvious outcome of "What it does"? For
+   example, layer1+Shift+L:  That is obviously shift+Right Arrow.  Go through
+   them all and make sure any that can be named by what they logically emit
+   from the engine ARE named appropriately". 29.13 looked up the layer
+   mapping OR the chord, never both, and dropped the held modifiers; and a
+   ["keymods"] action printed as the word "keymods". Now, as the engine
+   resolves it: a chord rule on this layer, then on any layer (active OS
+   profile, then shared, then other profiles); else the key's own mapping on
+   this layer with the held modifiers carried through -- which is how
+   layer1+Shift+L reaches Windows as Shift+Right. */
+const _USG_MODN=[[1,'Ctrl'],[8,'Win'],[4,'Alt'],[2,'Shift']];
+function _usgMods(m){const w=_USG_MODN.filter(([b])=>m&b).map(x=>x[1]).join('+');return w?w+'+':'';}
+// What an action sends, with `held` (engine bits) still down.
+function usageEmits(a,held){
+  a=_cfgAct(a);if(!a)return '';
+  held=held||0;
+  if(a[0]==='key')return _usgMods(held)+(KEYS[a[1]]||MODS[a[1]]||'?');
+  if(a[0]==='keymods')return _usgMods(held|(+a[2]||0))+(KEYS[a[1]]||MODS[a[1]]||'?');
+  if(a[0]==='suppress')return 'nothing (switched off)';
+  if(a[0]==='passthru')return '';
+  const s=actShort(a);
+  return s&&held?s+' (with '+_usgMods(held).slice(0,-1)+' held)':s;}
 function usageCfgDoes(id){
   let L=0,rest=String(id);
   const m=/^layer(\d+)\+(.+)$/.exec(rest);
   if(m){L=+m[1];rest=m[2];}
   else if(/ \(L\d+/.test(rest))return '';  // 29.8 names already say it
   const pc=parseCorpusChord(rest);if(!pc)return '';
+  const os=cfg.active_os||'win',profs=cfg.os_profiles||{};
+  const order=[profs[os]||{},cfg,...Object.entries(profs).filter(([o])=>o!==os).map(([,p])=>p||{})];
+  if(pc.mods){
+    for(const p of order)for(const lk of (L?[L,-1]:[0,-1])){
+      const t=p.mod_chords||{},k=`${lk},${pc.mods},${pc.canon}`;
+      if(!Object.prototype.hasOwnProperty.call(t,k))continue;
+      return usageEmits(t[k],0);}}          // passthru / null: as-is, nothing to add
   let a=null;
-  if(L){
-    a=_cfgAct((cfg.kbd_mappings||{})[`${L},${pc.canon}`]);
-    if(!a)for(const t of Object.values(cfg.kbd_mappings_by_device||{})){
-      a=_cfgAct((t||{})[`${L},${pc.canon}`]);if(a)break;}}
-  else{
-    const tabs=[cfg.mod_chords||{}];
-    for(const pr of Object.values(cfg.os_profiles||{}))if(pr&&pr.mod_chords)tabs.push(pr.mod_chords);
-    for(const t of tabs){a=_cfgAct(t[`-1,${pc.mods},${pc.canon}`]);if(a)break;}}
-  return a?actShort(a):'';}
+  for(const p of order.slice(0,2)){a=_cfgAct((p.kbd_mappings||{})[`${L},${pc.canon}`]);if(a)break;}
+  // Device tables only for a LAYER row: a usage id carries no device, and on
+  // the base layer a device remap is usually the E9's digit pad, so "Shift+5"
+  // typed on a keyboard would read as the E9's Shift+Right.
+  if(!a&&L)for(const t of Object.values(cfg.kbd_mappings_by_device||{})){
+    a=_cfgAct((t||{})[`${L},${pc.canon}`]);if(a)break;}
+  // Nothing on this layer: the engine emits the key itself, held modifiers
+  // and all (MAPPING_MODEL §1, "emit canon"). Say so rather than leave a gap.
+  if(!a)return L?rest+' (not remapped on '+layerName(L)+')':'';
+  const s=usageEmits(a,pc.mods);
+  // a key mapped to itself says nothing new
+  return s===rest?'':s;}
 // Which inputs run macro n: "L1 Right", "E9 button 5 (tap)", "Combo …".
 function usageMacroInputs(n){
   const out=[],isM=v=>Array.isArray(v)&&(v[0]==='macro'||v[0]==='macro_up')&&+v[1]===n;
@@ -8059,7 +8382,9 @@ function parseCorpusChord(s){
   for(const p of parts){
     const lm=NAME2MOD[p.toLowerCase()];
     if(lm!==undefined){mods|=modsToEngine(MODUSAGE2BIT[lm]||0);continue;}
-    const u=NAME2KEY[p.toLowerCase()];
+    let u=NAME2KEY[p.toLowerCase()];
+    // 29.19: the engine writes a key it has no name for as hex ("layer3+0x39")
+    if(u===undefined&&/^0x[0-9a-f]{1,4}$/i.test(p))u=parseInt(p,16);
     if(u===undefined)return null;       // unknown token: do not guess
     if(canon!==null)return null;        // two plain keys: not a mod-chord
     canon=u;}
@@ -8163,14 +8488,23 @@ function heldEffects(dev){
     if(p&&p.mod_chords)tbls.push([os,p.mod_chords]);
     // 29.1: in MAC MODE (Right Alt) Alt / Alt+Shift + key is the Mac
     // character for EVERY key in the table, ticked or not -- so that is what
-    // the next key would do. In Windows mode the tables below already hold
+    // the next key would do. In Windows option/alt mode the tables below already hold
     // exactly the ticked ones.
     const macMode=!!(lastEng&&lastEng.option_mode===true)&&/^win/i.test(cfg.active_os||'win');
     const aB=modsToEngine(0x04),asB=modsToEngine(0x06);
-    const macRows=macMode&&(bits===aB||bits===asB);
+    // 29.18 (URGENT): the Mac characters belong to LEFT Alt alone. Josh,
+    // 2026-10-08 10:44: "When I press Ralt in "Browser is listening" mode, I
+    // get the list of Mac symbols instead of all the Windows shortcuts" --
+    // `bits` is folded, so Right Alt matched too. Right Alt, or Left Alt
+    // with Ctrl or Cmd/Win (option_alt_with_mods), is Windows Alt, as in the
+    // engine's option_alt_is_option().
+    const rawB=(held.keys||[]).reduce((a,u)=>usageIsMod(+u)?a|(1<<(+u-0xe0)):a,0);
+    const oaw=Number.isInteger(cfg.option_alt_with_mods)?cfg.option_alt_with_mods:OPT_ALT_WITH_DEFAULT;
+    const lAltOpt=!!(rawB&0x04)&&!(rawB&0x40)&&!(rawB&oaw);
+    const macRows=macMode&&lAltOpt&&(bits===aB||bits===asB);
     if(macRows)for(const r of OPT_CHARS){
       const act=(bits===aB&&r[4])?['dead',r[2]]:['char',bits===aB?r[2]:r[3]];
-      add('key:'+r[0],{kind:'chord',tone:'',label:actShort(act),detail:modsName(bits)+' [Mac mode]'});}
+      add('key:'+r[0],{kind:'chord',tone:'',label:actShort(act),detail:modsName(bits)+' [Mac option/alt mode]'});}
     // 29.2: a chord belongs to a LAYER (or to every layer, -1). Josh,
     // 2026-10-01: with layer 6 selected and LShift picked, the buttons kept
     // showing their layer-6 "//u" / "//c" instead of the Shift rules "\\u" /
@@ -8570,7 +8904,7 @@ function optCollisions(row,shift){
     out.push({kind:'used',text:`you used ${id} ${r.count}× in ${usageData.weeks} wk`});
   // 29.1: a chord he is PRACTISING (or has marked known) is his too -- Alt+O
   // is RStudio's Fold All, on his 2026-09-28 training list, and a ticked ø
-  // would type over it in Windows mode.
+  // would type over it in Windows option/alt mode.
   for(const ch of [...((cfg&&cfg.kbd_train)||[]),...((cfg&&cfg.kbd_known)||[])])
     if(_chordNorm(ch)===want)
       out.push({kind:'used',text:`you are ${((cfg.kbd_train||[]).includes(ch))?'practising':'using (known)'} ${ch}`});
@@ -8606,7 +8940,7 @@ function _optSet(row,shift,on){
   if(baseOn&&!shiftOn&&!t[sk]){t[sk]=['passthru'];g.option_passthru.push(sk);}
   else if((!baseOn||shiftOn)&&pi>=0){
     if(t[sk]&&t[sk][0]==='passthru')delete t[sk];g.option_passthru.splice(pi,1);}}
-/* 29.15: the Mac-mode exceptions -- keys with which Left Alt still goes to
+/* 29.15: the Mac option/alt mode exceptions -- keys with which Left Alt still goes to
    Windows as Alt (option_alt_keys; default Alt+Tab and Alt+F4). Josh,
    2026-10-08: "totally mask and not send alt to the windows PC except in any
    exceptions listed in that feature's settings", then: "In mac mode LALT
@@ -8622,12 +8956,32 @@ function renderOptAltKeys(){
     toast('⬆ Save to device to apply');});
   $('oakadd').onchange=e=>{const u=+e.target.value;if(!e.target.value)return;
     cfg.option_alt_keys=[...new Set([...cur,u])];renderOptAltKeys();toast('⬆ Save to device to apply');};}
+/* 29.18: which modifiers, held with Left Alt, make it Windows Alt in Mac
+   option/alt mode (option_alt_with_mods, raw modifier bits; the engine's
+   default is Ctrl and Cmd/Win, both sides). Josh, 2026-10-08 11:12: "if
+   Ctrl is pressed as well as Alt, it SHOULD start sending Alt to Windows ...
+   The Win/Ctrl(Mac) key as well. ... (And insert preferences in the mode to
+   determine the behavior of any other keys that could be in the same
+   boat ...)". Shift is not offered: Option+Shift types characters. Reads
+   the default without writing it; only a click writes. */
+const OPT_ALT_WITH_DEFAULT=0x01|0x10|0x08|0x80;
+function renderOptAltWith(){
+  const host=$('optaltwith');if(!host)return;
+  const v=Number.isInteger(cfg.option_alt_with_mods)?cfg.option_alt_with_mods:OPT_ALT_WITH_DEFAULT;
+  const opts=[[0x01|0x10,'Ctrl'],[0x08|0x80,'Cmd/Win']];
+  host.innerHTML=opts.map(([b,n])=>`<label style="display:inline-flex;gap:.2rem;align-items:center;margin-right:.5rem;font-weight:400">
+      <input type="checkbox" data-oaw="${b}" ${v&b?'checked':''}>${n}</label>`).join('');
+  host.querySelectorAll('[data-oaw]').forEach(cb=>cb.onchange=()=>{
+    const b=+cb.dataset.oaw;
+    const cur=Number.isInteger(cfg.option_alt_with_mods)?cfg.option_alt_with_mods:OPT_ALT_WITH_DEFAULT;
+    cfg.option_alt_with_mods=cb.checked?(cur|b):(cur&~b);
+    toast('⬆ Save to device to apply');});}
 /* 29.17: THE MAC-MODE OPTION LIST. Josh, 2026-10-07 14:35: "list all the
    Windows commands that have to be moved (and where they're relocated, and
    make that user editable)"; 2026-10-08: "By "Cmd" I mean the key that is
    currently defined as "Ctrl" (in windows) and "Cmnd" (in MacOS)", and his
    macros 35-38 belong in it. cfg.option_rules holds rules that exist only in
-   Mac mode (engine: s2 OPTION_RULES), keyed like mod_chords. On Windows,
+   Mac option/alt mode (engine: s2 OPTION_RULES), keyed like mod_chords. On Windows,
    "Cmd" is that key, which reaches the engine as Ctrl -- so a Cmd trigger is
    stored with the Ctrl bit. Nothing here writes until he clicks. */
 const OPT_DISPLACED=[
@@ -8653,7 +9007,7 @@ function _optParse(txt){
 function _optSet(k,act){cfg.option_rules=cfg.option_rules||{};
   if(act)cfg.option_rules[k]=act;else delete cfg.option_rules[k];
   if(!Object.keys(cfg.option_rules).length)delete cfg.option_rules;
-  profileTouched();renderOptRules();toast('Mac-mode rule changed — ⬆ Save to device');}
+  profileTouched();renderOptRules();toast('Mac option/alt mode rule changed — ⬆ Save to device');}
 function renderOptRules(){
   const host=$('optrules');if(!host||!cfg)return;
   const rules=cfg.option_rules||{};
@@ -8675,24 +9029,24 @@ function renderOptRules(){
   // to this list: a passthru is what gives Alt+Shift+arrows back to Excel
   const bothRows=both.filter(x=>!(Array.isArray(x.v)&&['char','dead','passthru'].includes(x.v[0]))).map(x=>
     `<tr><td style="font-family:ui-monospace,monospace">${esc(_optRuleName(x.k))}</td><td>${esc(actShort(_cfgAct(x.v)||x.v))}</td>
-      <td><a class="mlink" data-omove="${esc(x.k)}" data-ofrom="${x.where}" title="Move it into the Mac-mode list: it stops firing in Windows mode">Mac mode only</a></td></tr>`).join('');
+      <td><a class="mlink" data-omove="${esc(x.k)}" data-ofrom="${x.where}" title="Move it into the Mac option/alt mode list: it stops firing in Windows option/alt mode">Mac option/alt mode only</a></td></tr>`).join('');
   const own=Object.entries(rules).map(([k,v])=>`<tr><td style="font-family:ui-monospace,monospace">${esc(_optRuleName(k))}</td>
       <td>${esc(actShort(_cfgAct(v)||v))}</td><td><a class="mlink" data-odel="${esc(k)}" title="remove">×</a></td></tr>`).join('');
   const boundBoth=(n,u)=>both.some(x=>x.k===`-1,4,${u}`&&Array.isArray(x.v)&&x.v[0]==='macro'&&+x.v[1]===n);
   const binds=OPT_MACRO_BINDS.filter(([n,u])=>(cfg.macros||{})[n]&&!rules[`-1,4,${u}`]&&!boundBoth(n,u)).map(([n,u,lab])=>
     `<a class="mlink" data-obind="${n},${u}">${esc(lab)} → ${esc(macroLabel(n))}</a>`).join(' · ');
-  host.innerHTML=`<b>Mac mode list</b> <span class="muted">— rules that exist only in Mac mode. "Cmd" is the key next to the spacebar (Ctrl on Windows).</span>
+  host.innerHTML=`<b>Mac option/alt mode list</b> <span class="muted">— rules that exist only in Mac option/alt mode. "Cmd" is the key next to the spacebar (Ctrl on Windows).</span>
     <div style="margin-top:.3rem"><b style="font-size:.78rem">What Option takes over, and where it moved</b>
-    <table style="font-size:.78rem"><tr><td><b>On Windows</b></td><td><b>Was</b></td><td><b>Now, in Mac mode</b></td></tr>${disp}</table></div>
-    <div style="margin-top:.3rem"><b style="font-size:.78rem">In Mac mode only</b>
+    <table style="font-size:.78rem"><tr><td><b>On Windows</b></td><td><b>Was</b></td><td><b>Now, in Mac option/alt mode</b></td></tr>${disp}</table></div>
+    <div style="margin-top:.3rem"><b style="font-size:.78rem">In Mac option/alt mode only</b>
     ${own?`<table style="font-size:.78rem">${own}</table>`:'<span class="muted"> — none yet</span>'}
     ${binds?`<div style="margin-top:.2rem">Add your macros: ${binds}</div>`:''}</div>
     ${bothRows?`<div style="margin-top:.3rem"><b style="font-size:.78rem">Your Option rules that fire in BOTH modes</b>
-      <span class="muted">(in Windows mode they take Alt+key from Windows)</span><table style="font-size:.78rem">${bothRows}</table></div>`:''}`;
+      <span class="muted">(in Windows option/alt mode they take Alt+key from Windows)</span><table style="font-size:.78rem">${bothRows}</table></div>`:''}`;
   host.querySelectorAll('[data-ouse]').forEach(a=>a.onclick=()=>{const [u,s]=a.dataset.ouse.split(',').map(Number);
     _optSet(`-1,1,${s}`,['keymods',u,4]);});
   host.querySelectorAll('[data-orel]').forEach(a=>a.onclick=()=>{const u=+a.dataset.orel;
-    const t=prompt('Which key should do Windows Alt+'+(KEYS[u]||'')+' in Mac mode? e.g. Cmd+[');if(!t)return;
+    const t=prompt('Which key should do Windows Alt+'+(KEYS[u]||'')+' in Mac option/alt mode? e.g. Cmd+[');if(!t)return;
     const k=_optParse(t);if(!k){toast('could not read that — try Cmd+[ or Cmd+Shift+B',true);return;}
     const old=relocOf(u);if(old)delete cfg.option_rules[old];_optSet(k,['keymods',u,4]);});
   host.querySelectorAll('[data-odel]').forEach(a=>a.onclick=()=>_optSet(a.dataset.odel,null));
@@ -8720,26 +9074,29 @@ function renderOptChars(){
     Applies on <b>Windows</b> only. Source: ${esc(OPT_SRC)}; the accent combinations are general knowledge.</p>
     <div style="font-size:.8rem;margin:.2rem 0 .5rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem">
       <b>Two modes — double-tap Right Alt to switch</b> (Windows only; one tap, or Right Alt held, is plain Windows Alt):
-      <div style="margin:.2rem 0 0 .6rem">• <b>Mac mode</b> — Left Alt is Option: Alt / Alt+Shift + <i>every</i> key below
+      <div style="margin:.2rem 0 0 .6rem">• <b>Mac option/alt mode</b> — Left Alt is Option: Alt / Alt+Shift + <i>every</i> key below
         types its Mac character, and <b>Left Alt itself never reaches Windows</b>, so nothing opens a menu or moves
         focus. Use Right Alt for Windows Alt. Exceptions (none unless you add one), where Left Alt goes to
-        Windows as Alt: <span id="optaltkeys"></span></div>
-      <div style="margin:.1rem 0 0 .6rem">• <b>Windows mode</b> — Alt is ordinary Windows Alt, <i>except</i> the items
+        Windows as Alt: <span id="optaltkeys"></span>
+        <br>Left Alt is also Windows Alt while you hold <span id="optaltwith"></span>
+        <span class="muted">(Cmd+Option+key on a Mac is a command, not a character)</span></div>
+      <div style="margin:.1rem 0 0 .6rem">• <b>Windows option/alt mode</b> — Alt is ordinary Windows Alt, <i>except</i> the items
         ticked below, which type their character in both modes. So tick only ones that collide with nothing you
         use — the button below does exactly that.</div>
       <div style="margin-top:.3rem">Now: ${lastEng&&typeof lastEng.option_mode==='boolean'
-        ?(lastEng.option_mode?'<b style="color:var(--ok)">Mac mode</b>':'<b style="color:var(--hi)">Windows mode</b>')
-        :'<span class="muted">unknown until connected</span>'} · the engine starts in Windows mode.</div></div>
+        ?(lastEng.option_mode?'<b style="color:var(--ok)">Mac option/alt mode</b>':'<b style="color:var(--hi)">Windows option/alt mode</b>')
+        :'<span class="muted">unknown until connected</span>'} · the engine starts in Windows option/alt mode.</div></div>
     <div id="optrules" style="font-size:.8rem;margin:.2rem 0 .5rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem"></div>
     <p style="font-size:.78rem;margin:.2rem 0 .4rem">Collisions: <span style="color:var(--err)">red</span> = you have used that Alt chord ·
     <span style="color:var(--warn)">amber</span> = one of your own chords · grey = an app or Windows shortcut in the shortcut sets.
     ${haveU&&haveC?'':`<b style="color:var(--warn)">${!haveU?'Usage':''}${!haveU&&!haveC?' and ':''}${!haveC?'the shortcut sets':''} not loaded — collisions are incomplete.</b>`}</p>
     <div class="bar" style="margin:.2rem 0 .4rem">
-      <button id="optinstall" title="For Windows mode: tick every item with NO collision; leave the rest off">＋ Windows mode: tick every item with no collision</button>
+      <button id="optinstall" title="For Windows option/alt mode: tick every item with NO collision; leave the rest off">＋ Windows option/alt mode: tick every item with no collision</button>
       <button id="optnone">Untick all</button>
       <span class="muted" style="font-size:.74rem">Then ⬆ Save to device.</span></div>
-    <table style="width:100%;font-size:.82rem"><tr><th>key</th><th title="Ticked = also in Windows mode. Mac mode types every one.">⌥ <span class="muted" style="font-weight:400">ticked = Windows mode too</span></th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
+    <table style="width:100%;font-size:.82rem"><tr><th>key</th><th title="Ticked = also in Windows option/alt mode. Mac option/alt mode types every one.">⌥ <span class="muted" style="font-weight:400">ticked = Windows option/alt mode too</span></th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
   renderOptAltKeys();                                       // 29.15
+  renderOptAltWith();                                       // 29.18
   renderOptRules();                                         // 29.17
   el.querySelectorAll('[data-opt]').forEach(cb=>cb.onchange=()=>{
     const row=OPT_CHARS.find(r=>r[0]===+cb.dataset.opt);
@@ -10847,6 +11204,9 @@ function renderMacros(){
     <div style="flex:1 1 12rem;min-width:11rem">
       <label title="Every key, button, combo and modifier chord that runs this macro. Dashed = reached through a setting rather than a mapping; struck through = switched off in its addition pack.">Fired by</label>
       ${macroUsersHTML(users[n])}
+      <button data-masg="${n}" style="font-size:.75rem;margin-top:.2rem"
+        title="Press the key, modifier + key, or mouse button that should run this macro">⌨ Assign…</button>
+      <div id="masg-${n}">${_masg&&_masg.n===String(n)?masgHTML():''}</div>
     </div>
   </div></details>`;}
   h+=`<div class="bar" style="margin-top:.5rem"><button id="macroadd">＋ Add macro</button>
@@ -10862,12 +11222,142 @@ function renderMacros(){
     cfg.macro_names=cfg.macro_names||{};
     if(i.value.trim())cfg.macro_names[i.dataset.mn]=i.value.trim();
     else delete cfg.macro_names[i.dataset.mn];});
+  el.querySelectorAll('[data-masg]').forEach(b=>b.onclick=()=>masgStart(b.dataset.masg));
+  if(_masg)masgBind();
   const add=$('macroadd');
   if(add)add.onclick=()=>{const n=macroMax()+1;
     cfg.macros=cfg.macros||{};cfg.macros[n]=[];
     render();toast('added Macro '+n+' — give it steps, then ⬆ Save to device');
     setTimeout(()=>gotoMacro(n),50);};
 }
+/* 29.19 (URGENT): ASSIGN A MACRO BY PRESSING ITS KEYS. from HID Notes,
+   2026-10-08 09:49:59: "Next to Macro have "Assign" button where you can
+   press the keys you want to assign to the Macro (URGENT)".
+
+   Press ⌨ Assign…, then the key, modifier + key, or mouse button. Nothing is
+   written until ✓ Assign, and the confirmation names what it replaces --
+   one control, one record (MAPPING_MODEL rule 2). Where it lands:
+     key alone      kbd_mappings  `${L},${canon}`  (this layer)
+     button alone   mouse_mappings `${L},${b}`     (this layer)
+     mods + key     mod_chords `${L|-1},${mods},${canon}`
+     mods + button  mod_chords with canon BTN_MC+b (29.1.2)
+   "This device only" uses the *_by_device tables for a key or button alone;
+   chords have no device table, so for a chord it is not offered. "All OSes"
+   or one OS profile picks the table the way the mapping editor does.
+
+   Source: the Pi's Show key presses stream when it runs (physical keys and
+   buttons, with the device; Baseline applied here, as the engine does), else
+   this browser (the keys the computer received -- after the Pi's remapping,
+   no mouse buttons). */
+function masgStart(n){
+  _masg={n:String(n),mods:new Set(),cand:null,t0:Date.now(),L:layer,os:'',scope:'all',chordAnyLayer:true};
+  renderMacros();
+  const d=$('macro-'+n);if(d)d.open=true;}
+function _masgFold(set,dev,fromPi){
+  let m=0;
+  for(const u of set){const c=fromPi?baselineOf(dev,u):u;m|=MODUSAGE2BIT[c]||0;}
+  return fromPi?modsToEngine(m):m;}
+// The record a candidate would write: [table, key, label]
+function masgTarget(){
+  const c=_masg&&_masg.cand;if(!c)return null;
+  const L=_masg.L;
+  if(c.mods){
+    const id=c.b!=null?BTN_MC+c.b:c.canon;
+    const Lc=_masg.chordAnyLayer?-1:L;
+    return{tbl:mcTable(_masg.os),key:mcKey(c.mods,id,Lc),kind:'chord',
+           where:(Lc===-1?'every layer':layerName(L))+(_masg.os?' · '+_masg.os+' only':'')};}
+  const slot=c.b!=null?{kind:'btn',dev:c.dev,id:c.b}:{kind:'key',dev:c.dev,canon:c.canon};
+  const dev=_masg.scope==='dev'&&c.dev;
+  const tbl=dev?_kmapFor(slot,'devcustom')
+    :(_masg.os?scopeTable(_masg.os,c.b!=null?'mouse_mappings':'kbd_mappings')
+      :_kmapFor(slot,'custom'));
+  return{tbl,key:`${L},${c.b!=null?c.b:c.canon}`,kind:c.b!=null?'btn':'key',
+         where:layerName(L)+(dev?' · '+devName(c.dev)+' only':_masg.os?' · '+_masg.os+' only':'')};}
+// Read-only peek at what is there now (does not create tables)
+function masgCurrent(){
+  const c=_masg&&_masg.cand;if(!c)return undefined;
+  const L=_masg.L;
+  if(c.mods){const id=c.b!=null?BTN_MC+c.b:c.canon;
+    const Lc=_masg.chordAnyLayer?-1:L;
+    const t=_masg.os?(((cfg.os_profiles||{})[_masg.os]||{}).mod_chords||{}):(cfg.mod_chords||{});
+    return t[mcKey(c.mods,id,Lc)];}
+  if(_masg.scope==='dev'&&c.dev){
+    const t=((c.b!=null?cfg.mouse_mappings_by_device:cfg.kbd_mappings_by_device)||{})[c.dev]||{};
+    return t[`${L},${c.b!=null?c.b:c.canon}`];}
+  const base=_masg.os?((cfg.os_profiles||{})[_masg.os]||{}):cfg;
+  return ((c.b!=null?base.mouse_mappings:base.kbd_mappings)||{})[`${L},${c.b!=null?c.b:c.canon}`];}
+function masgCandLabel(c){
+  const m=c.mods?modsName(c.mods)+'+':'';
+  return m+(c.b!=null?btnLabel(c.b):(KEYS[c.canon]||MODS[c.canon]||('0x'+c.canon.toString(16))));}
+function masgHTML(){
+  const a=_masg,c=a.cand;
+  const oses=Object.keys(cfg.os_profiles||{});
+  const osSel=`<select id="masgos" style="font-size:.75rem"><option value="">all OSes</option>${
+    oses.map(o=>`<option value="${esc(o)}" ${a.os===o?'selected':''}>${esc(o)} only</option>`).join('')}</select>`;
+  if(!c)return `<div class="muted" style="font-size:.75rem;border:1px dashed var(--hi);border-radius:6px;padding:.3rem .4rem;margin-top:.2rem">
+    ⌨ Press the key, modifier + key${_showKeysState>0?', or mouse button':''} for M${esc(a.n)}…
+    <br>${_showKeysState>0?'Reading the Pi (Show key presses).':'Reading this browser: the keys the computer gets, after the Pi. Turn on Show key presses for mouse buttons and the physical key.'}
+    <button id="masgcancel" style="font-size:.72rem">✕ Cancel</button></div>`;
+  const cur=masgCurrent(),tg=masgTarget();
+  const thWarn=!c.mods&&c.b==null&&((cfg.tap_hold||{})[c.canon]||(((cfg.tap_hold_by_device||{})[c.dev]||{})[c.canon]))
+    ?'<br><b style="color:var(--warn)">This key also has a Tap / Hold; that is what fires on a tap.</b>':'';
+  return `<div style="font-size:.75rem;border:1px solid var(--hi);border-radius:6px;padding:.3rem .4rem;margin-top:.2rem">
+    <b>${esc(masgCandLabel(c))}</b> → M${esc(a.n)}<br>
+    ${c.mods?`<label style="display:inline;font-weight:400"><input type="checkbox" id="masgany" ${a.chordAnyLayer?'checked':''}> every layer</label>
+      ${a.chordAnyLayer?'':'· '+esc(layerName(a.L))}`:esc(layerName(a.L))}
+    ${!c.mods&&c.dev?`· <select id="masgscope" style="font-size:.75rem"><option value="all">all devices</option>
+      <option value="dev" ${a.scope==='dev'?'selected':''}>${esc(devName(c.dev))} only</option></select>`:''}
+    ${a.scope==='dev'&&!c.mods?'':'· '+osSel}
+    <br>${cur===undefined?'<span class="muted">Nothing there now.</span>'
+      :cur===null?'<span class="muted">Replaces an explicit "nothing here".</span>'
+      :`<b style="color:var(--warn)">Replaces: ${esc(actShort(cur)||JSON.stringify(cur))}</b>`}${thWarn}
+    <div style="display:flex;gap:.3rem;margin-top:.25rem">
+      <button id="masgok" class="primary" style="font-size:.74rem">✓ Assign (${esc(tg.where)})</button>
+      <button id="masgagain" style="font-size:.74rem">↺ Press again</button>
+      <button id="masgcancel" style="font-size:.74rem">✕ Cancel</button></div></div>`;}
+function masgBind(){
+  const a=_masg;if(!a)return;
+  const re=()=>{const h=$('masg-'+a.n);if(h){h.innerHTML=masgHTML();masgBind();}};
+  if($('masgcancel'))$('masgcancel').onclick=()=>{_masg=null;renderMacros();};
+  if($('masgagain'))$('masgagain').onclick=()=>{a.cand=null;a.mods.clear();a.t0=Date.now();re();};
+  if($('masgos'))$('masgos').onchange=()=>{a.os=$('masgos').value;re();};
+  if($('masgscope'))$('masgscope').onchange=()=>{a.scope=$('masgscope').value;re();};
+  if($('masgany'))$('masgany').onchange=()=>{a.chordAnyLayer=$('masgany').checked;re();};
+  if($('masgok'))$('masgok').onclick=()=>{
+    const tg=masgTarget();if(!tg)return;
+    const cur=masgCurrent();
+    tg.tbl[tg.key]=['macro',+a.n];
+    const lbl=masgCandLabel(a.cand);
+    _masg=null;render();
+    toast(lbl+' now runs M'+a.n+' ('+tg.where+')'
+      +(cur!==undefined&&cur!==null?' — replaced '+(actShort(cur)||'a mapping'):'')
+      +' — ⬆ Save to device');};}
+// One press or release while assigning. Returns true when it was used.
+function masgEvent(ev){
+  const a=_masg;if(!a||a.cand)return false;
+  const fromPi=!!ev.pi;
+  if(ev.b!=null){
+    if(!ev.down||ev.b===1&&Date.now()-a.t0<700)return true;  // the click on Assign
+    a.cand={b:fromPi?btnIdent(ev.dev,ev.b):ev.b,dev:ev.dev||'',
+            mods:_masgFold(a.mods,ev.dev,fromPi)};}
+  else if(usageIsMod(fromPi?baselineOf(ev.dev,ev.u):ev.u)){
+    if(ev.down)a.mods.add(ev.u);else a.mods.delete(ev.u);return true;}
+  else{
+    if(!ev.down)return true;
+    if(!fromPi&&ev.u===0x29&&!a.mods.size){_masg=null;renderMacros();return true;}  // Esc cancels
+    a.cand={canon:fromPi?baselineOf(ev.dev,ev.u):ev.u,dev:ev.dev||'',
+            mods:_masgFold(a.mods,ev.dev,fromPi)};}
+  const h=$('masg-'+a.n);if(h){h.innerHTML=masgHTML();masgBind();}
+  return true;}
+document.addEventListener('keydown',e=>{
+  if(!_masg||_showKeysState>0||e.repeat)return;
+  const t=e.target,tn=(t&&t.tagName||'').toLowerCase();
+  if(tn==='input'||tn==='textarea'||(t&&t.isContentEditable))return;
+  const u=BROWSER_CODE2HID[e.code];if(u===undefined)return;
+  if(masgEvent({u,down:true,dev:''}))e.preventDefault();});
+document.addEventListener('keyup',e=>{
+  if(!_masg||_showKeysState>0)return;
+  const u=BROWSER_CODE2HID[e.code];if(u!==undefined)masgEvent({u,down:false,dev:''});});
 function gotoMacro(n){switchTab('macros');const d=$('macro-'+n);
 if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});
 d.classList.add('flashtgt');setTimeout(()=>d.classList.remove('flashtgt'),1600);}}
@@ -10903,6 +11393,7 @@ function renderDevs(){
         <option value="ansi" ${(d.wireframe||'ansi')==='ansi'?'selected':''}>ANSI keyboard</option>
         <option value="split" ${d.wireframe==='split'?'selected':''}>Split keyboard</option>
         <option value="e9" ${d.wireframe==='e9'?'selected':''}>E9 mouse (side view)</option>
+        <option value="fintie" ${d.wireframe==='fintie'?'selected':''}>Fintie keyboard (3-mode function row)</option>
       </select></td>
       <td><button onclick="removeDevice(${i})">✕</button></td>`;
     tr.querySelectorAll('select,input').forEach(x=>x.onchange=collectDevs);
@@ -12288,6 +12779,9 @@ function liveRaw(txt){
     // #mousesvg view still works if present.
     const logical=EVBTN[code];
     if(logical)holdBtn(logical,down);
+    if(logical&&+mb[2]!==2){const bd=txt.match(/ dev=(\S+)/);   // 29.18: layout capture
+      layoutKeyEvent({b:logical,down,dev:bd?bd[1]:''});
+      masgEvent({b:logical,down,dev:bd?bd[1]:'',pi:1});}   // 29.19
     const legacy=RAW_MBTN_BOX[code];
     if(legacy!==undefined&&legacy!==logical)holdBtn(legacy,down);
     return; }
@@ -12314,8 +12808,12 @@ function liveRaw(txt){
     if(btn)holdBtn(btn,down);
     return;
   }
-  const u=EV2HID[code];if(!u)return;
-  holdKey(u,down,rdev);}
+  // 29.18: a media key arrives as a key code too; its usage is page-tagged
+  const u=EV2HID[code]??(CONSUMER_USAGE[code]!==undefined?(0x0c<<16)|CONSUMER_USAGE[code]:0);
+  if(!u)return;
+  holdKey(u,down,rdev);
+  if(+m[2]!==2){layoutKeyEvent({u,down,dev:rdev});
+    masgEvent({u,down,dev:rdev,pi:1});}}                 // 29.19
 /* 29.4: the engine's STATE notices. Josh chose option A (2026-10-01): the
    engine says "ST:layer N" once per layer CHANGE -- never per keystroke --
    and the Pi forwards it with Show key presses off. So the wireframe follows
@@ -12349,7 +12847,7 @@ function liveOut(txt){
   if(om){if(lastEng)lastEng.option_mode=om[1]==='ON';
     heldPaintReset();renderStage();
     if(typeof renderOptChars==='function'&&$('optsec')&&$('optsec').open)renderOptChars();
-    toast('Right Alt (double tap): '+(om[1]==='ON'?'Mac mode — Left Alt is Option and never reaches Windows; Right Alt is Windows Alt':'Windows mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
+    toast('Right Alt (double tap): '+(om[1]==='ON'?'Mac option/alt mode — Left Alt is Option and never reaches Windows; Right Alt is Windows Alt':'Windows option/alt mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
   if(txt.startsWith('expand')){expandFlash=Date.now()+600;return;}
