@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.14</title>
+<title>HID Config 29.15</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -511,6 +511,9 @@ button.rec{background:var(--err);border-color:var(--err);color:#fff;font-weight:
 button.rec::before{content:'●';margin-right:.35rem;animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 /* 29.9: a Save button shows it is saving until the Pi answers */
+/* 29.15 (i): the scroll walk-through's buttons and steps stand out */
+button.labgo{background:var(--hi);border-color:var(--hi);color:#fff;font-weight:600}
+.labstep{border:2px solid var(--hi)!important;font-weight:500}
 .spin{display:inline-block;width:.75em;height:.75em;margin-right:.3em;vertical-align:-.05em;
   border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
   animation:spin .8s linear infinite}
@@ -1783,6 +1786,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.15',d:'2026-10-08',items:[
+   {t:'Mac mode: Left Alt (Option) never reaches Windows, so Option characters no longer move focus; Right Alt is Windows Alt; DOUBLE-tap Right Alt to switch modes',k:'optsec'},
+   {t:'The Fintie wireframe shows what its modifiers really send (a Baselined modifier skips the Ctrl/Win swap, as in the engine)',k:'devcards'},
+   {t:'The version badge opens every time, and "show more" expands it',k:'uiver'},
+   {t:'Scroll walk-through: Guide me first and highlighted; honest browser numbers; Exact first click below 1; a target for a strong flick sets the acceleration',k:'osscroll'}]},
  {v:'29.14',d:'2026-10-08',items:[
    {t:'Mouse writing: Option+drag draws an oval, Ctrl/Cmd+drag a rectangle (drag hidden from the app); holding the key previews the shape',k:'mousewrite'},
    {t:'Mouse writing: digits typed with Option held are circled when you let go (true circle or oval, a setting)',k:'mousewrite'},
@@ -2236,17 +2244,34 @@ function renderAppHistory(){
   el.innerHTML=h||'<p class="muted">Nothing recorded.</p>';
   el.querySelectorAll('[data-vhk]').forEach(a=>a.onclick=()=>vhGo(a.dataset.vhk));}
 
+/* 29.15: ONE outside-click closer at a time. Josh, 2026-10-08 07:36:
+   "Clicking on the v29.11 - engine 29.13 under "HID Config" to see changes
+   sometimes doesn't open it up;  clicking on "show more" doesn't open the
+   "Changes" dialogue". Two causes: every open ADDED a closer and only an
+   outside click removed it, so a popover closed another way left one
+   behind, which then caught the next badge click and hid the popover it
+   had just opened; and "show more" rebuilds the popover, so the link
+   clicked was no longer inside it by the time the closer looked -- the
+   click read as "outside" and shut it. */
+let _vhCloser=null;
+function vhDetach(){
+  if(!_vhCloser)return;
+  document.removeEventListener('click',_vhCloser.c);
+  document.removeEventListener('keydown',_vhCloser.k);
+  _vhCloser=null;}
 function vhOpen(all){
   const p=$('popover'),b=document.getElementById('uiver');
   if(!p||!b)return;
+  vhDetach();
   p.innerHTML=vhHTML(!!all);
   p.style.maxWidth='24rem';
   placePopover(p,b.getBoundingClientRect());
   p.querySelectorAll('[data-vhk]').forEach(a=>a.onclick=()=>vhGo(a.dataset.vhk));
   const more=p.querySelector('[data-vhmore]');
-  if(more)more.onclick=()=>vhOpen(true);
+  if(more)more.onclick=e=>{e.stopPropagation();vhOpen(true);};
   const tab=p.querySelector('[data-vhtab]');
-  if(tab)tab.onclick=()=>{
+  if(tab)tab.onclick=e=>{
+    e.stopPropagation();vhDetach();
     p.style.display='none';
     switchTab('log');
     const t=$('logapp');
@@ -2260,16 +2285,14 @@ function vhOpen(all){
   // The listener is added on a timeout so the click that OPENED it does not
   // immediately close it, which is how the other dismissers here do it.
   setTimeout(()=>{
+    vhDetach();
     const close=ev=>{
-      if(p.contains(ev.target))return;
-      p.style.display='none';
-      document.removeEventListener('click',close);
-      document.removeEventListener('keydown',esc);};
+      if(p.contains(ev.target)||(ev.composedPath&&ev.composedPath().includes(p)))return;
+      p.style.display='none';vhDetach();};
     const esc=ev=>{
       if(ev.key!=='Escape')return;
-      p.style.display='none';
-      document.removeEventListener('click',close);
-      document.removeEventListener('keydown',esc);};
+      p.style.display='none';vhDetach();};
+    _vhCloser={c:close,k:esc};
     document.addEventListener('click',close);
     document.addEventListener('keydown',esc);},50);}
 
@@ -2290,7 +2313,7 @@ function showVersions(engine){
   el.style.cursor='pointer';
   el.title='UI version (from the page title) · engine version once connected'
     +' — click for what changed';
-  el.onclick=()=>vhOpen(false);}
+  el.onclick=e=>{e.stopPropagation();vhOpen(false);};}
 document.addEventListener('DOMContentLoaded',()=>{
   showVersions(null);
   // Wired here rather than at the definition: the input must exist, and the
@@ -4106,7 +4129,15 @@ function effKey(dev,L,u){
   // swap into `canon` (19.3) made clicking a swapped modifier select the
   // wrong key and look mappings up under the swapped usage.
   const canon=baselineOf(dev,u);          // for lookups + selection
-  const sends=remapModUsage(canon);       // for the grey centre label only
+  // 29.15: the engine skips the OS modifier swap for a modifier with its
+  // OWN Baseline entry ("An EXPLICIT baseline entry always wins over the
+  // built-in MODMAP swap", s6). The wireframe applied the swap anyway, so
+  // the Fintie's Alt (Baselined to LCtrl) showed LWin while it sent LCtrl.
+  // Josh, 2026-10-08: "it appears to not follow the actual engine logic."
+  const _bl=(dev&&cfg.baseline&&cfg.baseline[dev])||{};
+  const _explicit=MODUSAGE2BIT[u]!==undefined
+    &&Object.prototype.hasOwnProperty.call(_bl,String(u));
+  const sends=_explicit?canon:remapModUsage(canon);   // grey centre label only
   const dd=dev&&cfg.kbd_mappings_by_device&&cfg.kbd_mappings_by_device[dev];
   const dv=dd?dd[`${L},${canon}`]:undefined;
   return{canon,sends,base:(canon!==u)||(sends!==canon),
@@ -8472,6 +8503,22 @@ function _optSet(row,shift,on){
   if(baseOn&&!shiftOn&&!t[sk]){t[sk]=['passthru'];g.option_passthru.push(sk);}
   else if((!baseOn||shiftOn)&&pi>=0){
     if(t[sk]&&t[sk][0]==='passthru')delete t[sk];g.option_passthru.splice(pi,1);}}
+/* 29.15: the Mac-mode exceptions -- keys with which Left Alt still goes to
+   Windows as Alt (option_alt_keys; default Alt+Tab and Alt+F4). Josh,
+   2026-10-08: "totally mask and not send alt to the windows PC except in any
+   exceptions listed in that feature's settings", then: "In mac mode LALT
+   never reaches windows." -- so the list starts empty. */
+function renderOptAltKeys(){
+  const host=$('optaltkeys');if(!host)return;
+  const cur=Array.isArray(cfg.option_alt_keys)?cfg.option_alt_keys:[];
+  host.innerHTML=cur.map(u=>`<span class="pill" style="margin-right:.25rem">Alt+${esc(KEYS[u]||('0x'+(+u).toString(16)))}
+      <a class="mlink" data-oak-del="${u}" title="Remove this exception">×</a></span>`).join('')
+    +`<select id="oakadd" style="font-size:.75rem"><option value="">＋ add…</option>${keyOpts(-1)}</select>`;
+  host.querySelectorAll('[data-oak-del]').forEach(a=>a.onclick=()=>{
+    cfg.option_alt_keys=cur.filter(u=>u!==+a.dataset.oakDel);renderOptAltKeys();
+    toast('⬆ Save to device to apply');});
+  $('oakadd').onchange=e=>{const u=+e.target.value;if(!e.target.value)return;
+    cfg.option_alt_keys=[...new Set([...cur,u])];renderOptAltKeys();toast('⬆ Save to device to apply');};}
 function renderOptChars(){
   const el=$('optbody');if(!el||!cfg)return;
   const haveU=!!(typeof usageData!=='undefined'&&usageData),haveC=!!refData('corpus');
@@ -8490,9 +8537,11 @@ function renderOptChars(){
     The five ◌ keys wait for the next letter (⌥E then e → é; Space types the accent alone).
     Applies on <b>Windows</b> only. Source: ${esc(OPT_SRC)}; the accent combinations are general knowledge.</p>
     <div style="font-size:.8rem;margin:.2rem 0 .5rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem">
-      <b>Two modes — tap Right Alt to switch</b> (Windows only; holding Right Alt with another key is still Alt):
-      <div style="margin:.2rem 0 0 .6rem">• <b>Mac mode</b> — Alt / Alt+Shift + <i>every</i> key below types its Mac
-        character. Nothing needs ticking.</div>
+      <b>Two modes — double-tap Right Alt to switch</b> (Windows only; one tap, or Right Alt held, is plain Windows Alt):
+      <div style="margin:.2rem 0 0 .6rem">• <b>Mac mode</b> — Left Alt is Option: Alt / Alt+Shift + <i>every</i> key below
+        types its Mac character, and <b>Left Alt itself never reaches Windows</b>, so nothing opens a menu or moves
+        focus. Use Right Alt for Windows Alt. Exceptions (none unless you add one), where Left Alt goes to
+        Windows as Alt: <span id="optaltkeys"></span></div>
       <div style="margin:.1rem 0 0 .6rem">• <b>Windows mode</b> — Alt is ordinary Windows Alt, <i>except</i> the items
         ticked below, which type their character in both modes. So tick only ones that collide with nothing you
         use — the button below does exactly that.</div>
@@ -8507,6 +8556,7 @@ function renderOptChars(){
       <button id="optnone">Untick all</button>
       <span class="muted" style="font-size:.74rem">Then ⬆ Save to device.</span></div>
     <table style="width:100%;font-size:.82rem"><tr><th>key</th><th title="Ticked = also in Windows mode. Mac mode types every one.">⌥ <span class="muted" style="font-weight:400">ticked = Windows mode too</span></th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
+  renderOptAltKeys();                                       // 29.15
   el.querySelectorAll('[data-opt]').forEach(cb=>cb.onchange=()=>{
     const row=OPT_CHARS.find(r=>r[0]===+cb.dataset.opt);
     _optSet(row,cb.dataset.sh==='1',cb.checked);profileTouched();renderOptChars();});
@@ -10417,7 +10467,12 @@ function renderMouseWriteMore(el,c){
   const mods=Object.assign({},...Object.entries(MW_MODS).map(([k,[v]])=>({[k]:v})),c.mods||{});
   const modSel=(k)=>`<select data-mwmod="${k}">${MW_MODSETS.map(([v,n])=>
     `<option value="${v}" ${v===+mods[k]?'selected':''}>${n}</option>`).join('')}</select>`;
+  // 29.16: the section is rebuilt on every engine status (live speed and
+  // size), which closed it while he read it -- Josh, 2026-10-08 08:09: "I'm
+  // just sitting there, reading it, and it closes on it's own." It keeps
+  // its open state now.
   const d=document.createElement('details');d.style.marginTop='.5rem';
+  d.open=!!window._mwMoreOpen;d.ontoggle=()=>{window._mwMoreOpen=d.open;};
   d.innerHTML=`<summary style="cursor:pointer"><b>Shapes, circled numbers and keys</b></summary>
     <p style="font-size:.8rem">In the mode: hold <b>Alt/Option</b> and drag for an <b>oval</b>, or
       <b>Ctrl/Cmd</b> and drag for a <b>rectangle</b> — the drag is hidden from the app; the shape is
@@ -12110,7 +12165,7 @@ function liveOut(txt){
   if(om){if(lastEng)lastEng.option_mode=om[1]==='ON';
     heldPaintReset();renderStage();
     if(typeof renderOptChars==='function'&&$('optsec')&&$('optsec').open)renderOptChars();
-    toast('Right Alt: '+(om[1]==='ON'?'Mac mode — every Mac character, and Option+arrows move by word':'Windows mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
+    toast('Right Alt (double tap): '+(om[1]==='ON'?'Mac mode — Left Alt is Option and never reaches Windows; Right Alt is Windows Alt':'Windows mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
   if(txt.startsWith('expand')){expandFlash=Date.now()+600;return;}
@@ -12762,21 +12817,28 @@ function labBoxes(){
       <div id="labc" data-lab="c" style="${box};height:60px;overflow-x:auto;display:flex;scroll-snap-type:x mandatory">${cols}</div>
       <div class="muted" style="margin-top:.4rem">Pixels</div>
       <div id="labp" data-lab="p" style="${box};height:60px;overflow-x:auto;display:flex">${px}</div></div></div>`;}
+function _accelVal(dev,k){
+  const c=((cfg.scroll_accel||{})[dev]||{})[k];if(c!==undefined)return +c;
+  const live=((((lastEng||{}).scroll_accel)||{})[dev]||{})[k];if(live!==undefined)return +live;
+  const d=(((lastEng||{}).scroll_accel_defaults)||{})[k];return d!==undefined?+d:0.82;}
 function renderScrollLab(){
   const host=$('scrolllab');if(!host)return;
   if(!_lab){host.innerHTML=`<div style="margin-top:.4rem"><b style="font-size:.85rem">Scroll test</b>
-      <span class="muted">· try a setting and see it, or be guided</span>
-      <button id="labstart" style="margin-left:.4rem">▶ Start scroll test</button>
-      <button id="labguide">🧭 Guide me</button></div>`;
+      <span class="muted">· be guided, or try a setting and see it</span>
+      <button id="labguide" class="labgo" style="margin-left:.4rem">🧭 Guide me</button>
+      <button id="labstart" class="labgo">▶ Start scroll test</button></div>`;
     $('labstart').onclick=()=>labStart(false);$('labguide').onclick=()=>labStart(true);return;}
   host.innerHTML=`<div style="margin-top:.4rem"><b style="font-size:.85rem">Scroll test</b>
       <button id="labstop" style="margin-left:.4rem">■ Stop</button>
       <button id="labclear">Clear</button>
       <label class="inl muted" style="margin-left:.6rem">want lines per click
-        <input id="labwant" type="number" min="1" step="1" value="${_lab.want}" style="width:3.5rem"></label></div>
+        <input id="labwant" type="number" min="0.1" step="0.1" value="${_lab.want}" style="width:3.5rem"></label>
+      <label class="inl muted" style="margin-left:.6rem" title="Lines a strong flick should travel. The walk-through sets the acceleration to hit it.">lines per strong flick
+        <input id="labflick" type="number" min="0" step="10" value="${_lab.flick||''}" placeholder="—" style="width:4.5rem"></label></div>
     <div id="labguidebox"></div>${labBoxes()}<div id="labres"></div>`;
   $('labstop').onclick=labStop;$('labclear').onclick=()=>{_lab.g=[];labShow();};
-  $('labwant').onchange=e=>{_lab.want=Math.max(1,+e.target.value||1);labShow();};
+  $('labwant').onchange=e=>{_lab.want=Math.max(0.1,+e.target.value||1);labShow();};
+  $('labflick').onchange=e=>{_lab.flick=Math.max(0,+e.target.value||0);labShow();};
   host.querySelectorAll('[data-lab]').forEach(b=>{
     b._lp=b.scrollTop+b.scrollLeft;
     b.addEventListener('scroll',()=>{const k=b.dataset.lab,now=k==='v'?b.scrollTop:b.scrollLeft;
@@ -12829,7 +12891,7 @@ function labGuideShow(){
   const box=$('labguidebox');if(!box||!_lab||_lab.step<0){if(box)box.innerHTML='';return;}
   const s=_lab.step;
   if(s<LAB_STEPS.length){const [,t,how]=LAB_STEPS[s];
-    box.innerHTML=`<div class="primer" style="margin:.3rem 0"><b>Step ${s+1} of ${LAB_STEPS.length}: ${esc(t)}</b>
+    box.innerHTML=`<div class="primer labstep" style="margin:.3rem 0"><b>Step ${s+1} of ${LAB_STEPS.length}: ${esc(t)}</b>
       — ${esc(how)} <button id="labnext">Next ▶</button></div>`;
     $('labnext').onclick=()=>{_lab.step++;labShow();};return;}
   const v=_lab.g.filter(g=>g.box==='v'&&g.clicks===1&&g.units);
@@ -12837,20 +12899,37 @@ function labGuideShow(){
   if(!v.length){html+='— no single clicks measured in the Lines box (is the Pi connected?). '
     +'<button id="labagain">Start again</button></div>';box.innerHTML=html;
     $('labagain').onclick=()=>{_lab.step=0;_lab.g=[];labShow();};return;}
+  // 29.15 (ii): the box measures what THIS BROWSER does with one unit.
+  // Chromium (Edge, Chrome) scrolls a fixed number of pixels per wheel unit
+  // -- about 1.7 lines of this box at Windows' smallest setting -- so "set
+  // Windows to 1 line" was wrong advice when it already is. Below one unit
+  // per click, the Pi can send a unit on only some lone clicks (a value
+  // under 1); finer still needs high-resolution wheel reports (FUTURE).
   const lpu=v.reduce((a,g)=>a+g.moved/LAB_LINE/g.units,0)/v.length;
+  const ppu=lpu*LAB_LINE;
   const units=v.reduce((a,g)=>a+g.units,0)/v.length;
-  const sugg=Math.max(1,Math.round(_lab.want/lpu));
+  const sugg=Math.max(0.1,Math.round(_lab.want/lpu*10)/10);
   const dev=(v[v.length-1].dev)||'';
-  html+=`— one lone click sent ${units.toFixed(1)} unit(s); the computer scrolls ${lpu.toFixed(1)} line(s) per unit. `;
-  if(lpu>_lab.want+0.25)html+=`One unit is already more than ${_lab.want} line(s): no Pi setting can go lower. `
-    +`Set the computer's "lines to scroll at a time" to ${_lab.want} (Windows: Settings → Bluetooth &amp; devices → Mouse), then run this again. `;
+  html+=`— one lone click sent ${units.toFixed(1)} unit(s); this browser scrolls ${ppu.toFixed(0)} px per unit, `
+    +`${lpu.toFixed(1)} line(s) of this box. `;
+  if(sugg<1)html+=`For ${_lab.want} line(s) per click the Pi sends a unit on ${Math.round(sugg*10)} click(s) in 10 `
+    +`(a value under 1); the other clicks scroll nothing. Apps that scroll by lines (Word, Excel) move one line per unit at your Windows setting. `;
+  // (iv) a strong flick: scale the acceleration gain toward the target
+  const f=_lab.g.filter(g=>g.box==='v'&&g.clicks>2);
+  let gain=null;
+  if(_lab.flick&&f.length){
+    const got=f.reduce((a,g)=>a+g.moved/LAB_LINE,0)/f.length;
+    const cur=_accelVal(dev,'cubic_gain');
+    gain=Math.max(0.02,Math.min(5,Math.round(cur*_lab.flick/Math.max(1,got)*100)/100));
+    html+=`A strong flick went ${got.toFixed(0)} lines; for ${_lab.flick}, acceleration gain ${cur} → <b>${gain}</b>. `;}
   html+=`Suggested <b>Exact first click = ${sugg}</b>${dev?' for '+esc(dev):''}. `
-    +(dev?`<button id="labapply">Use ${sugg}</button> `:'')+'<button id="labagain">Start again</button></div>';
+    +(dev?`<button id="labapply" class="labgo">Use ${gain!==null?'both':sugg}</button> `:'')+'<button id="labagain">Start again</button></div>';
   box.innerHTML=html;
   $('labagain').onclick=()=>{_lab.step=0;_lab.g=[];labShow();};
   if($('labapply'))$('labapply').onclick=()=>{
     cfg.scroll_accel=cfg.scroll_accel||{};
     const t=cfg.scroll_accel[dev]=cfg.scroll_accel[dev]||{};t.first_click=sugg;
+    if(gain!==null)t.cubic_gain=gain;
     const keep=_lab;renderAccel();_lab=keep;renderScrollLab();
     toast('Exact first click = '+sugg+' — ⬆ Save to device to apply');};}
 
