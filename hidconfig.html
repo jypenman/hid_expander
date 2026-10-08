@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.16</title>
+<title>HID Config 29.17</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1786,6 +1786,9 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.17',d:'2026-10-08',items:[
+   {t:'⌥ panel: the Mac mode list -- what Option takes over from Windows and where each moved (Back = Cmd+[ …), your Mac-mode-only rules, and your macros 35–38 one click away',k:'optsec'},
+   {t:'Keys held when Show key presses ends are let go on the wireframe',k:'legend'}]},
  {v:'29.16',d:'2026-10-08',items:[
    {t:'Practice keyboard: colour by stage (unused, learning, learned), app buttons with matching key outlines, descriptions inside the keys',k:'practicekbd'},
    {t:'Practice keyboard: one shortcut to focus on, with a change… list; each chosen shortcut can have its natural rate',k:'practicekbd'},
@@ -8619,6 +8622,85 @@ function renderOptAltKeys(){
     toast('⬆ Save to device to apply');});
   $('oakadd').onchange=e=>{const u=+e.target.value;if(!e.target.value)return;
     cfg.option_alt_keys=[...new Set([...cur,u])];renderOptAltKeys();toast('⬆ Save to device to apply');};}
+/* 29.17: THE MAC-MODE OPTION LIST. Josh, 2026-10-07 14:35: "list all the
+   Windows commands that have to be moved (and where they're relocated, and
+   make that user editable)"; 2026-10-08: "By "Cmd" I mean the key that is
+   currently defined as "Ctrl" (in windows) and "Cmnd" (in MacOS)", and his
+   macros 35-38 belong in it. cfg.option_rules holds rules that exist only in
+   Mac mode (engine: s2 OPTION_RULES), keyed like mod_chords. On Windows,
+   "Cmd" is that key, which reaches the engine as Ctrl -- so a Cmd trigger is
+   stored with the Ctrl bit. Nothing here writes until he clicks. */
+const OPT_DISPLACED=[
+  // [what it does on Windows, its key, its Alt chord's usage, suggested Cmd key (usage) or a note]
+  ['Back (browser, Explorer)','Alt+←',0x50,0x2F],
+  ['Forward','Alt+→',0x4F,0x30],
+  ['Undo, in some apps','Alt+⌫',0x2A,null,'Cmd+Z already undoes'],
+  ['Window menu','Alt+Space',0x2C,null,'Right Alt+Space'],
+  ['Switch app','Alt+Tab',0x2B,null,'Cmd+Tab (the macOS pack)'],
+  ['Close window','Alt+F4',0x3D,null,'Cmd+Q (the macOS pack)'],
+  ['Menu letters (Alt+F, Alt+E …)','Alt+letter',null,null,'Right Alt + the letter']];
+const OPT_MACRO_BINDS=[[35,0x50,'Option+←'],[36,0x4F,'Option+→'],[37,0x2A,'Option+⌫'],[38,0x4C,'Option+⌦']];
+function _optRuleName(k){const [,m,u]=k.split(',').map(Number);
+  const mn=[[1,'Cmd'],[4,'Option'],[2,'Shift'],[8,'Win']].filter(([b])=>m&b).map(x=>x[1]);
+  return [...mn,KEYS[u]||('0x'+u.toString(16))].join('+');}
+function _optParse(txt){
+  let m=0,u=null;
+  for(const p of String(txt||'').split('+').map(x=>x.trim().toLowerCase()).filter(Boolean)){
+    const b={cmd:1,ctrl:1,control:1,shift:2,alt:4,opt:4,option:4,win:8}[p];
+    if(b){m|=b;continue;}
+    const k=NAME2KEY[p];if(k===undefined||u!==null)return null;u=k;}
+  return u===null?null:`-1,${m},${u}`;}
+function _optSet(k,act){cfg.option_rules=cfg.option_rules||{};
+  if(act)cfg.option_rules[k]=act;else delete cfg.option_rules[k];
+  if(!Object.keys(cfg.option_rules).length)delete cfg.option_rules;
+  profileTouched();renderOptRules();toast('Mac-mode rule changed — ⬆ Save to device');}
+function renderOptRules(){
+  const host=$('optrules');if(!host||!cfg)return;
+  const rules=cfg.option_rules||{};
+  const relocOf=u=>Object.keys(rules).find(k=>{const a=rules[k];
+    return Array.isArray(a)&&a[0]==='keymods'&&+a[1]===u&&+a[2]===4;});
+  const disp=OPT_DISPLACED.map(([what,key,u,sug,note])=>{
+    const k=u!=null?relocOf(u):null;
+    const where=k?`<b>${esc(_optRuleName(k))}</b> <a class="mlink" data-orel="${u}" title="change">✎</a>
+        <a class="mlink" data-odel="${esc(k)}" title="remove">×</a>`
+      :sug!=null?`<a class="mlink" data-ouse="${u},${sug}">use Cmd+${esc(KEYS[sug])}</a> · <a class="mlink" data-orel="${u}">other…</a>`
+      :`<span class="muted">${esc(note||'—')}</span>${u!=null?` · <a class="mlink" data-orel="${u}">relocate…</a>`:''}`;
+    return `<tr><td>${esc(what)}</td><td style="font-family:ui-monospace,monospace">${esc(key)}</td><td>${where}</td></tr>`;}).join('');
+  // his own Alt rules that still fire in BOTH modes
+  const both=[];
+  const scan=(tbl,where)=>{for(const[k,v]of Object.entries(tbl||{})){
+    const [,m]=k.split(',').map(Number);if(m===4||m===6)both.push({k,v,where});}};
+  scan(cfg.mod_chords,'shared');scan(((cfg.os_profiles||{}).win||{}).mod_chords,'win');
+  // characters and passthru twins belong to the ⌥ panel's own machinery, not
+  // to this list: a passthru is what gives Alt+Shift+arrows back to Excel
+  const bothRows=both.filter(x=>!(Array.isArray(x.v)&&['char','dead','passthru'].includes(x.v[0]))).map(x=>
+    `<tr><td style="font-family:ui-monospace,monospace">${esc(_optRuleName(x.k))}</td><td>${esc(actShort(_cfgAct(x.v)||x.v))}</td>
+      <td><a class="mlink" data-omove="${esc(x.k)}" data-ofrom="${x.where}" title="Move it into the Mac-mode list: it stops firing in Windows mode">Mac mode only</a></td></tr>`).join('');
+  const own=Object.entries(rules).map(([k,v])=>`<tr><td style="font-family:ui-monospace,monospace">${esc(_optRuleName(k))}</td>
+      <td>${esc(actShort(_cfgAct(v)||v))}</td><td><a class="mlink" data-odel="${esc(k)}" title="remove">×</a></td></tr>`).join('');
+  const boundBoth=(n,u)=>both.some(x=>x.k===`-1,4,${u}`&&Array.isArray(x.v)&&x.v[0]==='macro'&&+x.v[1]===n);
+  const binds=OPT_MACRO_BINDS.filter(([n,u])=>(cfg.macros||{})[n]&&!rules[`-1,4,${u}`]&&!boundBoth(n,u)).map(([n,u,lab])=>
+    `<a class="mlink" data-obind="${n},${u}">${esc(lab)} → ${esc(macroLabel(n))}</a>`).join(' · ');
+  host.innerHTML=`<b>Mac mode list</b> <span class="muted">— rules that exist only in Mac mode. "Cmd" is the key next to the spacebar (Ctrl on Windows).</span>
+    <div style="margin-top:.3rem"><b style="font-size:.78rem">What Option takes over, and where it moved</b>
+    <table style="font-size:.78rem"><tr><td><b>On Windows</b></td><td><b>Was</b></td><td><b>Now, in Mac mode</b></td></tr>${disp}</table></div>
+    <div style="margin-top:.3rem"><b style="font-size:.78rem">In Mac mode only</b>
+    ${own?`<table style="font-size:.78rem">${own}</table>`:'<span class="muted"> — none yet</span>'}
+    ${binds?`<div style="margin-top:.2rem">Add your macros: ${binds}</div>`:''}</div>
+    ${bothRows?`<div style="margin-top:.3rem"><b style="font-size:.78rem">Your Option rules that fire in BOTH modes</b>
+      <span class="muted">(in Windows mode they take Alt+key from Windows)</span><table style="font-size:.78rem">${bothRows}</table></div>`:''}`;
+  host.querySelectorAll('[data-ouse]').forEach(a=>a.onclick=()=>{const [u,s]=a.dataset.ouse.split(',').map(Number);
+    _optSet(`-1,1,${s}`,['keymods',u,4]);});
+  host.querySelectorAll('[data-orel]').forEach(a=>a.onclick=()=>{const u=+a.dataset.orel;
+    const t=prompt('Which key should do Windows Alt+'+(KEYS[u]||'')+' in Mac mode? e.g. Cmd+[');if(!t)return;
+    const k=_optParse(t);if(!k){toast('could not read that — try Cmd+[ or Cmd+Shift+B',true);return;}
+    const old=relocOf(u);if(old)delete cfg.option_rules[old];_optSet(k,['keymods',u,4]);});
+  host.querySelectorAll('[data-odel]').forEach(a=>a.onclick=()=>_optSet(a.dataset.odel,null));
+  host.querySelectorAll('[data-obind]').forEach(a=>a.onclick=()=>{const [n,u]=a.dataset.obind.split(',').map(Number);
+    _optSet(`-1,4,${u}`,['macro',n]);});
+  host.querySelectorAll('[data-omove]').forEach(a=>a.onclick=()=>{const k=a.dataset.omove;
+    const tbl=a.dataset.ofrom==='win'?cfg.os_profiles.win.mod_chords:cfg.mod_chords;
+    const v=tbl[k];delete tbl[k];_optSet(k,v);});}
 function renderOptChars(){
   const el=$('optbody');if(!el||!cfg)return;
   const haveU=!!(typeof usageData!=='undefined'&&usageData),haveC=!!refData('corpus');
@@ -8648,6 +8730,7 @@ function renderOptChars(){
       <div style="margin-top:.3rem">Now: ${lastEng&&typeof lastEng.option_mode==='boolean'
         ?(lastEng.option_mode?'<b style="color:var(--ok)">Mac mode</b>':'<b style="color:var(--hi)">Windows mode</b>')
         :'<span class="muted">unknown until connected</span>'} · the engine starts in Windows mode.</div></div>
+    <div id="optrules" style="font-size:.8rem;margin:.2rem 0 .5rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem"></div>
     <p style="font-size:.78rem;margin:.2rem 0 .4rem">Collisions: <span style="color:var(--err)">red</span> = you have used that Alt chord ·
     <span style="color:var(--warn)">amber</span> = one of your own chords · grey = an app or Windows shortcut in the shortcut sets.
     ${haveU&&haveC?'':`<b style="color:var(--warn)">${!haveU?'Usage':''}${!haveU&&!haveC?' and ':''}${!haveC?'the shortcut sets':''} not loaded — collisions are incomplete.</b>`}</p>
@@ -8657,6 +8740,7 @@ function renderOptChars(){
       <span class="muted" style="font-size:.74rem">Then ⬆ Save to device.</span></div>
     <table style="width:100%;font-size:.82rem"><tr><th>key</th><th title="Ticked = also in Windows mode. Mac mode types every one.">⌥ <span class="muted" style="font-weight:400">ticked = Windows mode too</span></th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
   renderOptAltKeys();                                       // 29.15
+  renderOptRules();                                         // 29.17
   el.querySelectorAll('[data-opt]').forEach(cb=>cb.onchange=()=>{
     const row=OPT_CHARS.find(r=>r[0]===+cb.dataset.opt);
     _optSet(row,cb.dataset.sh==='1',cb.checked);profileTouched();renderOptChars();});
