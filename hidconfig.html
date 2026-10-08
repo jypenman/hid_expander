@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.20.2</title>
+<title>HID Config 29.20.3</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1830,6 +1830,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.20.3',d:'2026-10-08',items:[
+   {t:'The Fintie\'s function row works as F-keys: chords the keyboard sends by itself (Ctrl+A, Win+D, Ctrl+Shift …) are recognised -- one report, 0 ms apart -- and remapped, while the same chords typed by hand are untouched',k:'devcards'},
+   {t:'Fintie wireframe: corrected function row (F1 sends nothing; everything after it was one key off), For Win filled in, an Fn held row, and each chord shows the key it now types',k:'devcards'},
+   {t:'Mapping groups: switching a group off now also switches off its device-only mappings (the Fintie Function Keys group gives back the media keys)',k:'groupshost'}]},
  {v:'29.20.2',d:'2026-10-08',items:[
    {t:'Debug monitor: each raw key shows the time since the previous one (+ms), from the kernel\'s own timestamp -- to tell the Fintie\'s built-in chords from typed ones',k:'debugmon'}]},
  {v:'29.20.1',d:'2026-10-08',items:[
@@ -4326,54 +4330,58 @@ function e9Layout(){
    2026-10-08 12:12 and 12:13. "For Win" was NOT captured, so that row shows
    the F-key each position would be, and says so; replace it with a capture
    ("Capture in order" in the Layout palette) when he has one. */
-const FINTIE_WIN_CAPTURED=false;
-const FINTIE_FROW=(()=>{const C=u=>(0x0c<<16)|u;return[
-  [0x29,C(0x223),C(0x223)],
-  [0x3a,'LShift+Space','LCtrl+Space'],
-  [0x3b,C(0x221),C(0x221)],
-  [0x3c,'LCtrl+A','LWin+A'],
-  [0x3d,'LCtrl+C','LWin+C'],
-  [0x3e,'LCtrl+V','LWin+V'],
-  [0x3f,'LCtrl+X','LWin+X'],
-  [0x40,C(0xb6),C(0xb6)],
-  [0x41,C(0xcd),C(0xcd)],
-  [0x42,C(0xb5),C(0xb5)],
-  [0x43,C(0xea),C(0xea)],
-  [0x44,C(0xe9),C(0xe9)],
-  [0x45,null,null]];})();
+const FINTIE_WIN_CAPTURED=true;
+// 29.20.3: CORRECTED. F1 sends nothing in every mode -- the double Space in
+// each capture was F1, which 29.18 misread as the delimiter swallowing it,
+// so every key after Esc was one place off. And For Win is captured
+// (2026-10-08 13:12 and 14:50). A chord is {c: label, s: "mods,usage"}: s
+// is its same-report rule key (raw physical modifier bits, physical usage)
+// in synth_chords_by_device -- what the engine matches when the KEYBOARD
+// sends it, which leaves the same chord typed by hand alone.
+const FINTIE_FROW=(()=>{const C=u=>(0x0c<<16)|u,S=(c,s)=>({c,s});return[
+  [S('LWin+D','8,7'),C(0x223),C(0x223)],                                  // Esc
+  [null,null,null],                                                       // F1
+  [S('LCtrl+LShift','3,0'),S('LShift+Space','2,44'),S('LCtrl+Space','1,44')], // F2
+  [C(0x221),C(0x221),C(0x221)],                                           // F3
+  [S('LCtrl+A','1,4'),S('LCtrl+A','1,4'),S('LWin+A','8,4')],              // F4
+  [S('LCtrl+C','1,6'),S('LCtrl+C','1,6'),S('LWin+C','8,6')],              // F5
+  [S('LCtrl+V','1,25'),S('LCtrl+V','1,25'),S('LWin+V','8,25')],           // F6
+  [S('LCtrl+X','1,27'),S('LCtrl+X','1,27'),S('LWin+X','8,27')],           // F7
+  [C(0xb6),C(0xb6),C(0xb6)],[C(0xcd),C(0xcd),C(0xcd)],[C(0xb5),C(0xb5),C(0xb5)],
+  [C(0xea),C(0xea),C(0xea)],[C(0xe9),C(0xe9),C(0xe9)]];})();               // F8-F12
 const FINTIE_MODES=['For Win','For Android','For iOS'];
+const _fsame=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 // One element for what a mode row sends at one position.
 function fintieCell(v,x,y,w,h,mode){
   if(typeof v==='number')return{u:v,x,y,w,h};
   if(v==null)return{note:1,ghost:1,x,y,w,h,label:'—',
-    title:mode+': this key sent nothing when captured'};
+    title:mode+': this key sends nothing (hold Fn for F1)'};
   // The keys are 0.75 wide: symbols, so "Ctrl+A" is not cut to "Ctrl+"
   // (the full chord is in the tooltip).
-  const sh=v.replace('LShift+','⇧').replace('LCtrl+','⌃').replace('LWin+','⊞')
-    .replace('Space','␣');
-  return{note:1,x,y,w,h,label:sh,
-    title:mode+': the keyboard itself sends '+v+'. HIDConfig cannot tell that '
-      +'from you pressing '+v+', so it is shown here but cannot be remapped.'};}
-// The three rows for keys at the given x positions/widths. yTop is the top of
-// the For Win row; rows are 0.75 high on a 0.8 pitch. A position the same in
-// all three modes is ONE element spanning them; the same in Android and iOS
-// spans those two.
+  const sh=v.c.replace('LShift+','⇧').replace('LCtrl+','⌃').replace('LWin+','⊞')
+    .replace('LShift','⇧').replace('Space','␣');
+  return{note:1,x,y,w,h,label:sh,synth:v.s,
+    title:mode+': the keyboard itself sends '+v.c+', in one report. '
+      +'A same-report rule (synth_chords_by_device) can turn it into another key '
+      +'without touching '+v.c+' typed by hand.'};}
+// The rows for keys at the given x positions/widths. yTop is the top of
+// the For Win row; rows are 0.75 high on a 0.8 pitch, with the real F-keys
+// (what each key sends with Fn held) one row above. A position the same in
+// all three modes is ONE element spanning them; the same in Android and
+// iOS spans those two.
 function fintieRowElements(cols,yTop){
   const P=0.8,H=0.75,out=[];
   const minx=Math.min(...cols.map(c=>c.x));
-  FINTIE_MODES.forEach((m,r)=>out.push({note:1,rowlabel:1,x:minx-1.6,y:yTop+r*P,w:1.5,h:H,
-    label:m+(r===0&&!FINTIE_WIN_CAPTURED?' ?':''),
-    title:r===0&&!FINTIE_WIN_CAPTURED
-      ?'For Win was not captured yet: this row shows the F-key at each position'
-      :'what each key sends with the Fintie in '+m+' mode'}));
+  [['Fn held','with Fn held: the F-keys themselves'],...FINTIE_MODES.map(m=>[m,'what each key sends with the Fintie in '+m+' mode'])]
+    .forEach(([m,t],r)=>out.push({note:1,rowlabel:1,x:minx-1.6,y:yTop+(r-1)*P,w:1.5,h:H,label:m,title:t}));
   FINTIE_FROW.forEach(([win,an,ios],i)=>{
     const c=cols[i];if(!c)return;
     const x=c.x,w=c.w||1;
-    if(FINTIE_WIN_CAPTURED&&win===an&&an===ios){
-      out.push(fintieCell(win,x,yTop,w,2*P+H,'Every mode'));return;}
-    const wk=c.key?Object.assign(c.key,{y:yTop,h:H}):{u:win,x,y:yTop,w,h:H};
-    out.push(wk);
-    if(an===ios)out.push(fintieCell(an,x,yTop+P,w,P+H,'For Android and For iOS'));
+    const fk=c.key?Object.assign(c.key,{y:yTop-P,h:H,fnrow:1}):{u:0x29+(i?0x10+i:0),x,y:yTop-P,w,h:H,fnrow:1};
+    out.push(fk);
+    if(_fsame(win,an)&&_fsame(an,ios)){out.push(fintieCell(win,x,yTop,w,2*P+H,'Every mode'));return;}
+    out.push(fintieCell(win,x,yTop,w,H,'For Win'));
+    if(_fsame(an,ios))out.push(fintieCell(an,x,yTop+P,w,P+H,'For Android and For iOS'));
     else{out.push(fintieCell(an,x,yTop+P,w,H,'For Android'));
          out.push(fintieCell(ios,x,yTop+2*P,w,H,'For iOS'));}});
   return out;}
@@ -4382,7 +4390,8 @@ function fintieRowElements(cols,yTop){
 function fintieFrowKeys(lay){
   const top=lay.keys.find(k=>k.u===0x1e);
   const lim=top?top.y:Infinity;
-  const ks=FINTIE_FROW.map(([u])=>lay.keys.find(k=>k.u===u&&k.y<lim&&!k.note));
+  const fus=[0x29,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,0x40,0x41,0x42,0x43,0x44,0x45];
+  const ks=fus.map(u=>lay.keys.find(k=>k.u===u&&k.y<lim&&!k.note));
   return ks.every(Boolean)?ks:null;}
 // A consumer key already drawn above the number row that the mode rows will
 // now show (his Fintie layout has a stray Search there, added from a capture):
@@ -4392,19 +4401,21 @@ function fintieDupes(lay){
   const top=lay.keys.find(k=>k.u===0x1e),lim=top?top.y:Infinity;
   const inRows=new Set(FINTIE_FROW.flat().filter(v=>typeof v==='number'&&v>>16));
   return lay.keys.filter(k=>!k.fintie&&!ks.includes(k)&&k.y<lim&&inRows.has(k.u));}
-// Replace a layout's F-row with the three mode rows, in place, keeping each
-// key's own x and width. Only ever called from a button (a user action).
+// Replace a layout's F-row with the mode rows, in place, keeping each key's
+// own x and width. Only ever called from a button (a user action).
 function applyFintieRows(lay){
   const ks=fintieFrowKeys(lay);if(!ks)return false;
   // the first time, the old F-row becomes the bottom (For iOS) row's line;
-  // again, the rows stay where they are
+  // again, the rows stay where they are (the F-keys are then the Fn row,
+  // one row above For Win -- or, from 29.18's layout, ON the For Win row)
   const again=lay.keys.some(k=>k.fintie);
-  const yTop=Math.min(...ks.map(k=>k.y))-(again?0:1.6);
+  const y0=Math.min(...ks.map(k=>k.y));
+  const yTop=!again?y0-1.6:ks.every(k=>k.fnrow)?y0+0.8:y0;
   const drop=new Set([...ks,...fintieDupes(lay)]);
   // an earlier run's rows go too, so pressing it twice does not stack them
   lay.keys=lay.keys.filter(k=>!drop.has(k)&&!k.fintie);
   const els=fintieRowElements(ks.map(k=>({x:k.x,w:k.w||1,key:k})),yTop);
-  els.forEach(e=>{if(e.note||e.u!==undefined&&!ks.includes(e))e.fintie=1;});
+  els.forEach(e=>{if(!e.fnrow)e.fintie=1;});
   lay.keys.push(...els);
   return true;}
 function fintieLayout(){
@@ -4741,10 +4752,15 @@ function renderLayoutKbd(d,w){
     // 29.18: label-only -- a chord a key sends by itself, a greyed gap, or a
     // row label. Nothing to map, so no data-usage and no editor.
     if(k.note){
+      // 29.20.3: a chord with a same-report rule on this device shows what
+      // it now types
+      const sr=k.synth?((cfg.synth_chords_by_device||{})[d.id]||{})[k.synth]:null;
+      const srOff=sr&&isSuppressed('synth',d.id,k.synth);
       el.className='key knote'+(k.ghost?' kghost':'')+(k.rowlabel?' krowlbl':'')
-        +(editing&&editSel===idx?' editsel':'');
+        +(sr&&!srOff?' mapped':'')+(editing&&editSel===idx?' editsel':'');
       el.textContent=k.label||'';
-      if(k.title)el.title=k.title;
+      if(sr)el.innerHTML=esc(k.label||'')+`<span class="chip"${srOff?' style="opacity:.4"':''}>${esc(actShort(sr))}</span>`;
+      if(k.title)el.title=k.title+(sr?' This one is set to '+actShort(sr)+(srOff?' (its group is switched off)':'')+'.':'');
       if(editing)bindEditKey(el,d,idx);
       div.appendChild(el);return;}
     if(kind==='pad'){el.className='key';el.style.opacity=.35;
@@ -4978,8 +4994,10 @@ function drawGroupTags(d,lay,div,unit,offx,offy,srcs){
     const mem=new Set(g.members||[]);
     const pts=[];
     lay.keys.forEach(k=>{
-      if(k.note)return;
+      if(k.note&&!k.synth)return;
       let hit=false;
+      if(k.synth)hit=mem.has(`synth:${d.id},${k.synth}`);       // 29.20.3
+      else
       if(k.btn!=null){const b=btnIdent(d.id,k.btn);
         hit=mem.has(`mouse:${L},${b}`)||mem.has(`mouse:*,${b}`);}
       else if(k.u!=null){const c=baselineOf(d.id,k.u);
