@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.11</title>
+<title>HID Config 29.13</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -318,7 +318,20 @@ font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12)
 .heldchip.learn{color:var(--warn);font-weight:600}
 /* The centre reads the RESULT, not the key, so it must not look like the
    key's own label -- otherwise you cannot tell a preview from the truth. */
-.kcenter.heldcenter{color:var(--hi);font-weight:700}
+.kcenter.heldcenter{color:var(--ok);font-weight:400}
+/* 29.13 (i): while a key is held, what each key BECOMES is the main label
+   (above, green); its own name moves to the bottom-left, small and grey.
+   Josh, 2026-10-07 16:28: "This is a different paradigm from before we had
+   the immediate feedback". (ii): normal weight -- "nice and skinny". */
+.korig{position:absolute;left:2px;bottom:-1px;font-size:.52rem;color:var(--mut);
+  pointer-events:none;max-width:60%;overflow:hidden;white-space:nowrap}
+/* 29.13 (iii/iv): a legend checkbox hides that overlay */
+body.lghide-br .key .chip:not(.heldchip):not(.chipbase):not(.chiplayer){display:none}
+body.lghide-tl .key .chipbase{display:none}
+body.lghide-tr .key .chiplayer{display:none}
+body.lghide-bl .key .chipchord{display:none}
+body.lghide-labels .key .heldchip{display:none}
+.lgi input[type=checkbox]{margin:0 .2rem 0 0;vertical-align:middle}
 .key.held,.key.flash-red{background:rgba(239,68,68,.55)!important;position:relative;z-index:3}
 svg .region.held{fill:rgba(239,68,68,.55)!important}
 /* SENT = a thick yellow INSET ring (box-shadow), so it sits on top of a red
@@ -1770,6 +1783,13 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.13',d:'2026-10-08',items:[
+   {t:'Wireframe: while a key is held, what each key becomes is the main (green) label; its own name is small at the bottom-left',k:'legend'},
+   {t:'Legend checkboxes hide any overlay; the modifier-shortcut overlay starts hidden; keys flash while you type in a box on the page',k:'legend'},
+   {t:'Expansions: "Expands to" is timed (⏸ / ▶ / ⏹) -- the "Type it yourself" column is gone; ✎ sets the estimate by hand',k:'exptable'},
+   {t:'Usage: "Does what" from your own mappings; macro rows say which key or button ran them; Reference has its own column; several groups per row',k:'page-usage'}]},
+ {v:'29.12',d:'2026-10-08',items:[
+   {t:'Expansions with special characters: type the trigger again straight away and it is retyped the Office way (U+code, Alt+X)',k:'exptable'}]},
  {v:'29.11',d:'2026-10-07',items:[
    {t:'Mapping editor: "Supersede the device-specific rule on …" -- one shared edit can replace the rules devices have of their own (asks first)',k:'editor'},
    {t:'backups/ on the Pi is pruned after each save: everything from the last 10 days, the first and last of each older day',k:'write'}]},
@@ -4336,6 +4356,10 @@ const BROWSER_CODE2HID=(()=>{const m={};
     ControlRight:0xe4,ShiftRight:0xe5,AltRight:0xe6,MetaRight:0xe7});
   return m;})();
 const _browserHeld=new Set();
+function _browserKeysTyping(e){
+  if(typeof _showKeysState!=='undefined'&&_showKeysState>0)return false;
+  const t=e&&e.target,tn=(t&&t.tagName||'').toLowerCase();
+  return tn==='input'||tn==='textarea'||!!(t&&t.isContentEditable);}
 function _browserKeysActive(e){
   if(typeof _showKeysState!=='undefined'&&_showKeysState>0)return false;
   const t=e&&e.target,tn=(t&&t.tagName||'').toLowerCase();
@@ -4343,6 +4367,14 @@ function _browserKeysActive(e){
   const pm=$('page-map'),pu=$('page-usage');
   return (pm&&pm.style.display!=='none')||(pu&&pu.style.display!=='none');}
 document.addEventListener('keydown',e=>{
+  // 29.13 (v): typing in a box on this page still FLASHES the key on the
+  // wireframe. Josh, 2026-10-07 16:28: "Set it so it still flashes the
+  // keyboard keys even if writing in other areas of the HID Config HTML
+  // doc". A flash only -- holding a key in a text box must not repaint
+  // every label while he types.
+  if(!e.repeat&&_browserKeysTyping(e)){const u=BROWSER_CODE2HID[e.code];
+    if(u!==undefined)document.querySelectorAll(`.key[data-canon="${u}"],.key[data-usage="${u}"]`)
+      .forEach(el=>flash(el,'flash-yel'));return;}
   if(e.repeat||!_browserKeysActive(e))return;
   const u=BROWSER_CODE2HID[e.code];if(u===undefined)return;
   _browserHeld.add(u);holdKey(u,true,'');});
@@ -4579,7 +4611,8 @@ function renderLayoutKbd(d,w){
     el.innerHTML=(seqIdx>=0?`<span class="seqbadge">${seqIdx+1}</span>`:'')
       +(_isSelK?`<span class="edcorner" title="Edit this mapping">✎</span>`:'')
       +baseChip+`<span class="kcenter${_hp.center?' heldcenter':''}">${
-          _hp.center?esc(_hp.center):centerName}</span>`+_hp.chip
+          _hp.center?esc(_hp.center):centerName}</span>`
+      +(_hp.center&&_hp.center!==centerName?`<span class="korig">${centerName}</span>`:'')+_hp.chip
       +(_p2b?`<span class="chip" title="Baseline: this key acts as mouse button ${_p2b} (${esc(btnLabel(_p2b))}) and follows that button's mappings on every layer">≡btn ${_p2b}</span>`
             :(custChip||gestChip))
       +chordChip+(_p2b?elLayerBadge('btn',_p2b,d.id):elLayerBadge('key',eff.canon,d.id));
@@ -6421,12 +6454,21 @@ function usageGroupOf(id, kind, desc){
   if(mine) return {g: mine, from: 'you'};
   if(kind === 'shortcuts'){
     const pc = parseCorpusChord(id);
-    if(pc){
+    // 29.13: EVERY mapping group the rule is in (Josh, 16:54: "Allow
+    // multiple Groups"; 17:02: "for "Group" you can use whatever groups the
+    // mapping is included in"), and layer rows' kbd: members too.
+    const lm = /^layer(\d+)\+(.+)$/.exec(id);
+    const pcl = lm ? parseCorpusChord(lm[2]) : pc;
+    if(pcl){
+      const names = [];
       for(const [name, g] of Object.entries((cfg && cfg.mapping_groups) || {}))
         for(const m of (g.members || [])){
           const mm = /^mc:(-?\d+),(\d+),(\d+)$/.exec(m);
-          if(mm && +mm[2] === pc.mods && +mm[3] === pc.canon)
-            return {g: name, from: 'mapping group'};}}
+          const km = /^kbd:(\*|\d+),(\d+)$/.exec(m);
+          if((!lm && mm && +mm[2] === pcl.mods && +mm[3] === pcl.canon)
+             || (lm && km && +km[2] === pcl.canon && (km[1] === '*' || +km[1] === +lm[1]))){
+            if(!names.includes(name)) names.push(name);}}
+      if(names.length) return {g: names.join(', '), from: 'mapping group'};}
     if(desc && desc.text){
       const sec = /^([^—]{1,40})\s—\s/.exec(desc.text);
       const app = desc.app || desc.source || '';
@@ -6446,11 +6488,63 @@ function usageGroupCell(r){
       : '<span class="muted">—</span>'} <a class="mlink ugrpedit" data-uid="${esc(r.id)}"
       title="Set this row's group">✎</a></td>`;}
 
+/* 29.13 (URGENT, Josh 2026-10-07 17:02): "The "Does What" still has some
+   very obvious things already defined in the config as blanks: for example,
+   "layer1+Right" is blank, but that's obviously 'Resize Right' as defined in
+   the remappings ... In another example, it just says "Macro 25 Copy 0365
+   Doc Link" -  that doesn't actually tell me what key (or button) was hit".
+   His own config answers both, so it is read FIRST -- before any reference
+   set -- and it is never stored: a remapped key re-describes itself. */
+function _cfgAct(v){
+  if(v===undefined||v===null)return null;
+  if(typeof v==='number')return v?['key',v]:['suppress'];
+  return Array.isArray(v)?v:null;}
+function usageCfgDoes(id){
+  let L=0,rest=String(id);
+  const m=/^layer(\d+)\+(.+)$/.exec(rest);
+  if(m){L=+m[1];rest=m[2];}
+  else if(/ \(L\d+/.test(rest))return '';  // 29.8 names already say it
+  const pc=parseCorpusChord(rest);if(!pc)return '';
+  let a=null;
+  if(L){
+    a=_cfgAct((cfg.kbd_mappings||{})[`${L},${pc.canon}`]);
+    if(!a)for(const t of Object.values(cfg.kbd_mappings_by_device||{})){
+      a=_cfgAct((t||{})[`${L},${pc.canon}`]);if(a)break;}}
+  else{
+    const tabs=[cfg.mod_chords||{}];
+    for(const pr of Object.values(cfg.os_profiles||{}))if(pr&&pr.mod_chords)tabs.push(pr.mod_chords);
+    for(const t of tabs){a=_cfgAct(t[`-1,${pc.mods},${pc.canon}`]);if(a)break;}}
+  return a?actShort(a):'';}
+// Which inputs run macro n: "L1 Right", "E9 button 5 (tap)", "Combo …".
+function usageMacroInputs(n){
+  const out=[],isM=v=>Array.isArray(v)&&(v[0]==='macro'||v[0]==='macro_up')&&+v[1]===n;
+  const kname=u=>KEYS[u]||MODS[u]||('0x'+(+u).toString(16));
+  const lay=L=>+L?`L${L} `:'';
+  for(const [k,v] of Object.entries(cfg.kbd_mappings||{}))if(isM(v)){const [L,u]=k.split(',');out.push(lay(L)+kname(+u));}
+  for(const [d,t] of Object.entries(cfg.kbd_mappings_by_device||{}))for(const [k,v] of Object.entries(t||{}))
+    if(isM(v)){const [L,u]=k.split(',');out.push(`${_devName(d)}: ${lay(L)}${kname(+u)}`);}
+  for(const [k,v] of Object.entries(cfg.mouse_mappings||{}))if(isM(v)){const [L,b]=k.split(',');out.push(lay(L)+btnLabel(+b));}
+  for(const [d,t] of Object.entries(cfg.mouse_mappings_by_device||{}))for(const [k,v] of Object.entries(t||{}))
+    if(isM(v)){const [L,b]=k.split(',');out.push(`${_devName(d)}: ${lay(L)}${btnLabel(+b)}`);}
+  const th=(t,dev)=>{for(const [b,v] of Object.entries(t||{}))if(v&&isM(v[0]))
+    out.push(`${dev?_devName(dev)+': ':''}${btnLabel(+b)} (tap)`);};
+  th(cfg.tap_hold);for(const [d,t] of Object.entries(cfg.tap_hold_by_device||{}))th(t,d);
+  for(const c of Object.values(cfg.combos||{}))if(c&&isM(c.action))
+    out.push((c.keys||[]).map(kname).join('+'));
+  for(const [k,v] of Object.entries(cfg.mod_chords||{}))if(isM(v)){
+    const [,m,u]=k.split(',');
+    const mn=[[1,'Ctrl'],[4,'Alt'],[2,'Shift'],[8,'Cmd/Win']].filter(([bit])=>+m&bit).map(x=>x[1]);
+    out.push([...mn,kname(+u)].join('+'));}
+  return out;}
 function expSetNote(trigger){
   for(const s of Object.values(expSets||{})){
     for(const it of ((s&&s.items)||[])){
       if(it&&it.trigger===trigger&&it.note)return String(it.note);}}
   return '';}
+function usageRefHTML(r){
+  if(!r.desc)return '';
+  return esc(r.desc.text)+(r.desc.url?` <a class="mlink" href="${esc(r.desc.url)}"
+    target="_blank" rel="noopener" title="${esc(r.desc.source||'')} · retrieved ${esc(r.desc.retrieved||'?')}">source</a>`:'');}
 function usageDescHTML(r){
   const cited = r.desc ? esc(r.desc.text)
       + (r.desc.url ? ` <a class="mlink" href="${esc(r.desc.url)}"
@@ -6461,9 +6555,12 @@ function usageDescHTML(r){
     ? `<span title="your own note">${esc(r.note)}</span>` : '';
   const fromset = (!mine && !cited && r.setnote)
     ? `<span class="muted" title="from the expansion set that defines it">${esc(r.setnote)}</span>` : '';
-  const body = mine && cited ? mine + `<div class="muted"
-       style="font-size:.76rem">reference: ${cited}</div>`
-    : (mine || cited || fromset || '<span class="muted">—</span>');
+  // 29.13: the Reference is its own column now; "Does what" is his note,
+  // else what his own config does, else the set's note.
+  const fromcfg = (!mine && r.cfgdoes)
+    ? `<span title="from your own mappings">${esc(r.cfgdoes)}</span>` : '';
+  const body = mine || fromcfg || fromset
+    || (cited ? `<span class="muted">${cited}</span>` : '<span class="muted">—</span>');
   return body + ` <a class="mlink udescedit" data-uid="${esc(r.id)}"
       title="Write what this does" style="margin-left:.3rem">✎</a>`;
 }
@@ -6573,6 +6670,9 @@ function usageRows(kind){
     // line "what this does" -- when Josh has not written his own. Shown as
     // what it is (the set's text), never as a citation.
     setnote: kind === 'expansions' ? expSetNote(id) : '',
+    // 29.13: what his config says this does, and who runs a macro
+    cfgdoes: kind === 'shortcuts' ? usageCfgDoes(id) : '',
+    ins: /^Macro (\d+)/.test(id) ? usageMacroInputs(+/^Macro (\d+)/.exec(id)[1]) : [],
   }));
   for(const r of rows) r.group = usageGroupOf(r.id, kind, r.desc);   // 28.5
   const q = usageFilter.trim().toLowerCase();
@@ -6652,10 +6752,10 @@ function renderUsage(){
         <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}${
           totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span></summary>
       ${rows.length ? `<table style="width:100%">
-        <tr>${sh('desc','Does what')}<td>${sh('group','Group',1)} <a class="mlink ugrpfilter"
+        <tr>${sh('desc','Does what')}${sh('per_week','Per week')}<td>${sh('group','Group',1)} <a class="mlink ugrpfilter"
               title="Sort by group, and choose which groups to show"
               style="${usageGroupHide.size?'color:var(--hi);font-weight:700':''}">▾${usageGroupHide.size?' '+usageGroupHide.size+' hidden':''}</a></td>
-            ${sh('id','What you press')}${sh('per_week','Per week')}
+            ${sh('id','What you press')}<td><b>Reference</b></td>
             ${sh('count','Total')}${saved ? sh('chars','Chars saved') : ''}
             ${sh('os','OS')}<td></td></tr>
         ${rows.map((r, i) => {
@@ -6663,15 +6763,18 @@ function renderUsage(){
           const g = r.group.g || '';
           const head = (usageSort === 'group' && (i === 0 || (rows[i-1].group.g || '') !== g))
             ? `<tr class="ugrphdr" data-ugfold="${esc(g)}" style="cursor:pointer">
-                 <td colspan="${saved ? 8 : 7}" style="font-weight:600;padding-top:.4rem">
+                 <td colspan="${saved ? 9 : 8}" style="font-weight:600;padding-top:.4rem">
                  ${usageGroupFold.has(g) ? '▸' : '▾'} ${g ? esc(g) : '<i>(no group)</i>'}
                  <span class="muted" style="font-weight:400">· ${rows.filter(x => (x.group.g || '') === g).length}</span></td></tr>` : '';
           if(usageSort === 'group' && usageGroupFold.has(g)) return head;
           return head + `<tr>
           <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
+          <td>${r.per_week}</td>
           ${usageGroupCell(r)}
-          <td style="font-family:ui-monospace,monospace;max-width:18rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.id)}">${esc(r.id)}</td>
-          <td>${r.per_week}</td><td class="muted">${r.count}</td>
+          <td style="font-family:ui-monospace,monospace;max-width:18rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.id)}${r.ins.length?'\nrun by: '+esc(r.ins.join(', ')):''}">${esc(r.id)}${
+            r.ins.length?`<div class="muted" style="font-size:.72rem;font-family:inherit">← ${esc(r.ins.join(' · '))}</div>`:''}</td>
+          <td class="muted" style="font-size:.76rem">${usageRefHTML(r)}</td>
+          <td class="muted">${r.count}</td>
           ${saved ? `<td class="muted" title="${
             r.chars ? 'the text produced, less the trigger you typed'
                     : 'recorded before 24.3, when this was not counted'
@@ -8497,13 +8600,27 @@ const LG_KEY={
   bl:{sw:'<span class="sw" style="color:var(--hi)">⌘</span>',d:'⌘ bottom-left = has a modifier shortcut (e.g. Cmd+Tab); hover to see it',a:'⌘ bottom-left = has a modifier shortcut; hover the key',col:'var(--hi)',sel:'.chipchord'}};
 const LG_KEY_ORDER=['center','br','tl','tr','bl'];
 const LG_LABELS=[
-  {sw:'<span class="sw heldchip inuse" style="display:inline-flex">abc</span>',d:'green label: a shortcut you already use'},
+  {f:'labels',sw:'<span class="sw heldchip inuse" style="display:inline-flex">abc</span>',d:'green label: a shortcut you already use'},
   {sw:'<span class="sw heldchip learn" style="display:inline-flex">abc</span>',d:'yellow label: one you are learning'},
   {sw:'<span class="sw heldchip" style="display:inline-flex">abc</span>',d:'grey label: your own mapping or chord'},
   {sw:'<span class="sw heldchip" style="display:inline-flex">multiple</span>',d:'more than one set claims that key; hover for all of them'}];
 let _lgOpen=false;
 try{_lgOpen=localStorage.getItem('hc.lgopen')==='1';}catch(_){}
-function _lgItem(x){return `<div class="lgi">${x.sw}<span class="lgd">${esc(x.d)}</span></div>`;}
+// 29.13 (iii/iv): each overlay can be hidden; the modifier-shortcut one
+// (⌘ bottom-left) starts hidden. Josh, 2026-10-07 16:28: "Surface ability
+// to hide specific overlays from the wireframe (for example, a checkbox
+// along with each legend item)" and "I don't get the whole modifier
+// shortcut thing ... (have it's visual show/hide set to "off" by default)".
+let _lgHide=new Set(['bl']);
+try{const v=localStorage.getItem('hc.lghide');if(v)_lgHide=new Set(JSON.parse(v));}catch(_){}
+function lgApplyHide(){
+  for(const f of ['br','tl','tr','bl','labels'])
+    document.body.classList.toggle('lghide-'+f,_lgHide.has(f));}
+lgApplyHide();
+function _lgItem(x){
+  const cb=x.f?`<input type="checkbox" data-lgf="${x.f}" ${_lgHide.has(x.f)?'':'checked'}
+    title="Show this on the wireframes">`:'';
+  return `<div class="lgi">${cb}${x.sw}<span class="lgd">${esc(x.d)}</span></div>`;}
 // What a rendered key shows, minus what only reflects the moment (the ✎
 // corner, held labels): the "has THAT key changed?" test.
 function _lgSig(el){const c=el.cloneNode(true);
@@ -8604,7 +8721,7 @@ function lgDrawLines(box){
 function renderWfLegend(){
   const host=$('legend');if(!host)return;
   const live=typeof _showKeysState!=='undefined'&&_showKeysState>0;
-  const keyItems=LG_KEY_ORDER.map(f=>LG_KEY[f]);
+  const keyItems=LG_KEY_ORDER.map(f=>Object.assign(f==='center'?{}:{f},LG_KEY[f]));
   host.classList.toggle('open',_lgOpen);
   const btn=`<button class="txmini lgmore" id="lgmore" title="${_lgOpen?'Back to the strip':'The whole legend, with a key from your own config annotated'}">${_lgOpen?'▴ less':'▾ all'}</button>`;
   if(!_lgOpen){
@@ -8621,10 +8738,15 @@ function renderWfLegend(){
       +(live?sec('Live feedback',LG_LIVE):'')
       +sec('Basic',LG_BASIC)
       +`<div class="lgsec"><b>Within keys</b><div id="lgsamples"></div></div>`
+      +sec('Overlays — untick to hide one on every wireframe',keyItems.filter(x=>x.f))
       +sec('Labels — under other keys while a key or modifier is selected: what each would then do',LG_LABELS);
     const sh=$('lgsamples');
     const shown=new Set();
     for(const s of lgPickSamples()){const n=lgSampleNode(s,shown);sh.appendChild(n);lgDrawLines(n);}}
+  host.onchange=e=>{const f=e.target&&e.target.dataset&&e.target.dataset.lgf;if(!f)return;
+    if(e.target.checked)_lgHide.delete(f);else _lgHide.add(f);
+    try{localStorage.setItem('hc.lghide',JSON.stringify([..._lgHide]));}catch(_){}
+    lgApplyHide();};
   $('lgmore').onclick=e=>{e.stopPropagation();e.preventDefault();_lgOpen=!_lgOpen;
     try{localStorage.setItem('hc.lgopen',_lgOpen?'1':'0');}catch(_){}
     renderWfLegend();};}
@@ -11353,11 +11475,8 @@ function renderExp(){
   const tstats=(cfg&&cfg.exp_typing)||{};
   const totalN=Object.values(tstats).reduce((a,v)=>a+((v&&v.n)||0),0);
   t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td>'
-    +'<td><b>Expands to</b></td>'
-    +'<td title="Type the text out by hand here and press ✓. Timed from your '
-    +'first keystroke to your last."><b>Type it yourself</b></td>'
-    +'<td title="Mean time saved per use, over every sample you have saved.'
-    +' Hover a cell for SD, min and max."><b>Avg saved</b>'
+    +'<td title="Typing here is timed: ⏸ pause, ▶ resume, ⏹ record."><b>Expands to</b> <span class="muted" style="font-weight:400;font-size:.72rem">(timed)</span></td>'
+    +'<td title="Estimated time saved per use: the mean of every sample. ＋ adds one, ✎ sets the estimate by hand. Hover a cell for SD, min and max."><b>Estimated time saved</b>'
     +(totalN?` <span class="muted" style="font-weight:400;font-size:.72rem">`
       +`n=${totalN}</span>`:'')+'</td>'
     // 24.3, Josh: "the character count … A) I think it should be shown here
@@ -11396,47 +11515,53 @@ function addExpRow(k,v){
   const lbl=(cfg&&cfg.exp_names&&cfg.exp_names[k])||'';
   tr.innerHTML=`<td><input type="text" class="elabel" value="${lbl.replace(/"/g,'&quot;')}" placeholder="e.g. Signature"></td>
   <td><input type="text" class="etrig" value="${k.replace(/"/g,'&quot;')}"></td>
-  <td><input type="text" class="eval" value="${(v||'').replace(/"/g,'&quot;').replace(/\n/g,'\\n')}"></td>
-  <td><input type="text" class="etype" data-trig="${k.replace(/"/g,'&quot;')}"
-    placeholder="type it here…" style="min-width:8rem"
-    title="Type the expansion out by hand, then press ✓. Timed from your first keystroke to your last."><button class="etypesave" data-trig="${k.replace(/"/g,'&quot;')}" style="font-size:.72rem;margin-left:.2rem" title="Save this sample">✓</button></td>
+  <td style="white-space:nowrap"><input type="text" class="eval" value="${(v||'').replace(/"/g,'&quot;').replace(/\n/g,'\\n')}"
+    title="Typing here is timed (29.13): ⏸ pauses, ▶ resumes, ⏹ records how long writing it took. Time away from the page counts, as research."><button class="etpause" style="font-size:.72rem;margin-left:.2rem;display:none" title="Pause the timing (▶ resumes)">⏸</button><button class="etend" style="font-size:.72rem;display:none" title="End: record how long writing this took">⏹</button><span class="etclock muted" style="font-size:.7rem;margin-left:.2rem"></span></td>
   <td class="esaved" data-trig="${k.replace(/"/g,'&quot;')}"></td>
   <td class="eused" data-trig="${k.replace(/"/g,'&quot;')}"></td>
   <td><input type="text" class="egroup" list="expgrouplist" style="min-width:6rem"
     value="${(((cfg&&cfg.exp_groups)||{})[k]||'').replace(/"/g,'&quot;')}"
     placeholder="—" title="Optional. Groups rows in this table; not an expansion set."></td>`;
   t.appendChild(tr);
-  // 23.9: time the manual typing. 24.3: and keep timing it while you are
-  // away. State lives in expRuns, NOT in this closure -- switchTab('exp')
-  // calls renderExp(), which rebuilds every row, so a closure variable is
-  // destroyed by looking at another tab. That is precisely the case Josh
-  // asked to support.
-  const inp=tr.querySelector('.etype'), btn=tr.querySelector('.etypesave');
-  if(inp){
-    const run=expRuns[k];
-    if(run&&run.text!=null)inp.value=run.text;      // survive a re-render
-    inp.addEventListener('input',()=>{
-      const r=expRun(k);
-      const now=expNow();
-      // First keystroke starts the clock; every one after it moves the end.
-      if(r.t0===null)r.t0=now;
-      r.t1=now;
-      r.text=inp.value;});
-    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
-      if(btn)btn.click();}});}
-  if(btn)btn.onclick=()=>{
-    const text=(exps||{})[k]||'';
-    if(!inp||!inp.value.trim()){toast('type the text out first',true);return;}
-    const r=expRuns[k]||{};
-    if(r.t0===null||r.t0===undefined||r.t1===null||r.t1<=r.t0){
-      toast('nothing timed — type it in the box rather than pasting',true);
-      return;}
-    expAwayEnd(r);              // count the trip you are only just back from
-    const away=r.away||0;
-    const sample=(r.t1-r.t0)+away;
-    expAddSample(k,sample,
-      away?` (including ${fmtMs(away)} away from the page)`:'');
-    inp.value='';delete expRuns[k];};
+  // 29.13: THE TIMING IS IN "EXPANDS TO". Josh, 2026-10-07 16:11: "have all
+  // the functionality in "type it yourself" contained in the "Expands to"
+  // field so we can get rid of "Type it yourself" but still track the time
+  // saved", and: "It's pause/ start and 'end' BUTTONS since tracking starts
+  // as soon as you start typing in the 'expansion' field." Writing the
+  // expansion IS the sample: the first keystroke starts the clock, ⏸/▶
+  // pause and resume it (a paused stretch is not counted), and ⏹ End
+  // records it. Time away from the page still counts (24.3: looking things
+  // up is part of the work). State lives in expRuns -- switchTab('exp')
+  // rebuilds every row, so a closure would be lost by looking at a tab.
+  const inp=tr.querySelector('.eval'),bp=tr.querySelector('.etpause'),
+        be=tr.querySelector('.etend'),clk=tr.querySelector('.etclock');
+  const rk='row:'+(k||('new'+(++_expNewRow)));
+  const show=()=>{const r=expRuns[rk];const on=!!(r&&r.t0!==null);
+    bp.style.display=be.style.display=on?'':'none';
+    bp.textContent=r&&r.pauseAt!=null?'▶':'⏸';
+    clk.textContent=on?(r.pauseAt!=null?'paused':'timing'):'';};
+  inp.addEventListener('input',()=>{
+    const r=expRun(rk),now=expNow();
+    if(r.pauseAt!=null)return;                 // paused: not counted
+    if(r.t0===null)r.t0=now;
+    r.t1=now;show();});
+  bp.onclick=()=>{const r=expRun(rk),now=expNow();
+    if(r.pauseAt==null)r.pauseAt=now;
+    else{r.paused=(r.paused||0)+(now-r.pauseAt);r.pauseAt=null;r.t1=now;}
+    show();};
+  be.onclick=()=>{
+    const r=expRuns[rk];
+    const trig=(tr.querySelector('.etrig').value||'').trim();
+    if(!trig){toast('give it a trigger first, then ⏹',true);return;}
+    if(!r||r.t0===null||r.t1<=r.t0){toast('nothing timed — type the expansion in its box',true);return;}
+    // Ended while paused: the clock stopped at the pause (t1 no longer
+    // moves while paused), so there is nothing more to subtract.
+    r.pauseAt=null;
+    expAwayEnd(r);
+    const away=r.away||0,sample=Math.max(0,(r.t1-r.t0)-(r.paused||0))+away;
+    expAddSample(trig,sample,away?` (including ${fmtMs(away)} away from the page)`:'');
+    delete expRuns[rk];show();};
+  show();
   renderExpSavedCell(tr.querySelector('.esaved'),k);
   renderExpUsedCell(tr.querySelector('.eused'),k);}
 
@@ -11488,7 +11613,8 @@ function renderExpUsed(){
    renderExp(), which rebuilds every row -- so a closure would be destroyed by
    the very act of navigating away. */
 const EXP_AWAY_MAX_MS = 20*60*1000;
-const expRuns = {};        // trigger -> {t0,t1,away,awayAt,text}
+const expRuns = {};        // row key -> {t0,t1,away,awayAt,paused,pauseAt}
+let _expNewRow = 0;        // 29.13: a key for rows with no trigger yet
 
 function expNow(){
   return (window.performance&&performance.now)?performance.now():Date.now();}
@@ -11668,22 +11794,28 @@ function renderExpSavedCell(td,trig){
   const plus=`<a class="mlink eplus" data-trig="${esc(trig)}"
      title="Add a duration by hand: 1440h-1530h, 10:50-11:20, 2m 13s, 90 (minutes)"
      style="margin-left:.35rem">＋</a>`;
-  if(!a||!a.n){td.innerHTML='<span class="muted">—</span>'+plus;}
+  // 29.13: ✎ sets the estimate outright (Josh: "the ability to manually
+  // edit the "Estimated time" section"); ＋ still adds one sample to it.
+  const set=`<a class="mlink eset" data-trig="${esc(trig)}"
+     title="Set the estimate by hand (replaces the samples)">✎</a>`;
+  if(!a||!a.n){td.innerHTML='<span class="muted">—</span>'+plus+set;}
   else{
     const sd=accSd(a);
-    td.innerHTML=esc(fmtMs(a.mean))+plus;
+    td.innerHTML=esc(fmtMs(a.mean))+plus+set;
     td.title=`${a.n} sample${a.n>1?'s':''}`
       +`\nSD  ${fmtMs(sd)}`
       +`\nmin ${fmtMs(a.min)}`
       +`\nmax ${fmtMs(a.max)}`
       + (a.n<2?'\n\n(SD needs at least two samples)':'');}
   const p=td.querySelector('.eplus');
-  if(p)p.onclick=()=>expAskDuration(td,trig);}
+  if(p)p.onclick=()=>expAskDuration(td,trig);
+  const setEl=td.querySelector('.eset');
+  if(setEl)setEl.onclick=()=>expAskDuration(td,trig,true);}
 
 /* The "+" turns the cell into a one-field form. In place rather than a
    prompt(): a prompt cannot show what it accepts, and "any of the forms we
    usually use" is a list you want in front of you while typing. */
-function expAskDuration(td,trig){
+function expAskDuration(td,trig,replace){
   if(!td||td.querySelector('.edurin'))return;
   const back=td.innerHTML;
   td.innerHTML=`<input type="text" class="edurin" style="width:7.5rem"
@@ -11703,7 +11835,8 @@ function expAskDuration(td,trig){
             +'1440h-1530h or a plain number of minutes',true);
       inp.focus();inp.select();return;}
     done();
-    expAddSample(trig,ms,' (entered by hand)');};
+    if(replace&&cfg.exp_typing)delete cfg.exp_typing[trig];      // 29.13
+    expAddSample(trig,ms,replace?' (set by hand)':' (entered by hand)');};
   td.querySelector('.edurok').onclick=ok;
   inp.addEventListener('keydown',e=>{
     if(e.key==='Enter'){e.preventDefault();ok();}
