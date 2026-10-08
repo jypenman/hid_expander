@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.9</title>
+<title>HID Config 29.11</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1770,6 +1770,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.11',d:'2026-10-07',items:[
+   {t:'Mapping editor: "Supersede the device-specific rule on …" -- one shared edit can replace the rules devices have of their own (asks first)',k:'editor'},
+   {t:'backups/ on the Pi is pruned after each save: everything from the last 10 days, the first and last of each older day',k:'write'}]},
+ {v:'29.10',d:'2026-10-07',items:[
+   {t:'Window move/resize macros no longer stall or run away: the next one first ends the Size mode the last one left on',k:'macrolist'}]},
  {v:'29.9',d:'2026-10-07',items:[
    {t:'Save buttons show Saving… with a spinner until the Pi confirms; the quick note says Saving… then Saved',k:'write'},
    {t:'The mapping editor says when other inputs press the same button or key ("Also pressed by: Extra button, key 2")',k:'editor'}]},
@@ -9417,6 +9422,37 @@ function renderEditor(){
     ⚠ <b>Also pressed by:</b> ${ins.map(esc).join(', ')} — on this device these all arrive as the same
     ${sel.type==='btn'?'button':'key'}, so a change here changes every one of them. To split them,
     give one its own identity in Baseline.</div>`);}
+/* 29.11: "SUPERSEDE ALL DEVICE-SPECIFIC RULES". Josh, 2026-09-08: "add a
+   checkbox "supersede all device specific rules" that would allow changes
+   across all devices to change the per-device setting"; decided "build it"
+   2026-10-07. Shown only in the All-devices scope, and only when some
+   device has its own rule for this input (otherwise there is nothing to
+   supersede). Ticked, a shared edit also REMOVES those device rules --
+   including a present-but-null "nothing here" -- so every device follows
+   the shared rule. It writes more than one record, so it asks first and
+   names each device (CLAUDE.md §2.5 rule 2), and it unticks itself after
+   one use, so it can never quietly ride along on a later edit. */
+function _deviceRulesFor(kind,key){
+  return Object.entries(cfg[kind+'_by_device']||{})
+    .filter(([d,t])=>t&&Object.prototype.hasOwnProperty.call(t,key)).map(([d])=>d);}
+function _devName(id){const d=(cfg.devices||[]).find(x=>x.id===id);return d?(d.name||id):id;}
+function supersedeHTML(isBtn,key){
+  const devs=_deviceRulesFor(isBtn?'mouse_mappings':'kbd_mappings',key);
+  if(!devs.length)return '';
+  return `<label class="inl" style="margin-top:.4rem;font-size:.8rem" id="supersedewrap"
+    title="Ticked, this edit also removes the device-specific rule on each device listed, so every device follows this shared rule. Asks first; unticks itself after one use.">
+    <input type="checkbox" id="supersede"> Supersede the device-specific rule on:
+    ${devs.map(d=>esc(_devName(d))).join(', ')}</label>`;}
+function supersedeApply(kind,key){
+  const cb=$('supersede');if(!cb||!cb.checked)return true;
+  const devs=_deviceRulesFor(kind,key);if(!devs.length)return true;
+  if(!confirm('This edit will also REMOVE the device-specific rule for this '
+      +(kind==='mouse_mappings'?'button':'key')+' on:\n\n  '+devs.map(_devName).join('\n  ')
+      +'\n\nso those devices follow the shared rule. Continue?')){cb.checked=false;return false;}
+  for(const d of devs)delete cfg[kind+'_by_device'][d][key];
+  cb.checked=false;
+  toast('device-specific rules removed on '+devs.map(_devName).join(', ')+' — ⬆ Save to device to apply');
+  return true;}
 function _renderEditorBody(){
   const ed=$('editorbody');
   if(seqSel.length){return renderCaptureEditor(ed);}
@@ -9800,6 +9836,7 @@ function _renderEditorBody(){
       <option value="macro" ${ui.release==='macro'?'selected':''}>Macro…</option>
     </select><div id="relArg"></div>
     ${devScoped?'':osScopeHTML('osscope',scopeOf(isBtn?'mouse_mappings':'kbd_mappings',key))}
+    ${devScoped?'':supersedeHTML(isBtn,key)}
     ${noteFieldHTML(noteKey(isBtn?'mouse':'kbd',layer,isBtn?sel.id:canon))}
     ${editorOsOverrideHTML(isBtn,isBtn?sel.id:canon)}
   </div>${shortcutPanelHTML(isBtn?null:canon)}</div>`;
@@ -9888,6 +9925,7 @@ function _renderEditorBody(){
     // 25.1.2: kmapWrite(), not the read-only kmap. This is the write
     // path, and the ONLY place the per-device table should be created.
     const tbl=devScoped?kmapWrite():scopeTable(scope,kind);
+    if(!devScoped&&!supersedeApply(kind,key))return;           // 29.11
     if(isBtn){ if(a)tbl[key]=a;else delete tbl[key]; }
     else{ if(!a)delete tbl[key];
       else if(a[0]==='key')tbl[key]=a[1];
