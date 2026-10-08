@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.13</title>
+<title>HID Config 29.14</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1783,6 +1783,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.14',d:'2026-10-08',items:[
+   {t:'Mouse writing: Option+drag draws an oval, Ctrl/Cmd+drag a rectangle (drag hidden from the app); holding the key previews the shape',k:'mousewrite'},
+   {t:'Mouse writing: digits typed with Option held are circled when you let go (true circle or oval, a setting)',k:'mousewrite'},
+   {t:'Mouse writing: every key, modifier and step is a setting (Shapes, circled numbers and keys)',k:'mousewrite'}]},
  {v:'29.13',d:'2026-10-08',items:[
    {t:'Wireframe: while a key is held, what each key becomes is the main (green) label; its own name is small at the bottom-left',k:'legend'},
    {t:'Legend checkboxes hide any overlay; the modifier-shortcut overlay starts hidden; keys flash while you type in a box on the page',k:'legend'},
@@ -10396,7 +10400,49 @@ function renderMouseWrite(){
   $('mwsize').onchange=e=>{_mwSet('size',+e.target.value||MW_DEF.size);toast('starting size set — ⬆ Save to device');};
   $('mwspeed').onchange=e=>{_mwSet('speed',+e.target.value||MW_DEF.speed);toast('starting speed set — ⬆ Save to device');};
   if($('mwkeep'))$('mwkeep').onclick=()=>{_mwSet('size',st.size);_mwSet('speed',st.speed);
-    renderMouseWrite();toast('kept size '+st.size+' and speed '+st.speed+' — ⬆ Save to device');};}
+    renderMouseWrite();toast('kept size '+st.size+' and speed '+st.speed+' — ⬆ Save to device');};
+  renderMouseWriteMore(el,c);}
+/* 29.14: shapes, circled numbers, previews, and every key editable. Josh,
+   2026-10-07 14:24 (shapes, circled numbers, "Let the user decide in the
+   settings whether the circle surrounding should be a real circle or be
+   allowed to be an oval", "Allow user to set duration of the movement in
+   miliseconds") and 14:36 ("Let the user edit any of the keyboard shortcuts
+   for the options (eg faster/slower by..., etc.)"). Defaults match the
+   engine's (mouse_write.py KEY_DEFAULTS / MOD_DEFAULTS). */
+const MW_KEYS={faster:[0x4f,'Faster'],slower:[0x50,'Slower'],bigger:[0x52,'Bigger'],smaller:[0x51,'Smaller'],exit:[0x29,'Stop']};
+const MW_MODSETS=[[9,'Ctrl or Cmd/Win'],[1,'Ctrl'],[8,'Cmd/Win'],[4,'Alt/Option'],[13,'Ctrl+Alt+Cmd/Win'],[5,'Ctrl+Alt'],[12,'Alt+Cmd/Win']];
+const MW_MODS={adjust:[9,'Hold for speed/size'],toggle:[13,'Tap twice to start/stop'],oval:[4,'Hold + drag: oval'],rect:[9,'Hold + drag: rectangle']};
+function renderMouseWriteMore(el,c){
+  const keys=Object.assign({},...Object.entries(MW_KEYS).map(([k,[v]])=>({[k]:v})),c.keys||{});
+  const mods=Object.assign({},...Object.entries(MW_MODS).map(([k,[v]])=>({[k]:v})),c.mods||{});
+  const modSel=(k)=>`<select data-mwmod="${k}">${MW_MODSETS.map(([v,n])=>
+    `<option value="${v}" ${v===+mods[k]?'selected':''}>${n}</option>`).join('')}</select>`;
+  const d=document.createElement('details');d.style.marginTop='.5rem';
+  d.innerHTML=`<summary style="cursor:pointer"><b>Shapes, circled numbers and keys</b></summary>
+    <p style="font-size:.8rem">In the mode: hold <b>Alt/Option</b> and drag for an <b>oval</b>, or
+      <b>Ctrl/Cmd</b> and drag for a <b>rectangle</b> — the drag is hidden from the app; the shape is
+      drawn when you let go. Holding the key alone plays a small preview of the shape. Hold
+      <b>Alt/Option</b> while typing digits, and they are <b>circled</b> when you let go.</p>
+    <div class="row"><div>
+      <label>Preview length (ms, 0 = off)</label><input type="number" id="mwpms" min="0" max="3000" step="50" value="${c.preview_ms!=null?c.preview_ms:300}">
+      <label>Preview size (mouse counts)</label><input type="number" id="mwpsz" min="0" max="200" step="1" value="${c.preview_size!=null?c.preview_size:10}">
+      <label class="inl"><input type="checkbox" id="mwround" ${c.circle_round===false?'':'checked'}> Circled numbers: a true circle (untick for an oval that hugs the number)</label>
+      <label>Speed/size steps: ±% per press, and with Shift</label>
+      <span style="display:flex;gap:.4rem"><input type="number" id="mwstep" min="1" max="90" value="${c.step||25}" style="width:5rem">
+      <input type="number" id="mwfine" min="0.1" max="50" step="0.1" value="${c.fine_step||1}" style="width:5rem"></span>
+    </div><div>
+      ${Object.entries(MW_KEYS).map(([k,[,n]])=>`<label>${n} key</label><select data-mwkey="${k}">${keyOpts(keys[k])}</select>`).join('')}
+      ${Object.entries(MW_MODS).map(([k,[,n]])=>`<label>${n}</label>${modSel(k)}`).join('')}
+    </div></div>`;
+  el.appendChild(d);
+  const sub=(k,obj)=>{const t=Object.assign({},(cfg.mouse_write||{})[k]||{},obj);_mwSet(k,t);};
+  d.querySelector('#mwpms').onchange=e=>{_mwSet('preview_ms',Math.max(0,+e.target.value||0));toast('⬆ Save to device');};
+  d.querySelector('#mwpsz').onchange=e=>{_mwSet('preview_size',Math.max(0,+e.target.value||0));toast('⬆ Save to device');};
+  d.querySelector('#mwround').onchange=e=>{_mwSet('circle_round',e.target.checked);toast('⬆ Save to device');};
+  d.querySelector('#mwstep').onchange=e=>{_mwSet('step',+e.target.value||25);toast('⬆ Save to device');};
+  d.querySelector('#mwfine').onchange=e=>{_mwSet('fine_step',+e.target.value||1);toast('⬆ Save to device');};
+  d.querySelectorAll('[data-mwkey]').forEach(s=>s.onchange=()=>{sub('keys',{[s.dataset.mwkey]:+s.value});toast('⬆ Save to device');});
+  d.querySelectorAll('[data-mwmod]').forEach(s=>s.onchange=()=>{sub('mods',{[s.dataset.mwmod]:+s.value});toast('⬆ Save to device');});}
 
 /* ===== 29.2.1: SYNTAX PRIMERS =============================================
    Josh, 2026-10-01: "For the expansions section, can you write (and keep
