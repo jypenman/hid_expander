@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.19</title>
+<title>HID Config 29.20</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -11,7 +11,9 @@
 :root{--pick:#d97706;--pick-soft:rgba(217,119,6,.18);
   /* 27.8: space above and below a button's label, in LINES. Set from
      Preferences → Layout (PREFS.look.btnpad). */
-  --btnpad:.1}
+  --btnpad:.1;
+  /* 29.20: section heading spacing, Preferences → Layout (PREFS.look.headpad) */
+  --headpad:.25}
 button.armed{background:var(--pick)!important;color:#fff!important;
   box-shadow:0 0 0 3px var(--pick-soft)}
 /* While a swap is armed the whole stage says so: the cursor changes, every
@@ -228,6 +230,27 @@ input:focus-visible,textarea:focus-visible,.dockgrip:focus-visible{
 #toptabs{position:sticky;top:var(--topbar-h,2.9rem);z-index:55;background:Canvas;
   margin-top:0;padding-top:.45rem}
 @media (max-height:520px){#toptabs{position:static}}
+/* 29.20: THE GLOBAL STICKY RULE. Josh, 2026-10-08 10:54: "WHENEVER
+   something is a title for somethingn else (like, it can be collapsed and
+   expanded), that should stay not leave the screen when you scroll down (it
+   should stick to the top).  Same for column headers of tables.. Please
+   ensure that is built into the HID Config so that whenever a new table or
+   section is made, those rules get used for free".
+   So it is on the ELEMENTS: every open <details>' <summary>, and every <th>.
+   They stop under the top bar, the tab strip and the stacked Copy/Paste and
+   Debug bars (--pile-h, set by stickSync). A header inside its own scroll
+   box sticks to the top of THAT box: stickScan sets --sticky-under to 0 on
+   every scroll container, and the variable inherits. Use <th> for a table's
+   header row to get this; a <td><b> header does not stick. */
+:root{--sticky-under:calc(var(--topbar-h,0px) + var(--tabs-h,0px) + var(--pile-h,0px))}
+/* Each level of open <details> stacks its header below its parent's.
+   Summaries are not one height (19-40px measured), so stickScan measures
+   them: --sum-off on a <details> is where its own header stops, --in-off
+   where a <th> inside it stops. */
+details[open]>summary{position:sticky;top:calc(var(--sticky-under) + var(--sum-off,0px));
+  z-index:30;background:Canvas}
+th{position:sticky;top:calc(var(--sticky-under) + var(--in-off,0px));z-index:26;background:Canvas}
+@media (max-height:520px){details[open]>summary,th{position:static}}
 .tab{padding:.4rem 1rem;border:1px solid var(--line);border-radius:8px 8px 0 0;cursor:pointer;font-weight:600}
 .tab.on{background:var(--hi);color:#fff;border-color:var(--hi)}
 .pills{display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0}
@@ -553,8 +576,11 @@ table.perftbl tbody tr:hover{background:var(--panel)}
 .logbox{height:200px;overflow-y:auto;font-family:ui-monospace,monospace;font-size:.75rem;
 border:1px solid var(--line);border-radius:8px;padding:.5rem;background:rgba(0,0,0,.15);white-space:pre-wrap}
 .logbox .ev{color:var(--hi)}.logbox .rx{color:var(--ok)}.logbox .tx{color:var(--warn)}.logbox .er{color:var(--err)}
-details.dbg{border:1px solid var(--line);border-radius:12px;margin:.6rem 0;background:var(--panel)}
-details.dbg>summary{cursor:pointer;padding:.6rem 1rem;font-weight:600}
+/* 29.20: the heading pills' height and gaps follow --headpad (lines). They
+   were fixed at .6rem; Josh, 2026-10-08 10:32: ""Debug Monitors" and
+   "Copy/Paste" have too much empty space vertically." */
+details.dbg{border:1px solid var(--line);border-radius:12px;margin:calc(var(--headpad) * 1.6rem) 0;background:var(--panel)}
+details.dbg>summary{cursor:pointer;padding:calc(var(--headpad) * 1.6rem) 1rem;font-weight:600}
 .macro summary{cursor:pointer;padding:.2rem 0}
 .macro.flashtgt{outline:2px solid var(--hi);border-radius:6px}
 #chordbar{display:none;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.4rem 0;
@@ -615,10 +641,20 @@ border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:.82rem
 #devcards,#devcards .key,#mousesvg{user-select:none;-webkit-user-select:none}
 .kabs{position:relative}
 .kabs .key{position:absolute;margin:0;height:33px;padding:.15rem 2px;display:flex;
-align-items:center;justify-content:center}
+align-items:center;justify-content:center;
+/* 29.20: .key's min-width (2.1rem, for the grid views) held every wireframe
+   key at ~34px, so a 0.75-wide Fintie key barely shrank. Josh, 2026-10-08
+   11:15: "when I put width down to .75 they just got like .05 smaller". */
+min-width:0}
 .kabs .key .chip{bottom:0}
 .kabs .key{overflow:visible}
 .key.editsel{outline:2px solid var(--warn);outline-offset:1px;z-index:3}
+/* 29.20: Left Alt cannot be seen by this browser in Mac option/alt mode */
+body.lalt-hidden .kabs .key[data-canon="226"]::after{content:'*';position:absolute;
+  bottom:-3px;left:50%;transform:translateX(-50%);color:var(--warn);font-weight:700;font-size:.9rem}
+.grouptag{font-size:.68rem;font-weight:600;padding:0 .45rem;border-radius:999px;
+  background:Canvas;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;z-index:6}
+td.grpsel{outline:2px solid var(--hi);outline-offset:-2px;background:rgba(59,130,246,.12)}
 .wfbody.editing .key{cursor:grab;touch-action:none}
 /* 29.18: label-only elements -- a chord a key sends (shown, not mappable), a
    greyed gap where a captured key sent nothing, and a row label. */
@@ -704,7 +740,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <input type="search" id="uisearch" placeholder="🔎 Search this page…" autocomplete="off"
       style="width:13rem" title="Find anything in the UI — settings, mappings, triggers, macro names. Enter jumps to the first match; Esc closes.">
     <div id="uisearchdrop" style="display:none;position:absolute;top:100%;right:0;z-index:60;
-      min-width:26rem;max-width:34rem;max-height:60vh;overflow:auto;margin-top:.2rem;
+      min-width:min(26rem,calc(100vw - 16px));max-width:min(34rem,calc(100vw - 16px));max-height:60vh;overflow:auto;margin-top:.2rem;
       background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;
       box-shadow:0 8px 24px rgba(0,0,0,.28)"></div>
   </span>
@@ -886,6 +922,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <span id="brkeys" class="muted" style="margin-left:auto;font-size:.76rem;cursor:help"></span>
     <button id="showkeys">▶ Show key presses</button>
     <span class="muted" id="showkeysinfo"></span>
+    <span id="brkeysalt" style="display:none;font-size:.74rem;color:var(--warn);flex-basis:100%;text-align:right"></span>
   </div>
   <div id="chordbar">
     <b>Chord:</b><span id="chordinfo"></span>
@@ -1793,6 +1830,15 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.20',d:'2026-10-08',items:[
+   {t:'Every open section heading and table header row now sticks to the top while you scroll its content, stacked under the ones above it',k:'remappanel'},
+   {t:'⌥ panel: the Option-character checkboxes tick again (they had stopped in 29.17); Check all and Uncheck collisions buttons',k:'optsec'},
+   {t:'Groups: a pill and dotted line on each wireframe for every group, the layer key a group needs outlined too, click a swatch to recolour, parent groups (⤷), enable boxes behind a toggle',k:'groupshost'},
+   {t:'Assignments: drag down (or Shift / Option-click) the Group cells and type once to group them all; a focused Group field shows every group',k:'asgpanel'},
+   {t:'Wireframes: keys narrower than 0.8 shrink, with a smaller font; hover a cut-off key for its full text; click the background to close the editor; the ANSI / Split picker only appears in ✎ Layout',k:'wfsection'},
+   {t:'Preferences → Layout: Heading pill spacing (default tighter)',k:'prefsbody'},
+   {t:'Browser-listening view in Mac option/alt mode: an * under Left Alt and why (learn more)',k:'brkeys'},
+   {t:'Page search results stay on screen on a narrow window',k:'uisearch'}]},
  {v:'29.19',d:'2026-10-08',items:[
    {t:'Macros: ⌨ Assign… next to each macro -- press the key, modifier + key or mouse button that should run it; it says what it replaces before writing',k:'macrolist'},
    {t:'Usage: "Does what" names what a row sends -- layer1+Shift+L is Shift+→ (the layer key with Shift carried), a layer chord rule before the layer key, and an unmapped layer key says it is the key itself',k:'page-usage'},
@@ -2353,6 +2399,9 @@ let device=null,cfg=null,exps=null,layer=0,sel=null,chordSel=null,curFile=0;
 // 29.18/29.19: layout capture-in-order, type-to-add, macro Assign. Up here
 // because render() reads them and must never meet them in their TDZ.
 let _lcap=null,_typeAdd=true,_typeAddRow=null,_masg=null;
+let _groupEnableBoxes=false;
+const _asgGrpSel=new Set();        // 29.20: selected Group cells (member ids)
+try{_groupEnableBoxes=localStorage.getItem('hc.grpenbox')==='1';}catch(_){}
 let layouts=null,editDev=null,editSel=null,btStat={},btKnown={},statTimer=null;
 let editMulti=new Set();   // 19.1 #6: marquee-selected key indices in the layout editor
 let comboSel=[],seqSel=[],groupOn={},lastOrder='';
@@ -4391,6 +4440,7 @@ function render(){
   p.onclick=()=>{layer=i;render();};L.appendChild(p);});
   renderStage();try{renderWfLegend();}catch(e){console.warn('legend',e);}try{renderPalm();}catch(e){console.warn('palm',e);}renderMacros();try{renderMouseWrite();}catch(e){console.warn('mouse writing',e);}renderEditor();renderDevices();renderPalette();renderCapture();renderMapTable();renderAssignTable();updateOsBtn();
   renderHeldBar();
+  stickScan();                                              // 29.20
   requestAnimationFrame(drawChords);
 }
 /* E9 wireframe: right btn / wheel + 10,11 / left btn / thumb rows 7-8-9, 4-5-6, 0-3 */
@@ -4433,12 +4483,12 @@ function renderStage(){
     card.className='devcard';card.dataset.dev=d.id;
     card.innerHTML=`<div class="devhead">
       <h2>${esc(d.name)}</h2>
-      <select class="wfpick" data-wf="${d.id}" title="wireframe style for this device">
+      ${editing?`<select class="wfpick" data-wf="${d.id}" title="wireframe style for this device">
         <option value="ansi" ${(d.wireframe||'ansi')==='ansi'?'selected':''}>ANSI</option>
         <option value="split" ${d.wireframe==='split'?'selected':''}>Split</option>
         <option value="e9" ${d.wireframe==='e9'?'selected':''}>E9 mouse</option>
         <option value="fintie" ${d.wireframe==='fintie'?'selected':''}>Fintie (3 modes)</option>
-      </select>
+      </select>`:''}
       ${canEdit?`<button class="editbtn" data-ed="${d.id}" title="edit the wireframe drawing only (key positions), not mappings">${editing?'💾 Save layout':'✎ Layout'}</button>`:''}
       ${canEdit&&editing?`<button class="cancelbtn" title="discard the layout changes you have made since pressing Layout, and leave the editor">✕ Cancel</button>`:''}
       ${(()=>{const hasPtr=lastEng&&lastEng.nodes&&lastEng.nodes.some(n=>n.device===d.id&&n.role==='pointer');
@@ -4585,7 +4635,32 @@ function brKeysState(){
      +'Works while this page has focus and no text box is active. '
      +'Layer keys and mouse layer buttons are handled on the Pi; the Pi tells this page '
      +'when a layer is held, so the wireframe follows them either way.';}
-setInterval(brKeysState,1500);
+/* 29.20: Josh, 2026-10-08 10:37: "Have a little asterisk underneath LAlt in
+   that situation, and a disclaimer whenever this specific situation is in
+   play ... "To see live mappings for this key click "Show key presses"
+   (learn more)" - and if they click the "learn more" it gives the full
+   explanation about why." The situation: this browser is the key source
+   (Show key presses off) and the engine is in Mac option/alt mode on
+   Windows, so Left Alt never reaches the computer and the page cannot see
+   it held. */
+function brKeysAltNote(){
+  const el=$('brkeysalt');if(!el)return;
+  const on=_showKeysState===0&&!!(lastEng&&lastEng.option_mode===true)
+    &&/^win/i.test((cfg&&cfg.active_os)||'win');
+  document.body.classList.toggle('lalt-hidden',on);
+  if(!on){el.style.display='none';return;}
+  if(el.dataset.shown==='1')return;
+  el.dataset.shown='1';el.style.display='';
+  el.innerHTML=`* Left Alt: to see live mappings for this key click <b>Show key presses</b>
+    (<a class="mlink" id="brkeysaltmore">learn more</a>)<span id="brkeysaltwhy" style="display:none"><br>
+    In Mac option/alt mode the Pi keeps Left Alt to itself -- that is what stops Windows opening a
+    menu or moving focus when you type an Option character. So the computer never receives it, and
+    this page, which is only listening to what the computer receives, cannot tell that it is held.
+    With Show key presses on, the page listens to the Pi instead, which sees every key you press.
+    Right Alt is Windows Alt and shows normally.</span>`;
+  $('brkeysaltmore').onclick=()=>{const w=$('brkeysaltwhy');if(w)w.style.display=w.style.display?'':'none';};}
+setInterval(()=>{brKeysState();try{brKeysAltNote();}catch(_){}
+  const el=$('brkeysalt');if(el&&el.style.display==='none')delete el.dataset.shown;},1500);
 function holdBtn(box,on){
   if(on)_heldBtns.add(box);else _heldBtns.delete(box);
   const r=document.querySelector(`#mousesvg [data-btn="${box}"]`);if(r)r.classList.toggle('held',on);
@@ -4613,6 +4688,16 @@ function renderLayoutKbd(d,w){
   // layer" fill follows a device-scoped role instead of only the shared one.
   const lay=layoutFor(d),unit=lay.unit||40,srcs=layerSources(d.id);
   const ghl=groupMembersVisible();
+  // 29.20: Josh, 2026-10-08 12:34: "be sure to outline the layer key that is
+  // involved (for example, I've got a bunch of keys for "Window management"
+  // (arrow keys), but they don't show the key (likely Caps) that would be
+  // required to fire them". A member on layer L>0 also colours the key or
+  // button that opens L on THIS device, on every layer.
+  for(const[m,col]of Object.entries(ghl)){
+    const mm=/^(?:kbd|mouse|mc):(\d+),/.exec(m);if(!mm||!+mm[1])continue;
+    const s=srcs[+mm[1]];if(!s)continue;
+    const k=(s.type==='btn'?'mouse':'kbd')+':*,'+s.id;
+    if(!ghl[k])ghl[k]=col;}
   let minx=0,miny=0,maxx=0,maxy=0;
   for(const k of lay.keys){minx=Math.min(minx,k.x);miny=Math.min(miny,k.y);
     maxx=Math.max(maxx,k.x+(k.w||1));maxy=Math.max(maxy,k.y+(k.h||1));}
@@ -4631,6 +4716,10 @@ function renderLayoutKbd(d,w){
     el.style.left=((k.x+offx)*unit)+'px';el.style.top=((k.y+offy)*unit)+'px';
     el.style.width=((k.w||1)*unit-4)+'px';
     if(k.h)el.style.height=(k.h*unit-4)+'px';
+    // 29.20: a small key gets a smaller font, down to 7px, so its label
+    // still fits; the full text is in the tooltip (set after the content).
+    {const sc=Math.min(((k.w||1)*unit-4)/34,((k.h||1)*unit-4)/29);
+     if(sc<1)el.style.fontSize=Math.max(7,Math.round(11*sc))+'px';}
     if(k.rot)el.style.transform=`rotate(${k.rot}deg)`;
     const editing=editDev===d.id;
     // ---- special element kinds ----
@@ -4829,7 +4918,103 @@ function renderLayoutKbd(d,w){
         el.ondragstart=e=>dragStart(e,{type:'key',id:eff.canon});
         el.ondragover=e=>e.preventDefault();
         el.ondrop=e=>dropOn(e,{type:'key',id:eff.canon});}}
-    div.appendChild(el);});}
+    div.appendChild(el);});
+  // 29.20: Josh, 2026-10-08 11:20: "If something is hidden on a key then
+  // when I mouse over it make sure I get a popup that gives the full data."
+  // A key whose content does not fit gets its whole text as a tooltip
+  // (an existing tooltip, e.g. a chord's explanation, is kept and extended).
+  setTimeout(()=>div.querySelectorAll('.key').forEach(el=>{
+    if(el.scrollWidth<=el.clientWidth+1&&el.scrollHeight<=el.clientHeight+1
+       &&![...el.children].some(c=>c.scrollWidth>c.clientWidth+1))return;
+    const txt=el.innerText.replace(/\s+/g,' ').trim();
+    if(txt&&!(el.title||'').includes(txt))el.title=el.title?txt+' — '+el.title:txt;}),0);
+  drawGroupTags(d,lay,div,unit,offx,offy,srcs);              // 29.20
+  // 29.20 (11:26): a click on the empty background closes the mapping
+  // editor, as its × does. Not while editing the layout: there an empty
+  // click starts a marquee.
+  if(editDev!==d.id)div.addEventListener('click',e=>{
+    if(e.target===div&&$('editor')&&$('editor').style.display==='block')closeEditor();});}
+/* 29.20: GROUP TAGS ON THE WIREFRAME. Josh, 2026-10-08 12:38: "When
+   viewing groups is turned on, have each device wireframe have a little pill
+   with the group name and a dotted line in that groups color to the edge of
+   the main bulk of keys for that group (if theyr'e separated, you can have
+   multiple lines (up to three, but two preferred) ONLY if they don't cross
+   any other lines, otherwise just have it to the main group.  ii) if we run
+   out of colors, use different dashingsn of lines".
+
+   Pills stack down the right of the board. Each group's elements on THIS
+   device are clustered (elements within 1.6 units chain together); the line
+   goes to the edge of the biggest cluster, and to the second biggest too
+   when it has 2+ elements and the line crosses no line already drawn. Dash
+   patterns cycle once the palette has been used. Drawing only: nothing here
+   writes to cfg. */
+const GROUP_DASHES=['4 3','9 4','2 3','10 3 2 3'];
+function _segX(a,b,c,d){   // do segments ab and cd properly cross?
+  const o=(p,q,r)=>Math.sign((q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x));
+  return o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0;}
+function drawGroupTags(d,lay,div,unit,offx,offy,srcs){
+  if(!_showGroups||!cfg||!cfg.mapping_groups)return;
+  const names=Object.keys(cfg.mapping_groups);
+  const L=layer;
+  const tags=[];
+  names.forEach((name,gi)=>{
+    const g=cfg.mapping_groups[name];
+    if(!groupActive(g)||groupOn[name]===false)return;
+    const mem=new Set(g.members||[]);
+    const pts=[];
+    lay.keys.forEach(k=>{
+      if(k.note)return;
+      let hit=false;
+      if(k.btn!=null){const b=btnIdent(d.id,k.btn);
+        hit=mem.has(`mouse:${L},${b}`)||mem.has(`mouse:*,${b}`);}
+      else if(k.u!=null){const c=baselineOf(d.id,k.u);
+        hit=mem.has(`kbd:${L},${c}`)||mem.has(`kbd:*,${c}`);}
+      if(hit)pts.push({x:k.x+offx,y:k.y+offy,w:k.w||1,h:k.h||1});});
+    if(!pts.length)return;
+    // cluster: chain elements whose boxes are within 1.6 units
+    const cl=[];
+    for(const p of pts){
+      const near=cl.filter(c=>c.some(q=>Math.abs(q.x-p.x)<1.6+Math.max(p.w,q.w)&&Math.abs(q.y-p.y)<1.6));
+      if(!near.length)cl.push([p]);
+      else{const m=near[0];m.push(p);
+        for(const o of near.slice(1)){m.push(...o);cl.splice(cl.indexOf(o),1);}}}
+    cl.sort((a,b)=>b.length-a.length);
+    tags.push({name,col:g.color||'#a855f7',dash:GROUP_DASHES[Math.floor(gi/GROUP_COLORS.length)%GROUP_DASHES.length],
+               cl:cl.slice(0,3)});});
+  if(!tags.length)return;
+  let maxx=0,maxy=0;
+  for(const k of lay.keys){maxx=Math.max(maxx,k.x+offx+(k.w||1));maxy=Math.max(maxy,k.y+offy+(k.h||1));}
+  const px=(maxx+0.6)*unit,pillW=150,pitch=24;
+  const W=px+pillW+8,H=Math.max(maxy*unit+12,tags.length*pitch+8);
+  div.style.width=W+'px';div.style.height=H+'px';
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg');
+  svg.setAttribute('width',W);svg.setAttribute('height',H);
+  svg.style.cssText='position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:5';
+  const drawn=[];
+  const box=c=>{const x0=Math.min(...c.map(p=>p.x)),y0=Math.min(...c.map(p=>p.y)),
+    x1=Math.max(...c.map(p=>p.x+p.w)),y1=Math.max(...c.map(p=>p.y+p.h));
+    return{x0:x0*unit,y0:y0*unit,x1:x1*unit-4,y1:y1*unit-4};};
+  tags.forEach((t,i)=>{
+    const py=6+i*pitch,anchor={x:px,y:py+9};
+    t.cl.forEach((c,ci)=>{
+      if(ci>0&&c.length<2)return;
+      const b=box(c),end={x:b.x1+2,y:Math.max(b.y0,Math.min(b.y1,anchor.y))};
+      if(ci>0&&drawn.some(s=>_segX(anchor,end,s[0],s[1])))return;
+      if(ci>1)return;                       // two preferred
+      drawn.push([anchor,end]);
+      const ln=document.createElementNS(NS,'line');
+      ln.setAttribute('x1',anchor.x);ln.setAttribute('y1',anchor.y);
+      ln.setAttribute('x2',end.x);ln.setAttribute('y2',end.y);
+      ln.setAttribute('stroke',t.col);ln.setAttribute('stroke-width','1.6');
+      ln.setAttribute('stroke-dasharray',t.dash);ln.setAttribute('opacity','.85');
+      svg.appendChild(ln);});
+    const pill=document.createElement('div');
+    pill.className='grouptag';pill.textContent=t.name;pill.title=t.name;
+    pill.style.cssText=`position:absolute;left:${px}px;top:${py}px;max-width:${pillW}px;`
+      +`border:1.5px dashed ${t.col};color:${t.col};`;
+    div.appendChild(pill);});
+  div.appendChild(svg);}
 /* ---- groups pseudo-device card ---- */
 const GROUP_COLORS=['#a855f7','#06b6d4','#f97316','#84cc16','#ec4899','#eab308'];
 function renderGroupsCard(c){
@@ -4837,29 +5022,77 @@ function renderGroupsCard(c){
   const names=Object.keys(cfg.mapping_groups||{});
   const card=document.createElement('div');
   card.className='devcard';card.id='groupscard';
+  /* 29.20: PARENT GROUPS. Josh, 2026-10-08 12:38: "Enable feature that
+     allows groups to have parent groups:-) (so a group of groups). to enable
+     subgroups. This is just for organizing from the user perspective".
+     A group's parent is its `parent` field, set with ⤷, or else the part of
+     a dotted name before the first dot ("mouse.mirror_keyboard" is under
+     "mouse"). The engine reads only `members` and `active`, so `parent`
+     changes nothing it does. Children are listed under their parent, whose
+     👁 shows or hides them all. */
+  const parentOf=n=>{const g=cfg.mapping_groups[n]||{};
+    return g.parent||(n.includes('.')?n.split('.')[0]:'');};
+  const byParent={};
+  names.forEach(n=>{(byParent[parentOf(n)]=byParent[parentOf(n)]||[]).push(n);});
   let pills='';
+  const pillOf={};
   names.forEach((n,i)=>{
     const g=cfg.mapping_groups[n];
     const col=g.color||GROUP_COLORS[i%GROUP_COLORS.length];
     const active=groupActive(g);
+    // 29.20 (Josh, 12:34): 👁 on the LEFT; the enable checkbox only with
+    // "Include checkbox for enabling/disabling groups" -- next to "Show
+    // Groups" a bare checkbox reads as show/hide, which it is not. The
+    // swatch opens a colour picker.
     pills+=`<span class="grouppill ${active?'':'off'}" data-g="${esc(n)}" style="cursor:default">
-      <input type="checkbox" ${active?'checked':''} data-gact="${esc(n)}" title="enable/disable this group's mappings">
-      <span class="sw" style="background:${col}"></span>${esc(n)}
+      <a class="mlink" data-geye="${esc(n)}" title="show/hide highlights">${groupOn[n]===false?'🙈':'👁'}</a>
+      <label class="sw" style="background:${col};cursor:pointer;position:relative" title="Change this group's colour">
+        <input type="color" data-gcol="${esc(n)}" value="${/^#[0-9a-f]{6}$/i.test(col)?col:'#a855f7'}"
+          style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0"></label>${esc(n)}
       <span class="muted">(${(g.members||[]).length})</span>
-      <a class="mlink" data-geye="${esc(n)}" title="show/hide highlights">${groupOn[n]===false?'🙈':'👁'}</a></span>`;});
+      ${_groupEnableBoxes?`<input type="checkbox" ${active?'checked':''} data-gact="${esc(n)}" title="enable/disable this group's mappings (stays in the config)">`
+        :(active?'':'<span class="muted" title="this group is switched off">off</span>')}
+      <a class="mlink" data-gpar="${esc(n)}" title="Put this group under a parent group (organising only)">⤷</a></span>`;
+    pillOf[n]=pills;pills='';});
+  for(const n of byParent['']||[])pills+=pillOf[n];
+  for(const [par,kids] of Object.entries(byParent).sort()){
+    if(!par)continue;
+    const allOff=kids.every(k=>groupOn[k]===false);
+    pills+=`<div class="grpparent" style="margin:.3rem 0 0 .2rem"><a class="mlink" data-gpeye="${esc(par)}"
+        title="show/hide every group under ${esc(par)}">${allOff?'🙈':'👁'}</a>
+      <b style="font-size:.8rem">${esc(par)}</b> <span class="muted" style="font-size:.74rem">(${kids.length})</span>
+      <div style="display:flex;flex-wrap:wrap;gap:.25rem;margin:.15rem 0 0 1rem">${kids.map(k=>pillOf[k]).join('')}</div></div>`;}
   card.innerHTML=`<div class="devhead" style="align-items:center;gap:.5rem">
       <a class="mlink" id="grpcollapse" title="collapse/expand" style="font-weight:600">${_groupsCollapsed?'▸':'▾'}</a>
       <h2 style="margin:0">🗂 Groups</h2>
       <label style="display:flex;align-items:center;gap:.3rem;font-weight:600;margin-left:.4rem;cursor:pointer">
         <input type="checkbox" id="grpshow" ${_showGroups?'checked':''}> Show Groups</label>
       <button id="grpselall" style="font-size:.74rem;padding:.1rem .5rem" title="highlight every group">Select all</button>
-      <button id="grpselnone" style="font-size:.74rem;padding:.1rem .5rem" title="clear all highlighting">Deselect all</button></div>
+      <button id="grpselnone" style="font-size:.74rem;padding:.1rem .5rem" title="clear all highlighting">Deselect all</button>
+      <label style="display:flex;align-items:center;gap:.3rem;font-weight:400;font-size:.76rem;margin-left:auto;cursor:pointer">
+        <input type="checkbox" id="grpenbox" ${_groupEnableBoxes?'checked':''}> Include checkbox for enabling/disabling groups</label></div>
     <div id="grpbody" style="${_groupsCollapsed?'display:none':''}">
       ${names.length?pills:'<span class="muted">No groups yet — assign one from the mapping editor below.</span>'}
       <div class="muted" style="font-size:.75rem;margin-top:.3rem">“Show Groups” toggles all highlight coloring. Per-group checkbox = enable/disable that group's mappings (stays in the config; ⬆ Save to device to apply). 👁 toggles one group's highlight.</div>
     </div>`;
   host.innerHTML='';host.appendChild(card);
   $('grpshow').onchange=()=>{_showGroups=$('grpshow').checked;render();};
+  $('grpenbox').onchange=()=>{_groupEnableBoxes=$('grpenbox').checked;
+    try{localStorage.setItem('hc.grpenbox',_groupEnableBoxes?'1':'0');}catch(_){}render();};
+  card.querySelectorAll('[data-gpeye]').forEach(a=>a.onclick=()=>{
+    const kids=byParent[a.dataset.gpeye]||[];const hide=!kids.every(k=>groupOn[k]===false);
+    kids.forEach(k=>{groupOn[k]=!hide;});render();});
+  card.querySelectorAll('[data-gpar]').forEach(a=>a.onclick=()=>{
+    const n=a.dataset.gpar,g=cfg.mapping_groups[n];if(!g)return;
+    const v=prompt('Parent group for "'+n+'" (leave empty for none):',g.parent||'');
+    if(v===null)return;
+    const t=v.trim();
+    if(t===n){toast('a group cannot be its own parent',true);return;}
+    if(t)g.parent=t;else delete g.parent;
+    render();toast(t?'"'+n+'" is now under "'+t+'" — ⬆ Save to device to keep it':'"'+n+'" has no parent now — ⬆ Save to device');});
+  card.querySelectorAll('[data-gcol]').forEach(inp=>inp.onchange=()=>{
+    const g=cfg.mapping_groups[inp.dataset.gcol];if(!g)return;
+    g.color=inp.value;render();toast('group colour changed — ⬆ Save to device to keep it');});
   // 19.9 #2: bulk highlight control, right where the per-group 👁 toggles are
   $('grpselall').onclick=()=>{_showGroups=true;
     Object.keys(cfg.mapping_groups||{}).forEach(n=>{groupOn[n]=true;});
@@ -6157,7 +6390,10 @@ function stickSync(){
   for(const el of all){
     if(!el.open){el.style.setProperty('--stick-top',top+'px');
       top+=Math.round(el.getBoundingClientRect().height);}}
-  if(!open.length)return;
+  // 29.20: what the global sticky headers must clear (see the CSS)
+  const pile=()=>document.documentElement.style.setProperty('--pile-h',pileH+'px');
+  let pileH=top;
+  if(!open.length){pile();return;}
   /* Share the viewport between the open panels rather than letting each take
      38vh: two at 38vh is 76% of the screen for panels you are scrolling PAST.
      The cap is per panel and shrinks as more open, which is the decision 25.5
@@ -6172,7 +6408,36 @@ function stickSync(){
     // Measured, not assumed: the panels are not a uniform height, and the
     // next one must start below whatever this one actually occupies.
     cumulative+=Math.round(
-      Math.min(el.getBoundingClientRect().height, innerHeight*share/100));}}
+      Math.min(el.getBoundingClientRect().height, innerHeight*share/100));}
+  pileH=cumulative;pile();}
+/* 29.20: a scroll container resets the sticky offset for what is inside it,
+   or a header at the top of a small scrolling box would be pushed down by
+   the page's header height. Runs after renders, throttled, never on scroll. */
+function stickScan(){
+  clearTimeout(stickScan._t);
+  stickScan._t=setTimeout(()=>{
+    for(const el of document.body.querySelectorAll('div,details,section,table,ul,td')){
+      const s=getComputedStyle(el);
+      const sc=/(auto|scroll)/.test(s.overflowY)||/(auto|scroll)/.test(s.overflowX);
+      if(sc){el.style.setProperty('--sticky-under','0px');el.style.setProperty('--in-off','0px');
+             el.dataset.stkScroll='1';}
+      else if(el.dataset.stkScroll){el.style.removeProperty('--sticky-under');
+             el.style.removeProperty('--in-off');delete el.dataset.stkScroll;}}
+    // Document order: a parent is measured before its children.
+    for(const d of document.body.querySelectorAll('details[open]')){
+      const sum=d.querySelector(':scope>summary');
+      const par=d.parentElement&&d.parentElement.closest('details[open]');
+      // A scroll box between this and its parent restarts the stack.
+      const box=d.parentElement&&d.parentElement.closest('[data-stk-scroll]');
+      const off=(par&&!(box&&par.contains(box)))
+        ?(parseFloat(par.style.getPropertyValue('--in-off'))||0):0;
+      d.style.setProperty('--sum-off',off+'px');
+      d.style.setProperty('--in-off',(off+(sum?Math.round(sum.getBoundingClientRect().height):0))+'px');}
+  },250);}
+// Opening or closing any section changes the stack. `toggle` does not
+// bubble, so listen in the capture phase.
+document.addEventListener('toggle',()=>stickScan(),true);
+window.addEventListener('resize',()=>stickScan());
 
 // Toggle only -- never on scroll. That is the whole point of the technique:
 // the browser does the sticking, JS only says where each header stops.
@@ -8087,7 +8352,7 @@ function renderAssignTable(){
         ${cells}
         <td><textarea data-asgnote="${esc(rowNoteKey(r))}" rows="1" class="asgnote"
           placeholder="what this does" maxlength="160">${esc(getNote(rowNoteKey(r)))}</textarea></td>
-        <td><input type="text" data-asggrp="${esc(member)}" list="grouplist" placeholder="group" value="" style="width:80px" maxlength="60">
+        <td class="asggrpcell${_asgGrpSel.has(member)?' grpsel':''}" data-grpcell="${esc(member)}"><input type="text" data-asggrp="${esc(member)}" placeholder="group" value="" style="width:7rem" maxlength="60" autocomplete="off">
           ${inGroups.map(n=>{
             const held=(cfg.mapping_groups[n].members||[]).find(m=>_ids.includes(m))||member;
             return `<span class="grouppill" title="remove from ${esc(n)}" onclick="groupRemove('${esc(n)}','${esc(held)}')">${esc(n)} ✕</span>`;}).join('')}</td>
@@ -8147,8 +8412,39 @@ function renderAssignTable(){
         n.toLowerCase()===want.toLowerCase()||('📦 '+n)===want);
       if(packName){moveRuleIntoPack(R(gi.closest('tr').querySelector('[data-asgpick]').dataset.asgpick),packName);
         gi.value='';return;}
-      addToGroup(want,gi.dataset.asggrp);gi.value='';};
-    gi.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commit();}};gi.onblur=commit;});
+      // 29.20: typing into a selected cell applies to every selected row
+      const mem=gi.dataset.asggrp;
+      const targets=_asgGrpSel.has(mem)&&_asgGrpSel.size>1?[..._asgGrpSel]:[mem];
+      targets.forEach(m=>addToGroup(want,m));
+      if(targets.length>1){toast('added '+targets.length+' rows to "'+want+'" — ⬆ Save to device');
+        _asgGrpSel.clear();}
+      gi.value='';};
+    gi.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();grpChipsHide();commit();}
+      if(e.key==='Escape'){_asgGrpSel.clear();grpChipsHide();host.querySelectorAll('.grpsel').forEach(c=>c.classList.remove('grpsel'));}};
+    gi.onfocus=()=>grpChipsShow(gi,commit);
+    gi.onblur=()=>{setTimeout(grpChipsHide,150);commit();};});
+  /* 29.20: Josh, 2026-10-08 10:30: "Allow drag select to select multiple to
+     all assign to a specific group. (Say; grab select the "Group" items and
+     the cursor will go into the top one;  allow shift+click and option+click
+     as well to select more/less; then whatever the user types in applies to
+     all selected." Drag down the Group column, or Shift-click to add a cell
+     and Option-click to remove one; the cursor goes to the top selected
+     cell; Enter applies the name to all of them. Esc clears. */
+  let _grpDrag=false;
+  const cells=[...host.querySelectorAll('td[data-grpcell]')];
+  const paint=()=>cells.forEach(c=>c.classList.toggle('grpsel',_asgGrpSel.has(c.dataset.grpcell)));
+  const focusTop=()=>{const top=cells.find(c=>_asgGrpSel.has(c.dataset.grpcell));
+    if(top){const i=top.querySelector('input');if(i&&document.activeElement!==i)i.focus();}};
+  cells.forEach(c=>{
+    c.onmousedown=e=>{
+      if(e.target.closest('.grouppill'))return;
+      const m=c.dataset.grpcell;
+      if(e.altKey){e.preventDefault();_asgGrpSel.delete(m);paint();focusTop();return;}
+      if(e.shiftKey){e.preventDefault();_asgGrpSel.add(m);paint();focusTop();return;}
+      if(e.target.tagName!=='INPUT'){e.preventDefault();_asgGrpSel.clear();_asgGrpSel.add(m);_grpDrag=true;paint();}
+      else if(!_asgGrpSel.has(m)){_asgGrpSel.clear();paint();}};
+    c.onmouseenter=()=>{if(_grpDrag){_asgGrpSel.add(c.dataset.grpcell);paint();}};});
+  document.addEventListener('mouseup',()=>{if(_grpDrag){_grpDrag=false;focusTop();}},{once:true});
   host.querySelectorAll('[data-asgexp]').forEach(b=>b.onclick=e=>{
     e.preventDefault();e.stopPropagation();exportAddition(b.dataset.asgexp,buckets[b.dataset.asgexp].map(i=>rows[i]));});
   const add=$('asgnewadd');
@@ -9004,7 +9300,12 @@ function _optParse(txt){
     if(b){m|=b;continue;}
     const k=NAME2KEY[p];if(k===undefined||u!==null)return null;u=k;}
   return u===null?null:`-1,${m},${u}`;}
-function _optSet(k,act){cfg.option_rules=cfg.option_rules||{};
+// 29.20: was a SECOND `function _optSet` -- the later declaration wins, so
+// from 29.17 every Option-character checkbox called this one with (row,
+// shift) and nothing it showed could change. Josh, 2026-10-08 10:46: "When I
+// click on checkbox next to a key in Option Mode section, it doesn't check".
+// test_ui_structure now refuses two functions with one name.
+function _optRuleSet(k,act){cfg.option_rules=cfg.option_rules||{};
   if(act)cfg.option_rules[k]=act;else delete cfg.option_rules[k];
   if(!Object.keys(cfg.option_rules).length)delete cfg.option_rules;
   profileTouched();renderOptRules();toast('Mac option/alt mode rule changed — ⬆ Save to device');}
@@ -9044,17 +9345,17 @@ function renderOptRules(){
     ${bothRows?`<div style="margin-top:.3rem"><b style="font-size:.78rem">Your Option rules that fire in BOTH modes</b>
       <span class="muted">(in Windows option/alt mode they take Alt+key from Windows)</span><table style="font-size:.78rem">${bothRows}</table></div>`:''}`;
   host.querySelectorAll('[data-ouse]').forEach(a=>a.onclick=()=>{const [u,s]=a.dataset.ouse.split(',').map(Number);
-    _optSet(`-1,1,${s}`,['keymods',u,4]);});
+    _optRuleSet(`-1,1,${s}`,['keymods',u,4]);});
   host.querySelectorAll('[data-orel]').forEach(a=>a.onclick=()=>{const u=+a.dataset.orel;
     const t=prompt('Which key should do Windows Alt+'+(KEYS[u]||'')+' in Mac option/alt mode? e.g. Cmd+[');if(!t)return;
     const k=_optParse(t);if(!k){toast('could not read that — try Cmd+[ or Cmd+Shift+B',true);return;}
-    const old=relocOf(u);if(old)delete cfg.option_rules[old];_optSet(k,['keymods',u,4]);});
-  host.querySelectorAll('[data-odel]').forEach(a=>a.onclick=()=>_optSet(a.dataset.odel,null));
+    const old=relocOf(u);if(old)delete cfg.option_rules[old];_optRuleSet(k,['keymods',u,4]);});
+  host.querySelectorAll('[data-odel]').forEach(a=>a.onclick=()=>_optRuleSet(a.dataset.odel,null));
   host.querySelectorAll('[data-obind]').forEach(a=>a.onclick=()=>{const [n,u]=a.dataset.obind.split(',').map(Number);
-    _optSet(`-1,4,${u}`,['macro',n]);});
+    _optRuleSet(`-1,4,${u}`,['macro',n]);});
   host.querySelectorAll('[data-omove]').forEach(a=>a.onclick=()=>{const k=a.dataset.omove;
     const tbl=a.dataset.ofrom==='win'?cfg.os_profiles.win.mod_chords:cfg.mod_chords;
-    const v=tbl[k];delete tbl[k];_optSet(k,v);});}
+    const v=tbl[k];delete tbl[k];_optRuleSet(k,v);});}
 function renderOptChars(){
   const el=$('optbody');if(!el||!cfg)return;
   const haveU=!!(typeof usageData!=='undefined'&&usageData),haveC=!!refData('corpus');
@@ -9092,7 +9393,9 @@ function renderOptChars(){
     ${haveU&&haveC?'':`<b style="color:var(--warn)">${!haveU?'Usage':''}${!haveU&&!haveC?' and ':''}${!haveC?'the shortcut sets':''} not loaded — collisions are incomplete.</b>`}</p>
     <div class="bar" style="margin:.2rem 0 .4rem">
       <button id="optinstall" title="For Windows option/alt mode: tick every item with NO collision; leave the rest off">＋ Windows option/alt mode: tick every item with no collision</button>
-      <button id="optnone">Untick all</button>
+      <button id="optall" title="Tick every item, collisions included">Check all</button>
+      <button id="optnone">Uncheck all</button>
+      <button id="optuncol" title="Untick every ticked item that collides with something">Uncheck collisions</button>
       <span class="muted" style="font-size:.74rem">Then ⬆ Save to device.</span></div>
     <table style="width:100%;font-size:.82rem"><tr><th>key</th><th title="Ticked = also in Windows option/alt mode. Mac option/alt mode types every one.">⌥ <span class="muted" style="font-weight:400">ticked = Windows option/alt mode too</span></th><th>collides with</th><th>⌥⇧</th><th>collides with</th></tr>${rows}</table>`;
   renderOptAltKeys();                                       // 29.15
@@ -9110,6 +9413,18 @@ function renderOptChars(){
       if(!optCollisions(r,sh).length&&!_optIsOn(r,sh)){_optSet(r,sh,true);k++;}
     profileTouched();renderOptChars();
     toast(`ticked ${k} item(s) with no collision — ⬆ Save to device`);};
+  // 29.20: Josh, 2026-10-08 10:46: "I want some tickbox check options:
+  // "Check All", "Uncheck All", Uncheck Collisions; Check All
+  // Non-Collisions." The last is the ＋ button above.
+  $('optall').onclick=()=>{
+    if(!confirm('Tick every macOS Option character, including the ones that collide with a shortcut?'))return;
+    let k=0;for(const r of OPT_CHARS)for(const sh of [false,true])if(!_optIsOn(r,sh)){_optSet(r,sh,true);k++;}
+    profileTouched();renderOptChars();toast(`ticked ${k} — ⬆ Save to device`);};
+  $('optuncol').onclick=()=>{
+    if(!haveU||!haveC){toast('usage and the shortcut sets are not both loaded — collisions would be incomplete',true);return;}
+    let k=0;for(const r of OPT_CHARS)for(const sh of [true,false])
+      if(_optIsOn(r,sh)&&optCollisions(r,sh).length){_optSet(r,sh,false);k++;}
+    profileTouched();renderOptChars();toast(`unticked ${k} colliding item(s) — ⬆ Save to device`);};
   $('optnone').onclick=()=>{
     if(!confirm('Untick every macOS Option character?'))return;
     for(const r of OPT_CHARS)for(const sh of [true,false])if(_optIsOn(r,sh))_optSet(r,sh,false);
@@ -11358,6 +11673,28 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{
   if(!_masg||_showKeysState>0)return;
   const u=BROWSER_CODE2HID[e.code];if(u!==undefined)masgEvent({u,down:false,dev:''});});
+/* 29.20: Josh, 2026-10-08 10:27: "Let the group dropdown resize to show as
+   many as possible." A <datalist> popup is the browser's and cannot be
+   sized, so a focused Group field shows EVERY group as a chip below it,
+   wrapping to as many rows as it needs; click one to use it. */
+function grpChipsShow(inp,commit){
+  grpChipsHide();
+  const names=groupNamesSorted();if(!names.length)return;
+  const r=inp.getBoundingClientRect();
+  const d=document.createElement('div');d.id='grpchips';
+  d.style.cssText=`position:fixed;left:${Math.max(8,r.left)}px;top:${r.bottom+2}px;z-index:90;`
+    +'max-width:min(40rem,calc(100vw - 16px));max-height:45vh;overflow:auto;background:Canvas;color:CanvasText;'
+    +'border:1px solid var(--line);border-radius:8px;padding:.3rem;display:flex;flex-wrap:wrap;gap:.25rem;'
+    +'box-shadow:0 6px 18px rgba(0,0,0,.18)';
+  const q=()=>inp.value.trim().toLowerCase();
+  const draw=()=>{d.innerHTML=names.filter(n=>!q()||n.toLowerCase().includes(q()))
+    .map(n=>`<button type="button" data-gchip="${esc(n)}" style="font-size:.74rem;padding:.1rem .45rem">${esc(n)}</button>`).join('')
+    ||'<span class="muted" style="font-size:.74rem">new group — press Enter</span>';
+    d.querySelectorAll('[data-gchip]').forEach(b=>b.onmousedown=e=>{e.preventDefault();
+      inp.value=b.dataset.gchip;grpChipsHide();commit();});};
+  draw();inp.addEventListener('input',draw);
+  document.body.appendChild(d);}
+function grpChipsHide(){const d=$('grpchips');if(d)d.remove();}
 function gotoMacro(n){switchTab('macros');const d=$('macro-'+n);
 if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});
 d.classList.add('flashtgt');setTimeout(()=>d.classList.remove('flashtgt'),1600);}}
@@ -12000,7 +12337,19 @@ function uiSearchRun(q){
     if(own)push(el,own,'text');}
   return hits;}
 
+// 29.20: Josh, 2026-10-08 11:20: "Search;  Bug where it is chopped off to
+// the left when screen is narrow enough that search ends up on left under
+// "HID Config" title." The drop is anchored to the box's RIGHT edge, so with
+// the box near the left it started off-screen (measured at -40px on a 560px
+// window). Shift it back inside the window once it is laid out.
+function uiSearchClamp(){
+  const d=$('uisearchdrop');if(!d||d.style.display==='none')return;
+  d.style.transform='';
+  const r=d.getBoundingClientRect();
+  if(r.left<8)d.style.transform=`translateX(${Math.round(8-r.left)}px)`;}
 function uiSearchRender(hits,q){
+  try{return _uiSearchRender(hits,q);}finally{uiSearchClamp();}}
+function _uiSearchRender(hits,q){
   const d=$('uisearchdrop');if(!d)return;
   if(!q.trim()){d.style.display='none';d.innerHTML='';return;}
   if(!hits.length){
@@ -15219,7 +15568,7 @@ const PF_DEFAULT_RECIPE =
   'lat.mean|Lat ; lat.p95|p95 ; lat.max|max ; lat.sd|± ; lat.n|n ; apm.mean|APM ; apm.band|';
 
 let PREFS = {
-  look: { btnpad: 0.1 },       // 27.8: Preferences → Layout
+  look: { btnpad: 0.1, headpad: 0.25 },   // 27.8 / 29.20: Preferences → Layout
   bench: {
     recipe: PF_DEFAULT_RECIPE,
     show: true,
@@ -15253,6 +15602,10 @@ function pfApplyLook(){
   const v = +((PREFS.look || {}).btnpad);
   document.documentElement.style.setProperty('--btnpad',
     String(isFinite(v) ? Math.max(0, Math.min(0.6, v)) : 0.1));
+  const hp = +((PREFS.look || {}).headpad ?? 0.25);
+  document.documentElement.style.setProperty('--headpad',
+    String(isFinite(hp) ? Math.max(0, Math.min(1, hp)) : 0.25));
+  try{ stickSync(); stickScan(); }catch(_){}   // the sticky pile changes height
 }
 function pfSave(){
   try{ localStorage.setItem(PF_LS, JSON.stringify(PREFS)); }
@@ -15418,6 +15771,16 @@ const PF_SECTIONS = {
         <p>The space above and below the label of every button on the page,
         in lines of text. It was nearly half a line (0.45); the default is
         now a tenth. Kept in this browser only.</p>`)}
+    </div>
+    <div class="pfrow">
+      <label for="pf-headpad">Heading pill spacing</label>
+      <input type="range" id="pf-headpad" min="0" max="1" step="0.05" value="${+((PREFS.look||{}).headpad ?? 0.25)}" style="width:12rem">
+      <span id="pf-headpadv">${(+((PREFS.look||{}).headpad ?? 0.25)).toFixed(2)}</span>
+      <button data-pfa="headpad-reset" class="txmini">reset</button>
+      ${pfHelp('What this changes', `
+        <p>The space inside and around the section heading pills (Debug
+        monitors, Copy / Paste, All custom remappings…). It was 0.6 (about
+        0.6 of a line); the default is now 0.25. Kept in this browser only.</p>`)}
     </div>`;
   },
 
@@ -15553,6 +15916,8 @@ function pfInit(){
       case 'open':  pfOpen(); break;
       case 'close': pfClose(); break;
       case 'run':   pfRunBenchmark(); break;
+      case 'headpad-reset':
+        (PREFS.look = PREFS.look || {}).headpad = 0.25; pfSave(); pfApplyLook(); pfRender(); break;
       case 'btnpad-reset':
         (PREFS.look = PREFS.look || {}).btnpad = 0.1; pfSave(); pfApplyLook(); pfRender(); break;
       case 'recipe-reset':
@@ -15585,6 +15950,9 @@ function pfInit(){
     else if(id === 'pf-secs')   b.random_seconds = +e.target.value || 20;
     else if(id === 'pf-from')   { b.random_from = e.target.value; pfSchedule(); }
     else if(id === 'pf-to')     { b.random_to = e.target.value; pfSchedule(); }
+    else if(id === 'pf-headpad'){
+      (PREFS.look = PREFS.look || {}).headpad = +e.target.value; pfApplyLook();
+      const o = $('pf-headpadv'); if(o) o.textContent = (+e.target.value).toFixed(2); }
     else if(id === 'pf-btnpad'){
       (PREFS.look = PREFS.look || {}).btnpad = +e.target.value; pfApplyLook();
       const o = $('pf-btnpadv');
