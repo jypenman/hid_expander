@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.24</title>
+<title>HID Config 29.24.1</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -480,6 +480,10 @@ label.inl input{margin:0}
 .ftog{font-size:.72rem;padding:.05rem .45rem;border-radius:999px;border:1.5px solid var(--hi);
   background:transparent;color:var(--fg);opacity:.55;cursor:pointer;margin-left:.3rem}
 .ftog.on{background:var(--hi);color:Canvas;opacity:1}
+/* 29.24.1: the focus chip flashes green when the engine sends the chord */
+@keyframes fcflash{from{background:rgba(34,197,94,.55)}to{background:transparent}}
+#focuschip.fcflash{animation:fcflash .9s ease-out}
+#focuschip .fcused{color:var(--ok);font-weight:600;margin:0 .2rem}
 .txbtn .txcar{opacity:.6;font-size:.7rem;padding:0 .15rem;border-left:1px solid var(--line);margin-left:.1rem}
 .txbtn .txcar:hover{opacity:1;color:var(--hi)}
 .txtagbtn{border-radius:999px;border-style:dashed}
@@ -762,6 +766,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       style="width:17rem;min-height:1.6rem;max-height:50vh;resize:both;font:inherit;font-size:.82rem;
              padding:.2rem .4rem;vertical-align:middle;background:var(--bg);color:var(--fg);
              border:1px solid var(--line);border-radius:6px"></textarea></span>
+  <!-- 29.24.1: the current learning focus, on every tab -->
+  <span id="focuschip" style="display:none;font-size:.8rem;border:1.5px solid var(--hi);border-radius:999px;padding:.05rem .45rem;white-space:nowrap"></span>
   <span style="position:relative;display:inline-block">
     <button id="msglogbtn" title="Every message this page has shown since it was loaded, with the time. Kept in this page's memory only — nothing is read from or sent to the Pi.">🗒</button>
     <div id="msglog" style="display:none;position:absolute;top:100%;right:0;z-index:60;
@@ -1871,6 +1877,12 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.24.1',d:'2026-10-09',items:[
+   {t:'Focus on is in the top bar on every tab, with change… and a ⧉ button',k:'focuschip'},
+   {t:'⧉ opens the focus in a small floating window that stays on top (Edge and Chrome; a normal window elsewhere), with ◀ ▶ to step through your list',k:'focuschip'},
+   {t:'change… is its own dialog with a search that finds any shortcut -- your training list first, then every set; picking a new one adds it to training',k:'focuschip'},
+   {t:'Using the focus shortcut lights the top bar (and the floating window) green and counts it, from what the engine sends',k:'focuschip'},
+   {t:'The practice keyboard comes with you to the Training tab',k:'practicekbd'}]},
  {v:'29.24',d:'2026-10-08',items:[
    {t:'Test: mouse writing calibration -- the Pi writes a line per speed (or size) into a box, and the page finds the fastest speed (or smallest size) that still matches the first line',k:'testmw'},
    {t:'Test: each line shows its strokes, width and height against the first (pointer acceleration makes fast lines bigger) and how far its shape is off; one click makes the answer your starting speed or size',k:'testmw'},
@@ -4500,6 +4512,7 @@ function editableLayout(d){
 /* ============ rendering ============ */
 function render(){
   if(!cfg)return;
+  try{renderFocusChip();}catch(_){}     // 29.24.1: the top bar's focus, from any tab
   // 25.6: the held-effects cache lives for exactly one render. Anything
   // longer and a mapping edit repaints keycaps from the config as it was
   // before the edit -- a wrong answer about his keyboard, which is the one
@@ -8266,8 +8279,7 @@ function renderPracticeKbd(){
     :PK_ROWS.map(r=>`<div>${rowHTML(r)}</div>`).join('');
   // vi: one shortcut to focus on -- his choice, else the top-priority one
   // not yet learned
-  let focus=(cfg.kbd_focus&&chosen.includes(cfg.kbd_focus))?cfg.kbd_focus:null;
-  if(!focus)focus=chosen.find(id=>pkStage(id,counts).s!=='learned')||chosen[0];
+  const focus=pkFocus(counts);
   const fd=corpusDesc(focus),fst=pkStage(focus,counts);
   const side=`<div style="flex:0 0 11rem;font-size:.72rem;margin-left:.5rem">
     <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.4rem">${apps.map(a=>
@@ -8302,26 +8314,183 @@ function renderPracticeKbd(){
     const a=b.dataset.pkapp;if(hide.has(a))hide.delete(a);else hide.add(a);
     try{localStorage.setItem('hc.pkhide',JSON.stringify([...hide]));}catch(_){}
     renderPracticeKbd();});
-  const ch=$('pkchange');if(ch)ch.onclick=()=>pkChooseFocus();}
+  const ch=$('pkchange');if(ch)ch.onclick=()=>pkChooseFocus();
+  renderFocusChip();renderFocusFloat();}
 // vi: the "change" dialog -- every chosen shortcut, with its app and the
 // section its set gives it ("Source — …"), and its stage.
-function pkChooseFocus(){
-  const p=$('popover');if(!p)return;
-  const counts=_usageByNorm(),chosen=(cfg&&cfg.kbd_train)||[];
-  p.innerHTML=`<b>Focus on…</b><div style="max-height:22rem;overflow:auto;margin-top:.3rem">${chosen.map(id=>{
-    const d=corpusDesc(id),st=pkStage(id,counts);
-    const sec=d&&/^([^—]{1,40})\s—\s/.exec(d.text);
-    return `<div style="padding:.15rem 0;border-bottom:1px solid var(--line)"><a class="mlink" data-pkf="${esc(id)}"
-      style="font-family:ui-monospace,monospace">${esc(id)}</a> <span class="muted">${esc((d&&d.app)||'')}${sec?' · '+esc(sec[1]):''}
-      · ${st.per}/wk · ${st.s}</span><div style="font-size:.74rem">${esc(d?d.text.replace(/^[^—]{1,40}—\s*/,''):'')}</div></div>`;}).join('')}</div>`;
-  p.style.maxWidth='28rem';placePopover(p,$('practicekbd').getBoundingClientRect());
-  let close=null;
-  p.querySelectorAll('[data-pkf]').forEach(a=>a.onclick=e=>{e.stopPropagation();
-    cfg.kbd_focus=a.dataset.pkf;profileTouched();p.style.display='none';
-    if(close)document.removeEventListener('click',close);renderPracticeKbd();
-    toast('focus: '+a.dataset.pkf+' — ⬆ Save to device to keep it');});
-  setTimeout(()=>{close=ev=>{if(p.contains(ev.target))return;p.style.display='none';
-    document.removeEventListener('click',close);};document.addEventListener('click',close);},50);}
+/* ===== 29.24.1: FOCUS ON, EVERYWHERE =======================================
+   Josh, 2026-10-09 09:41: "Update the "Focus on" to also show up at top
+   right no matter where you are in the UI"; 09:44: the change dialog gets
+   "a search ... allow the search to find things that aren't in the "to
+   train" as well (Present things that are checked off in training first
+   (along with their context, just like now), but also show things that
+   aren't already checked off)"; in chat: "a function where it opens up
+   another, floating widow that I could seperately set on a portion of my
+   screen, with the current learning focus ... (Would have to work in
+   Edge)."
+
+   One focus (pkFocus), shown in three places: the top bar (always there,
+   the bar is sticky), the practice keyboard, and a floating window.
+   - THE PICKER IS ITS OWN DIALOG (#focusdlg), not the shared #popover. Josh
+     reported "change…" dead twice (2026-10-08 10:50, again 2026-10-09
+     08:59 on 29.24, after 29.21 fixed the stale-listener cause I could
+     reproduce). I could not reproduce the second report -- not with his
+     live config, his full shortcut sets, nor a real click. The shared
+     popover has eight different openers and as many closers; a dialog
+     with no shared state takes all of them out of the question rather
+     than guessing at a ninth.
+   - THE FLOATING WINDOW is Document Picture-in-Picture where the browser
+     has it (Edge and Chrome 116+): a small window that stays above every
+     other window, which is what "set on a portion of my screen" needs.
+     Elsewhere, a plain popup window. Both are drawn and updated from here;
+     neither needs the Pi.
+   - "USED" is counted from what the engine SENT, read off the debug stream
+     (OUT: kbd mods=… keys=[…]): a report carrying the focus chord after
+     one that did not. Session-only; the Pi's usage counts stay the record. */
+function pkFocus(counts){
+  const chosen=(cfg&&cfg.kbd_train)||[];
+  if(cfg&&cfg.kbd_focus)return cfg.kbd_focus;
+  counts=counts||_usageByNorm();
+  return chosen.find(id=>pkStage(id,counts).s!=='learned')||chosen[0]||null;}
+function focusInfo(id){
+  const d=corpusDesc(id),st=pkStage(id,_usageByNorm());
+  const sec=d&&/^([^—]{1,40})\s—\s/.exec(d.text);
+  return {id,app:(d&&d.app)||'',sec:sec?sec[1]:'',st,
+    text:d?d.text.replace(/^[^—]{1,40}—\s*/,''):'',trained:((cfg&&cfg.kbd_train)||[]).includes(id)};}
+function focusSet(id){
+  if(!cfg){toast('read the device first',true);return;}
+  cfg.kbd_focus=id;
+  let added=false;
+  if(!(cfg.kbd_train||[]).includes(id)){setTrained(id,true);added=true;}
+  profileTouched();focusUsed=0;
+  renderPracticeKbd();renderFocusChip();renderFocusFloat();
+  if(added&&typeof renderTraining==='function')renderTraining();
+  toast('focus: '+id+(added?' (added to training)':'')+' — ⬆ Save to device to keep it');}
+function focusStep(dir){
+  const chosen=(cfg&&cfg.kbd_train)||[];if(!chosen.length)return;
+  const i=chosen.indexOf(pkFocus());
+  focusSet(chosen[(i+dir+chosen.length)%chosen.length]);}
+// The top bar: always visible, since the bar is sticky.
+function renderFocusChip(){
+  const el=$('focuschip');if(!el)return;
+  const id=cfg&&pkFocus();
+  if(!id){el.style.display='none';return;}
+  const f=focusInfo(id);
+  el.style.display='';
+  el.innerHTML=`<span title="${esc(f.text)}${f.app?' · '+esc(f.app):''} — ${f.st.per}/wk of ${f.st.t}, ${esc(f.st.s)}">🎯 <b style="font-family:ui-monospace,monospace">${esc(id)}</b>
+    <span class="muted" style="font-size:.74rem;max-width:12rem;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(f.text)}</span></span>
+    ${focusUsed?`<span class="fcused" title="times you used it since this page loaded">✓${focusUsed}</span>`:''}
+    <button class="txmini" data-focus="pick" title="Choose what to focus on (search any shortcut)">change…</button>
+    <button class="txmini" data-focus="float" title="Open it in a small floating window you can put anywhere on screen">⧉</button>`;}
+document.addEventListener('click',e=>{
+  const b=e.target.closest&&e.target.closest('[data-focus]');if(!b)return;
+  if(b.dataset.focus==='pick')focusPick();
+  else if(b.dataset.focus==='float')focusFloat();});
+// The picker: training first, with context, then every other shortcut the
+// search finds -- active OS first. Picking one not in training adds it.
+let _focusQ='';
+function focusPick(){
+  let dlg=$('focusdlg');
+  if(!dlg){
+    dlg=document.createElement('div');dlg.id='focusdlg';
+    dlg.style.cssText='position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.3);display:flex;align-items:flex-start;justify-content:center;padding-top:8vh';
+    dlg.innerHTML=`<div class="panel" style="background:var(--bg);width:min(34rem,94vw);max-height:80vh;display:flex;flex-direction:column;padding:.6rem .7rem">
+      <div class="bar" style="margin:0 0 .4rem"><b>Focus on…</b>
+        <input type="search" id="focusq" placeholder="search any shortcut or what it does" style="flex:1" autocomplete="off">
+        <button data-fd="close" title="Close (Esc)">✕</button></div>
+      <div id="focuslist" style="overflow:auto;font-size:.8rem"></div></div>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click',e=>{
+      if(e.target===dlg||e.target.closest('[data-fd="close"]')){dlg.style.display='none';return;}
+      const a=e.target.closest('[data-fpick]');
+      if(a){dlg.style.display='none';focusSet(a.dataset.fpick);}});
+    dlg.addEventListener('keydown',e=>{if(e.key==='Escape')dlg.style.display='none';
+      if(e.key==='Enter'){const a=dlg.querySelector('[data-fpick]');if(a){dlg.style.display='none';focusSet(a.dataset.fpick);}}});
+    dlg.querySelector('#focusq').addEventListener('input',e=>{_focusQ=e.target.value;focusList();});}
+  if(!refData('corpus')&&device&&!_corpusAsked)loadCorpus();
+  dlg.style.display='flex';
+  const q=dlg.querySelector('#focusq');q.value=_focusQ;focusList();
+  setTimeout(()=>{q.focus();q.select();},0);}
+function focusList(){
+  const box=$('focuslist');if(!box)return;
+  const q=_focusQ.trim().toLowerCase(),cur=pkFocus();
+  const chosen=(cfg&&cfg.kbd_train)||[];
+  const hit=(id,txt)=>!q||id.toLowerCase().includes(q)||txt.toLowerCase().includes(q);
+  const row=(id,f,extra)=>`<div data-fpick="${esc(id)}" style="padding:.2rem .3rem;border-bottom:1px solid var(--line);cursor:pointer${id===cur?';background:var(--panel2)':''}">
+    <b style="font-family:ui-monospace,monospace">${esc(id)}</b> <span class="muted">${esc(f.app)}${f.sec?' · '+esc(f.sec):''}${extra}</span>
+    <div style="font-size:.74rem">${esc(f.text)}</div></div>`;
+  const mine=chosen.filter(id=>{const f=focusInfo(id);return hit(id,f.text+' '+f.app+' '+f.sec);});
+  const os=(cfg&&cfg.active_os)||'win',seen=new Set(chosen),others=[];
+  const corp=(refData('corpus')||[]).slice().sort((a,b)=>((b.os||'').startsWith(os)?1:0)-((a.os||'').startsWith(os)?1:0));
+  if(q)for(const c of corp)for(const[k,does]of Object.entries(c.shortcuts||{})){
+    if(seen.has(k)||others.length>=60)continue;
+    const t=String(does||'');
+    if(hit(k,t+' '+(c.app||''))){seen.add(k);others.push([k,{app:c.app||c.name||'',sec:(/^([^—]{1,40})\s—\s/.exec(t)||[])[1]||'',
+      text:t.replace(/^[^—]{1,40}—\s*/,'')}]);}}
+  box.innerHTML=`<div class="muted" style="margin:.1rem 0 .2rem">In training · ${mine.length}</div>
+    ${mine.map(id=>{const f=focusInfo(id);return row(id,f,` · ${f.st.per}/wk · ${f.st.s}`);}).join('')||'<div class="muted">none match</div>'}
+    ${q?`<div class="muted" style="margin:.5rem 0 .2rem">Other shortcuts · ${others.length}${others.length>=60?' (first 60)':''} — picking one adds it to training</div>
+      ${others.map(([k,f])=>row(k,f,'')).join('')||'<div class="muted">none match'+(refData('corpus')?'':' — the shortcut sets have not loaded')+'</div>'}`
+      :'<div class="muted" style="margin:.5rem 0">Type to search every shortcut set too.</div>'}`;}
+function pkChooseFocus(){focusPick();}
+// The floating window.
+let focusWin=null,focusUsed=0;
+async function focusFloat(){
+  if(focusWin&&!focusWin.closed){focusWin.focus();return;}
+  // Always-on-top first; a plain popup if the browser refuses it. A refused
+  // request can spend the click's permission to open a window, so the popup
+  // may then be blocked too -- the toast below says to allow pop-ups.
+  let why='';
+  if(window.documentPictureInPicture){
+    try{focusWin=await documentPictureInPicture.requestWindow({width:360,height:150});}
+    catch(e){focusWin=null;why=e.message;}}
+  if(!focusWin){
+    try{focusWin=window.open('','hidfocus','popup,width=380,height=190');}catch(e){focusWin=null;}
+    if(focusWin&&why)toast('floating window opened as a normal window (stays on top only in Edge/Chrome 116+: '+why+')');}
+  if(!focusWin){toast('the browser would not open a window — allow pop-ups for this page',true);return;}
+  focusWin.document.title='Focus';
+  focusWin.addEventListener('pagehide',()=>{focusWin=null;});
+  focusWin.document.addEventListener('click',e=>{const b=e.target.closest('[data-ff]');if(!b)return;
+    if(b.dataset.ff==='next')focusStep(1);else if(b.dataset.ff==='prev')focusStep(-1);
+    else if(b.dataset.ff==='pick'){window.focus();focusPick();}});
+  renderFocusFloat();}
+function renderFocusFloat(flash){
+  if(!focusWin||focusWin.closed)return;
+  const cs=getComputedStyle(document.body),bg=cs.backgroundColor,fg=cs.color;
+  const hi=getComputedStyle(document.documentElement).getPropertyValue('--hi').trim()||'#2563eb';
+  const id=pkFocus(),f=id?focusInfo(id):null;
+  const d=focusWin.document;
+  d.body.style.cssText=`margin:0;padding:.5rem .7rem;font:14px system-ui,sans-serif;background:${flash?'rgba(34,197,94,.35)':bg};color:${fg};transition:background .4s`;
+  d.body.innerHTML=!f?'<p>Nothing chosen to practise yet.</p>':`
+    <div style="font-size:.75rem;opacity:.7">Focus on${f.app?' · '+esc(f.app):''}${f.sec?' · '+esc(f.sec):''}</div>
+    <div style="font:600 1.5rem ui-monospace,monospace;margin:.1rem 0">${esc(id)}</div>
+    <div style="font-size:.9rem">${esc(f.text)}</div>
+    <div style="font-size:.75rem;opacity:.75;margin-top:.25rem">${f.st.per}/wk of ${f.st.t} · ${esc(f.st.s)}${focusUsed?` · <b style="color:${hi}">used ✓${focusUsed}</b> now`:''}</div>
+    <div style="margin-top:.35rem;display:flex;gap:.3rem">
+      <button data-ff="prev" title="previous in your training list">◀</button>
+      <button data-ff="next" title="next in your training list">▶</button>
+      <button data-ff="pick" title="choose in the main window">change…</button></div>`;
+  if(flash)setTimeout(()=>renderFocusFloat(false),700);}
+// "Used": the engine sent a report carrying the focus chord.
+let _focusWasOn=false;
+function focusSeen(txt){
+  const id=cfg&&pkFocus();if(!id)return;
+  const m=/kbd mods=(0x[0-9a-f]+).*keys=\[([^\]]*)/i.exec(txt);if(!m)return;
+  const want=focusReport(id);if(!want)return;
+  const mods=parseInt(m[1],16),bits=(mods|(mods>>4))&0x0f;
+  const keys=m[2].split(',').map(x=>parseInt(x.replace(/['" ]/g,''),16)).filter(x=>!isNaN(x));
+  const on=bits===want.mods&&keys.includes(want.key);
+  if(on&&!_focusWasOn){focusUsed++;renderFocusChip();renderFocusFloat(true);
+    const c=$('focuschip');if(c){c.classList.remove('fcflash');void c.offsetWidth;c.classList.add('fcflash');}}
+  _focusWasOn=on;}
+// A chord as the HOST sees it: left-hand modifier bits and the key usage.
+function focusReport(id){
+  let mods=0,key=null;
+  for(const p of String(id).split('+').map(x=>x.trim().toLowerCase()).filter(Boolean)){
+    const lm=NAME2MOD[p];
+    if(lm!==undefined){mods|=MODUSAGE2BIT[lm]||0;continue;}
+    const u=NAME2KEY[p];if(u===undefined||key!==null)return null;key=u;}
+  return key===null?null:{mods:(mods|(mods>>4))&0x0f,key};}
 
 /* ===== 28.9: TRAINING -- R SHORTCUTS THIS WEEK ===========================
    Josh, 2026-09-28: "make the training things highest priority: I want to
@@ -13716,6 +13885,8 @@ function liveOut(txt){
       $('testmwstate').textContent=txt;}}
     else if(/^mwtest done/.test(txt)&&testMW&&!testMW.done)setTimeout(testMWAnalyse,600);
     return;}
+  if(/^kbd mods=/.test(txt))focusSeen(txt);          // 29.24.1
+  else if(/^kbd release-all/.test(txt))_focusWasOn=false;
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
   if(txt.startsWith('expand')){expandFlash=Date.now()+600;return;}
@@ -17496,6 +17667,11 @@ document.querySelectorAll('#usagetabs .tab').forEach(t=>t.onclick=()=>{
     x.classList.toggle('on',x.dataset.ut===usageTab));
   $('usagepane').style.display=usageTab==='usage'?'':'none';
   $('trainpane').style.display=usageTab==='train'?'':'none';
+  // 29.24.1: the practice keyboard goes with you. Josh, 2026-10-09 08:59:
+  // "Keyboard should still show up when I switch over to the "Training"
+  // tab". Moved, not copied: one keyboard, its handlers intact.
+  const pk=$('practicekbd'),dest=$(usageTab==='train'?'trainpane':'usagepane');
+  if(pk&&dest&&pk.parentElement!==dest)dest.insertBefore(pk,dest.firstElementChild);
   if(usageTab==='train')renderTraining();});
 window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
 // 29.21: a click on BACKGROUND anywhere in the wireframes closes the
