@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.20.3</title>
+<title>HID Config 29.24</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -474,6 +474,12 @@ label.inl input{margin:0}
 .txbtn:hover{border-color:var(--hi)}
 .txbtn.primary{background:var(--hi);border-color:var(--hi);color:#fff;font-weight:600}
 .txbtn.txmini{padding:.25rem .5rem;font-size:.76rem}
+/* 29.21: a small on/off filter chip -- saturated when on, faded when off.
+   Josh, 2026-10-08 10:59: "highlighted/dehighlighted to show off and on
+   (like, saturated vs unsaturated)". */
+.ftog{font-size:.72rem;padding:.05rem .45rem;border-radius:999px;border:1.5px solid var(--hi);
+  background:transparent;color:var(--fg);opacity:.55;cursor:pointer;margin-left:.3rem}
+.ftog.on{background:var(--hi);color:Canvas;opacity:1}
 .txbtn .txcar{opacity:.6;font-size:.7rem;padding:0 .15rem;border-left:1px solid var(--line);margin-left:.1rem}
 .txbtn .txcar:hover{opacity:1;color:var(--hi)}
 .txtagbtn{border-radius:999px;border-style:dashed}
@@ -807,6 +813,9 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="usage">Usage</div>
   <div class="tab" data-t="perf">Performance</div>
   <div class="tab" data-t="test">Test</div>
+  <!-- 29.21: shown only when chosen (Preferences → Layout, or the switch on
+       the Macros page) -->
+  <div class="tab" data-t="mw" id="tab-mw" style="display:none">✍ Mouse writing</div>
 </div>
 
 <div class="bar" id="profbar">
@@ -1326,11 +1335,37 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     </div>
     <div id="testmstats" style="font-size:.8rem;margin-top:.4rem"></div>
   </div>
+  <!-- 29.24: Josh, 2026-10-07 (decided "A"): "the page shows a drawing canvas
+       and asks the Pi to mouse-write a test line into it at rising speeds;
+       the page records the pointer itself, so it can compare what arrived
+       ... and report the fastest speed that still draws cleanly -- and the
+       same for size." -->
+  <div class="panel" id="testmw" data-uikey="test-mw" style="margin-top:.6rem">
+    <h2 style="font-size:1rem;margin:0 0 .3rem">Mouse writing calibration</h2>
+    <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">The Pi writes the same line
+      once per speed (or per size) into the box below, and this page records the pointer
+      itself, here on your computer. Each line is compared with the slowest (or largest)
+      one: the same number of strokes, and the same shape once scaled. The fastest speed
+      (or smallest size) that still matches is the answer.</p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem;font-size:.8rem">
+      <label>Find the <select id="testmwkind"><option value="speed">fastest clean speed</option>
+        <option value="size">smallest clean size</option></select></label>
+      <label>values <input id="testmwvals" style="width:14rem"></label>
+      <label>text <input id="testmwtext" value="Quick fox 25" maxlength="40" style="width:9rem"></label>
+      <button id="testmwstart" class="txmini">▶ Calibrate</button>
+      <button id="testmwdone" class="txmini" disabled>Analyse now</button>
+      <span id="testmwstate" class="muted" style="font-size:.78rem"></span>
+    </div>
+    <div id="testmwpad" style="position:relative;height:360px;border:1px solid var(--line);
+      border-radius:6px;overflow:hidden;user-select:none;touch-action:none;background:var(--panel2)"></div>
+    <div id="testmwstats" style="font-size:.8rem;margin-top:.4rem"></div>
+  </div>
   <div class="panel" id="testhist" data-uikey="test-hist" style="margin-top:.6rem">
     <h2 style="font-size:1rem;margin:0 0 .3rem">History, per device
       <button id="testhistload" class="txmini" style="margin-left:.5rem">↻ load</button>
       <label style="font-size:.78rem;font-weight:400;margin-left:.8rem"
         title="What the little chart beside each device plots, oldest run on the left">chart
+        <button id="testmetricmode" class="ftog" title="Switch the charts between the engine's own time and how you did">engine ms</button>
         <select id="testmetric" style="width:auto;font-size:.78rem"></select></label></h2>
     <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Every run is
       a line in <code>usage/tests.jsonl</code> on the Pi, written by the engine
@@ -1399,6 +1434,10 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <!-- 29.7: first on the page, closed (Josh, 2026-10-07 13:45: "Move
        Mousewriting section to top of the Macro's page (default closed of
        course)") -->
+  <!-- 29.21: Josh, 2026-10-08 11:39: "Move "Mouse Writing" into its own
+       section (that only shows up when selected, and give a place to turn it
+       on in the Macro's section where it currently resides" -->
+  <div class="muted" id="mwstub" style="font-size:.78rem;margin:0 0 .4rem"></div>
   <details class="panel" id="mwsec" data-uikey="mousewrite">
     <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">✍ Mouse writing — type, and the mouse draws it
       <span class="muted" id="mwstate" style="font-weight:400;font-size:.8rem"></span></h3></summary>
@@ -1408,6 +1447,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 </div>
  <div class="panel primer" id="macprimer" data-primer="mac" style="flex:0 1 24rem;position:sticky;top:.5rem;max-height:92vh;overflow:auto"></div>
 </div></div>
+
+<div id="page-mw" style="display:none"></div>
 
 <div id="page-exp" style="display:none">
   <div class="panel">
@@ -1830,6 +1871,29 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.24',d:'2026-10-08',items:[
+   {t:'Test: mouse writing calibration -- the Pi writes a line per speed (or size) into a box, and the page finds the fastest speed (or smallest size) that still matches the first line',k:'testmw'},
+   {t:'Test: each line shows its strokes, width and height against the first (pointer acceleration makes fast lines bigger) and how far its shape is off; one click makes the answer your starting speed or size',k:'testmw'},
+   {t:'Test history: calibration runs are filed with the others, with charts for the fastest clean speed and smallest clean size',k:'test-hist'}]},
+ {v:'29.23',d:'2026-10-08',items:[
+   {t:'Training: the practice keyboard is the keyboard you used most recently that has every key your shortcuts need (by what each key sends), drawn as it is laid out',k:'practicekbd'},
+   {t:'Training: a shortcut is judged only on the weeks its app was in use -- weeks away from RStudio no longer pull a learned shortcut back down',k:'practicekbd'},
+   {t:'Training: a progress log kept by the Pi -- the date each shortcut was started, became learning and learned -- with a from/to filter',k:'trainpane'}]},
+ {v:'29.22',d:'2026-10-08',items:[
+   {t:'Mouse writing: a rectangle or oval starts where your drag began, at every pointer speed (the drag was measured before the speed factor, so at 0.5x it began up and to the left)',k:'mousewrite'},
+   {t:'Mouse writing: the E9\'s arrow buttons change speed and size in the mode instead of reaching the computer',k:'mousewrite'},
+   {t:'Mouse writing: shape previews follow the writing speed, take a set time (looping at speed), or are off',k:'mousewrite'},
+   {t:'Mouse writing: a small looping picture of the motion beside each item (start, speed, size, stop, oval, rectangle), with a switch to hide them',k:'mousewrite'}]},
+ {v:'29.21',d:'2026-10-08',items:[
+   {t:'Media keys reach the computer over USB: the Pi now has a media-key interface (built at boot -- the 29.9 tries failed on a kernel bug in live re-plugging, not on the interface)',k:'devcards'},
+   {t:'Usage: "Don\'t show single key swaps" and a button per group (show/hide, uses per week or all time in k/m, ÷ keys used), highest first',k:'usagebody'},
+   {t:'Usage: click between the group buttons for the time each group saves -- boxes like GrandPerspective, or bars -- per week and all time, hover for details, with a small rating',k:'usagebody'},
+   {t:'Usage: Focus on "change…" opens every time (a closed popover\'s leftover listener was shutting the next one), and ticking Train or Know no longer moves the page',k:'practicekbd'},
+   {t:'Usage: the practice keyboard is framed and titled Training; click the frame to open the Training tab',k:'practicekbd'},
+   {t:'Test: finishes by itself when the text is all green; shows total APM (deletions too) and effective WPM; scroll timing starts at the first scroll',k:'testkstats'},
+   {t:'Test history: charts switch between engine ms and how you did, and every chart shows its unit',k:'test-hist'},
+   {t:'Mapping: clicking background in the wireframes closes the editor, as ✕ does',k:'devcards'},
+   {t:'Mouse writing can have its own tab (switch on the Macros page or in Preferences → Layout); the Bluetooth tab can be hidden',k:'mousewrite'}]},
  {v:'29.20.3',d:'2026-10-08',items:[
    {t:'The Fintie\'s function row works as F-keys: chords the keyboard sends by itself (Ctrl+A, Win+D, Ctrl+Shift …) are recognised -- one report, 0 ms apart -- and remapped, while the same chords typed by hand are untouched',k:'devcards'},
    {t:'Fintie wireframe: corrected function row (F1 sends nothing; everything after it was one key off), For Win filled in, an Fn held row, and each chord shows the key it now types',k:'devcards'},
@@ -7123,6 +7187,42 @@ let usageSortRev = false;              // 29.0: the second click on a header
 let usageGroupFold = new Set();        // 29.0: collapsed groups
 try{ usageGroupFold = new Set(JSON.parse(localStorage.getItem('hc.ugrpfold')||'[]')); }catch(_){}
 try{ usageGroupHide = new Set(JSON.parse(localStorage.getItem('hc.ugrphide')||'[]')); }catch(_){}
+/* 29.21: filter chips on the "Key combinations, layers and macros" line.
+   Josh, 2026-10-08 10:59: "give me little filter buttons (in same line right
+   after "___ entries" for: "Don't Show Single Key Swaps""; 11:06: "little
+   buttons for the different groups that also let me show/hide them, and
+   some metric that shows their relative popularity . . . the sum of their
+   total per week across all keys in the group (in short notation so use k,
+   m, etc. with decimals), and a toggle to have it show adjusted for number
+   of active keys in group or not ... ii) Order these group buttons from
+   highest to lowest."
+   A "single key swap" is a row whose OUTPUT is one key with no modifier:
+   in his data those are the layer-reached keys, `Right (L1 L)`. Per
+   browser, like the rest of the table's view state. */
+let usageNoSingle = false, usageGAdj = false, usageGMetric = 'week';
+try{ const v = JSON.parse(localStorage.getItem('hc.ugchips') || '{}');
+  usageNoSingle = !!v.noSingle; usageGAdj = !!v.adj; usageGMetric = v.metric === 'total' ? 'total' : 'week'; }catch(_){}
+function usageChipsSave(){
+  try{ localStorage.setItem('hc.ugchips', JSON.stringify({noSingle: usageNoSingle, adj: usageGAdj, metric: usageGMetric})); }catch(_){}}
+function usageIsSingleSwap(id){
+  if(/^Macro \d+/.test(id)) return false;
+  return !id.replace(/\s*\(L\d+ [^)]*\)$/, '').includes('+');}
+// 1234 -> 1.2k, 3456789 -> 3.5m; below 10 keeps one decimal.
+function fmtK(v){
+  const a = Math.abs(v);
+  return a >= 1e6 ? (v/1e6).toFixed(1) + 'm' : a >= 1e3 ? (v/1e3).toFixed(1) + 'k'
+       : a >= 10 ? v.toFixed(0) : v.toFixed(1);}
+// One group's popularity: the sum of per-week (or all-time) uses across its
+// rows, optionally divided by how many of its keys were used at all.
+function usageGroupStats(rows){
+  const m = new Map();
+  for(const r of rows){
+    const g = r.group.g || '';
+    const s = m.get(g) || m.set(g, {g, week: 0, total: 0, keys: 0, active: 0}).get(g);
+    s.week += +r.per_week || 0; s.total += +r.count || 0; s.keys++;
+    if((+r.count || 0) > 0) s.active++;}
+  const val = s => (usageGMetric === 'total' ? s.total : s.week) / (usageGAdj ? Math.max(1, s.active) : 1);
+  return [...m.values()].map(s => (s.v = val(s), s)).sort((a, b) => b.v - a.v);}
 function usageGroupOf(id, kind, desc){
   const mine = ((cfg && cfg.usage_groups) || {})[id];
   if(mine) return {g: mine, from: 'you'};
@@ -7404,6 +7504,169 @@ function usageRows(kind){
   return filtered.sort((a, b) => usageSortRev ? -cmp(a, b) : cmp(a, b));
 }
 
+/* ===== 29.21: TIME SAVED, BY GROUP ========================================
+   Josh, 2026-10-08 11:06: "If I click on the area around the gorups, it
+   takes me to a useful graphic that shows these groups and the estimated
+   time savings (per week and all time) for each of them. (Something like the
+   way the grandPerspective mac app shows space taken up by files and
+   folders ...) Especially if you're able to mouse over to get more details
+   ... IF you have another idea for useful visualization of that data, place
+   a button that lets me toggle to that idea (and a way I can rate it ...
+   five stars that I can click on, and the ability to give feedback - make
+   sure these UI elements are small and unobtrusive".
+
+   GrandPerspective's picture is a TREEMAP: area = size, nested. Here area =
+   estimated time saved; groups are the outer boxes, the rows inside them.
+
+   THE ESTIMATE IS AN ASSUMPTION, and it says so on screen with both numbers
+   editable: a shortcut saves `sec` seconds per use against reaching for the
+   mouse or a menu (default 2 s), and an expansion saves the characters it
+   typed for you at your own speed (your latest Test wpm, else 50 wpm). The
+   rating and the note are written to the profile, cfg.ui_feedback, on the
+   click -- the engine ignores the key; it reaches me with the next pull. */
+let usageVizMode = 'tree', usageVizSpan = 'week';
+try{ const v = JSON.parse(localStorage.getItem('hc.uviz') || '{}');
+  if(v.mode) usageVizMode = v.mode; if(v.span) usageVizSpan = v.span; }catch(_){}
+function usageVizAssume(){
+  let a = {sec: 2, wpm: 0};
+  try{ a = Object.assign(a, JSON.parse(localStorage.getItem('hc.uvizassume') || '{}')); }catch(_){}
+  if(!a.wpm){ const t = (typeof testRuns !== 'undefined' ? testRuns : []).filter(r => r.kind === 'typing').pop();
+    a.wpmFrom = t ? 'your last Test' : 'a default';
+    a.wpm = t ? (t.wpm_eff != null ? t.wpm_eff : t.wpm) || 50 : 50; }
+  else a.wpmFrom = 'you';
+  return a;}
+function fmtSecs(s){
+  return s >= 3600 ? (s/3600).toFixed(1) + ' h' : s >= 60 ? (s/60).toFixed(1) + ' min' : s.toFixed(0) + ' s';}
+function usageVizData(){
+  const A = usageVizAssume(), perChar = 60 / (Math.max(1, A.wpm) * 5);
+  const items = [];
+  for(const r of usageRows('shortcuts')){
+    if(typingChar(r.id)) continue;
+    items.push({id: r.id, g: r.group.g || '(no group)', kind: 'shortcut',
+      week: (+r.per_week || 0) * A.sec, total: (+r.count || 0) * A.sec,
+      uses: r.count, per_week: r.per_week});}
+  for(const r of usageRows('expansions')){
+    const c = +r.chars || 0, n = +r.count || 0;
+    items.push({id: r.id, g: r.group.g || '(no group)', kind: 'expansion',
+      week: n ? c * ((+r.per_week || 0) / n) * perChar : 0, total: c * perChar,
+      uses: r.count, per_week: r.per_week, chars: c});}
+  const groups = new Map();
+  for(const it of items){
+    const g = groups.get(it.g) || groups.set(it.g, {g: it.g, week: 0, total: 0, items: []}).get(it.g);
+    g.week += it.week; g.total += it.total; g.items.push(it);}
+  return {A, groups: [...groups.values()]};}
+// Squarified treemap (Bruls, Huizing, van Wijk): lays `items` (with .v > 0)
+// into the rectangle, rows chosen to keep the boxes near-square.
+function squarify(items, x, y, w, h){
+  const out = [], list = items.filter(i => i.v > 0).sort((a, b) => b.v - a.v);
+  const sum = list.reduce((a, i) => a + i.v, 0); if(!sum || w <= 0 || h <= 0) return out;
+  const scale = (w * h) / sum;
+  let rest = list.map(i => ({it: i, a: i.v * scale}));
+  const worst = (row, side) => {
+    const s = row.reduce((a, r) => a + r.a, 0), mx = Math.max(...row.map(r => r.a)), mn = Math.min(...row.map(r => r.a));
+    return Math.max(side * side * mx / (s * s), (s * s) / (side * side * mn));};
+  while(rest.length){
+    const side = Math.min(w, h); let row = [rest[0]], i = 1;
+    while(i < rest.length && worst(row.concat(rest[i]), side) <= worst(row, side)){ row.push(rest[i]); i++; }
+    rest = rest.slice(i);
+    const s = row.reduce((a, r) => a + r.a, 0);
+    if(w >= h){ const cw = s / h; let cy = y;
+      for(const r of row){ const ch = r.a / cw; out.push({it: r.it, x, y: cy, w: cw, h: ch}); cy += ch; }
+      x += cw; w -= cw; }
+    else{ const rh = s / w; let cx = x;
+      for(const r of row){ const cw2 = r.a / rh; out.push({it: r.it, x: cx, y, w: cw2, h: rh}); cx += cw2; }
+      y += rh; h -= rh; }}
+  return out;}
+function usageVizSVG(D, W, H){
+  const span = usageVizSpan, gs = D.groups.map(g => Object.assign(g, {v: g[span]}));
+  const col = i => PK_PALETTE[i % PK_PALETTE.length];
+  let s = '';
+  squarify(gs, 0, 0, W, H).forEach((b, gi) => {
+    const g = b.it, c = col(gi), pad = 3, top = b.h > 34 && b.w > 60 ? 15 : 0;
+    s += `<g><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${c}" fill-opacity=".18" stroke="var(--bg)" stroke-width="2">
+      <title>${esc(g.g)}: ${fmtSecs(g[span])} saved ${span === 'week' ? 'per week' : 'all time'} · ${g.items.length} item(s)</title></rect>`;
+    if(top) s += `<text x="${b.x + 4}" y="${b.y + 12}" font-size="11" font-weight="600" fill="var(--fg)" pointer-events="none">${esc(g.g)} · ${fmtSecs(g[span])}</text>`;
+    const kids = g.items.map(it => Object.assign({}, it, {v: it[span]}));
+    squarify(kids, b.x + pad, b.y + pad + top, b.w - 2 * pad, b.h - 2 * pad - top).forEach(k => {
+      const it = k.it;
+      s += `<rect x="${k.x}" y="${k.y}" width="${Math.max(0, k.w - 1)}" height="${Math.max(0, k.h - 1)}" fill="${c}" fill-opacity=".55" rx="2">
+        <title>${esc(it.id)} (${it.kind}) · ${esc(g.g)}
+${fmtSecs(it.week)} per week · ${fmtSecs(it.total)} all time
+${it.per_week}/week · ${it.uses} uses${it.chars ? ' · ' + it.chars + ' chars typed for you' : ''}</title></rect>`;
+      if(k.w > 46 && k.h > 14) s += `<text x="${k.x + 3}" y="${k.y + 11}" font-size="9.5" fill="var(--fg)" pointer-events="none">${esc(it.id.length > k.w / 6 ? it.id.slice(0, Math.max(3, Math.floor(k.w / 6) - 1)) + '…' : it.id)}</text>`;});
+    s += '</g>';});
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;max-width:100%">${s}</svg>`;}
+// The other idea: ranked bars, a group's time split into its top items.
+// Easier to compare two groups' sizes than two areas.
+function usageVizBars(D){
+  const span = usageVizSpan, gs = D.groups.filter(g => g[span] > 0).sort((a, b) => b[span] - a[span]);
+  const mx = gs.length ? gs[0][span] : 1;
+  return gs.map((g, gi) => {
+    const items = g.items.filter(i => i[span] > 0).sort((a, b) => b[span] - a[span]);
+    return `<div style="display:flex;align-items:center;gap:.4rem;margin:.15rem 0;font-size:.76rem">
+      <span style="flex:0 0 10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(g.g)}">${esc(g.g)}</span>
+      <span style="flex:1;display:flex;height:14px">${items.map(it => `<span title="${esc(it.id)}: ${fmtSecs(it[span])}"
+        style="width:${(100 * it[span] / mx).toFixed(2)}%;background:${PK_PALETTE[gi % PK_PALETTE.length]};opacity:.65;border-right:1px solid var(--bg)"></span>`).join('')}</span>
+      <span style="flex:0 0 4.5rem;text-align:right">${fmtSecs(g[span])}</span></div>`;}).join('') || '<p class="muted">Nothing used yet.</p>';}
+function usageVizRateHTML(key){
+  const f = ((cfg && cfg.ui_feedback) || {})[key] || {};
+  return `<span class="uvizrate" data-k="${esc(key)}" style="font-size:.72rem;opacity:.75" title="Rate this view (saved with the profile)">${
+    [1,2,3,4,5].map(n => `<a class="mlink" data-star="${n}" style="text-decoration:none;color:${n <= (f.stars || 0) ? 'var(--warn)' : 'var(--mut)'}">★</a>`).join('')}
+    <a class="mlink" data-fb="1" title="${esc(f.note || 'Say what works or does not')}">${f.note ? '✎ feedback' : '+ feedback'}</a></span>`;}
+function usageVizOpen(){
+  let ov = $('uviz');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'uviz';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if(e.target === ov) ov.style.display = 'none'; });
+    document.addEventListener('keydown', e => { if(e.key === 'Escape' && ov.style.display !== 'none') ov.style.display = 'none'; });}
+  const D = usageVizData(), A = D.A, span = usageVizSpan;
+  const sum = D.groups.reduce((a, g) => a + g[span], 0);
+  const W = Math.min(980, document.documentElement.clientWidth - 60), H = Math.min(560, document.documentElement.clientHeight - 200);
+  const key = 'usage-viz:' + usageVizMode;
+  ov.style.display = 'flex';
+  ov.innerHTML = `<div class="panel" style="background:var(--bg);max-width:96vw;padding:.6rem .8rem">
+    <div class="bar" style="margin:0 0 .4rem;align-items:center">
+      <b>Time saved, by group</b>
+      <span class="muted" style="font-size:.78rem">· ${fmtSecs(sum)} ${span === 'week' ? 'per week' : 'all time'}</span>
+      <button class="ftog${span === 'week' ? ' on' : ''}" data-uv="week">per week</button>
+      <button class="ftog${span === 'total' ? ' on' : ''}" data-uv="total">all time</button>
+      <span style="width:.8rem"></span>
+      <button class="ftog${usageVizMode === 'tree' ? ' on' : ''}" data-uv="tree" title="Boxes sized by time saved, groups outside, items inside (like GrandPerspective)">▦ boxes</button>
+      <button class="ftog${usageVizMode === 'bars' ? ' on' : ''}" data-uv="bars" title="Groups as ranked bars, each split into its items">≡ bars</button>
+      ${usageVizRateHTML(key)}
+      <span style="flex:1"></span>
+      <button data-uv="close" title="Close (Esc)">✕</button></div>
+    <div class="muted" style="font-size:.72rem;margin-bottom:.35rem">Estimate: a shortcut saves
+      <input type="number" data-uva="sec" value="${A.sec}" min="0" step="0.5" style="width:3.4rem;font-size:.72rem"> s per use
+      against the mouse or a menu; an expansion saves the characters it types for you at
+      <input type="number" data-uva="wpm" value="${A.wpm}" min="1" step="1" style="width:3.4rem;font-size:.72rem"> wpm
+      (${esc(A.wpmFrom)}). Hover a box for its numbers.</div>
+    ${usageVizMode === 'bars' ? usageVizBars(D) : usageVizSVG(D, W, H)}</div>`;
+  ov.querySelectorAll('[data-uv]').forEach(b => b.onclick = () => {
+    const k = b.dataset.uv;
+    if(k === 'close'){ ov.style.display = 'none'; return; }
+    if(k === 'week' || k === 'total') usageVizSpan = k; else usageVizMode = k;
+    try{ localStorage.setItem('hc.uviz', JSON.stringify({mode: usageVizMode, span: usageVizSpan})); }catch(_){}
+    usageVizOpen();});
+  ov.querySelectorAll('[data-uva]').forEach(i => i.onchange = () => {
+    let a = {}; try{ a = JSON.parse(localStorage.getItem('hc.uvizassume') || '{}'); }catch(_){}
+    a[i.dataset.uva] = +i.value || 0;
+    try{ localStorage.setItem('hc.uvizassume', JSON.stringify(a)); }catch(_){}
+    usageVizOpen();});
+  const rate = ov.querySelector('.uvizrate');
+  if(rate) rate.onclick = e => {
+    const st = e.target.closest('[data-star]'), fb = e.target.closest('[data-fb]');
+    if(!st && !fb) return;
+    if(!cfg){ toast('read the device first — the rating is saved with the profile', true); return; }
+    cfg.ui_feedback = cfg.ui_feedback || {};
+    const f = cfg.ui_feedback[key] = cfg.ui_feedback[key] || {};
+    if(st) f.stars = +st.dataset.star;
+    if(fb){ const v = prompt('Feedback on this view', f.note || ''); if(v === null) return; f.note = v.trim(); }
+    f.at = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16);   // local time
+    profileTouched(); usageVizOpen();
+    toast('thanks — ⬆ Save to device to send it');};}
+
 // Jump to where the thing is EDITED, rather than opening an editor here.
 //
 // 24.2: these called showTab(), which has never existed -- the function is
@@ -7447,8 +7710,23 @@ function renderUsage(){
   const table = (kind, title, openDefault, keep) => {
     // 28.5: the Group column's filter applies to THESE tables only -- not to
     // Training, which reads usageRows() for its own lists.
-    const rows = (keep ? usageRows(kind).filter(keep) : usageRows(kind))
-      .filter(r => !usageGroupHide.has(r.group.g || ''));
+    const pool = (keep ? usageRows(kind).filter(keep) : usageRows(kind))
+      .filter(r => !(kind === 'shortcuts' && usageNoSingle && usageIsSingleSwap(r.id)));
+    const rows = pool.filter(r => !usageGroupHide.has(r.group.g || ''));
+    // 29.21: the chips (shortcuts table only). Clicking between them opens
+    // the time-saved picture (usageVizOpen).
+    const chips = kind !== 'shortcuts' ? '' : `<span class="ugchips" title="Click between the buttons for a picture of the time each group saves"
+        style="display:inline-flex;flex-wrap:wrap;gap:.2rem;align-items:center;margin-left:.4rem;padding:.1rem .3rem;border-radius:8px;cursor:zoom-in">
+      <button class="ftog${usageNoSingle ? ' on' : ''}" data-ugchip="nosingle"
+        title="Hide rows that send one key with no modifier, like Right (L1 L)">Don't show single key swaps</button>
+      <span class="muted" style="font-size:.7rem;margin-left:.4rem">groups:</span>
+      ${usageGroupStats(pool).map(s => `<button class="ftog${usageGroupHide.has(s.g) ? '' : ' on'}" data-ugchipg="${esc(s.g)}"
+        title="${esc(s.g || '(no group)')}: ${fmtK(s.week)}/week, ${fmtK(s.total)} all time, ${s.active} of ${s.keys} keys used${usageGAdj ? ' -- shown per used key' : ''}. Click to show or hide."
+        >${esc(s.g || '(no group)')} <b>${fmtK(s.v)}</b></button>`).join('')}
+      <button class="ftog${usageGMetric === 'total' ? ' on' : ''}" data-ugchip="metric"
+        title="The number on each group: uses per week, or all time">${usageGMetric === 'total' ? 'all time' : 'per week'}</button>
+      <button class="ftog${usageGAdj ? ' on' : ''}" data-ugchip="adj"
+        title="Divide each group's number by how many of its keys you actually used">÷ keys used</button></span>`;
     // Only expansions save typing, so only they get the column. A "Saved"
     // column reading 0 down every shortcut row would be a column that means
     // nothing, which is worse than a missing one.
@@ -7457,7 +7735,7 @@ function renderUsage(){
     return `<details ${openDefault ? 'open' : ''} data-uikey="usage-${kind}">
       <summary style="cursor:pointer"><b>${title}</b>
         <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}${
-          totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span></summary>
+          totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span>${chips}</summary>
       ${rows.length ? `<table style="width:100%">
         <tr>${sh('desc','Does what')}${sh('per_week','Per week')}<td>${sh('group','Group',1)} <a class="mlink ugrpfilter"
               title="Sort by group, and choose which groups to show"
@@ -7580,6 +7858,20 @@ function renderUsage(){
     const k = a.dataset.usort;
     if(usageSort === k) usageSortRev = !usageSortRev; else { usageSort = k; usageSortRev = false; }
     renderUsage(); });
+  // 29.21: the chips sit inside <summary>, so each click must not also
+  // fold the table.
+  el.querySelectorAll('.ugchips').forEach(box => box.onclick = ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const b = ev.target.closest('button');
+    if(!b){ usageVizOpen(); return; }
+    if(b.dataset.ugchip === 'nosingle') usageNoSingle = !usageNoSingle;
+    else if(b.dataset.ugchip === 'adj') usageGAdj = !usageGAdj;
+    else if(b.dataset.ugchip === 'metric') usageGMetric = usageGMetric === 'total' ? 'week' : 'total';
+    else if(b.dataset.ugchipg != null){
+      const g = b.dataset.ugchipg;
+      if(usageGroupHide.has(g)) usageGroupHide.delete(g); else usageGroupHide.add(g);
+      try{ localStorage.setItem('hc.ugrphide', JSON.stringify([...usageGroupHide])); }catch(_){}}
+    usageChipsSave(); renderUsage(); });
   el.querySelectorAll('[data-ugfold]').forEach(tr => tr.onclick = () => {
     const g = tr.dataset.ugfold;
     if(usageGroupFold.has(g)) usageGroupFold.delete(g); else usageGroupFold.add(g);
@@ -7798,13 +8090,20 @@ function renderTrack(){
   trackState();
   // 28.9: counts beside each shortcut, matched by the normalised chord.
   const _cnt = _usageByNorm(), _haveU = !!usageData;
+  // 29.21: a re-render keeps the sets that were open, and the page where it
+  // was. Josh, 2026-10-08 11:22: "when I select a checkbox to "Train" it
+  // pops me down to the bottom of the page ... It shouldn't move when I
+  // click that checkbox!" -- every set was redrawn closed, the list shrank
+  // by the height of the open one, and the page fell to what was below.
+  const _open = new Set([...el.querySelectorAll('details[open] [data-trackset]')]
+    .map(cb => cb.dataset.trackset));
   el.innerHTML = corpus.map(c => {
     const t = cfg.kbd_track[c.file] || {on:false, off:[]};
     const chords = Object.entries(c.shortcuts || {});
     const nOn = chords.filter(([k]) => isTracked(c.file, k)).length;
     const warn = (c.warnings || []).length
       ? ` <span class="muted" style="color:var(--warn)" title="${esc((c.warnings||[]).join('; '))}">⚠</span>` : '';
-    return `<details style="margin:.25rem 0;border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem">
+    return `<details ${_open.has(c.file)?'open':''} style="margin:.25rem 0;border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem">
       <summary style="cursor:pointer">
         <label class="inl" style="font-weight:600" onclick="event.stopPropagation()">
           <input type="checkbox" data-trackset="${esc(c.file)}" ${t.on?'checked':''}>
@@ -7838,13 +8137,23 @@ function renderTrack(){
     toast(cb.checked ? 'tracking ' + f : 'no longer tracking ' + f);});
   el.querySelectorAll('[data-trackone]').forEach(cb => cb.onchange = () =>
     setTracked(cb.dataset.trackone, cb.dataset.chord, cb.checked));
-  el.querySelectorAll('[data-train]').forEach(cb => cb.onchange = () => {
+  // The ticked box stays exactly where it was on screen, whatever the
+  // re-render changed in height above it (the practice keyboard, Training).
+  const keepPlace = (cb, fn) => {
+    const sel = `input[data-${cb.dataset.train != null ? 'train' : 'know'}]`;
+    const all = [...el.querySelectorAll(sel)], i = all.indexOf(cb);
+    const top = cb.getBoundingClientRect().top;
+    fn();
+    const n = el.querySelectorAll(sel)[i];
+    if(n){ window.scrollBy(0, n.getBoundingClientRect().top - top);
+      try{ n.focus({preventScroll:true}); }catch(_){}}};
+  el.querySelectorAll('[data-train]').forEach(cb => cb.onchange = () => keepPlace(cb, () => {
     setTrained(cb.dataset.train, cb.checked);
     if(cb.checked && isKnown(cb.dataset.train)) setKnown(cb.dataset.train, false);
-    renderTraining(); renderTrack();});
+    renderTraining(); renderTrack();}));
   // 28.9: "I already know this one" -- takes it off the practice list.
-  el.querySelectorAll('[data-know]').forEach(cb => cb.onchange = () => {
-    setKnown(cb.dataset.know, cb.checked); renderTraining(); renderTrack();});}
+  el.querySelectorAll('[data-know]').forEach(cb => cb.onchange = () => keepPlace(cb, () => {
+    setKnown(cb.dataset.know, cb.checked); renderTraining(); renderTrack();}));}
 
 /* ===== 29.0: THE PRACTICE KEYBOARD =========================================
    A compact US keyboard in the Usage tab. Keys that finish one of his
@@ -7878,7 +8187,15 @@ const PK_ROWS=[
    write cfg (focus, rate, which apps show is per browser). */
 const PK_TARGET=5;
 const PK_PALETTE=['#2563eb','#d97706','#7c3aed','#0891b2','#db2777','#65a30d'];
+function pkPiStage(pi){
+  const tg=pi.target||PK_TARGET;
+  return {s:pi.stage,r:pi.rate/tg,per:pi.rate,t:tg,active:pi.active,weeks:pi.weeks};}
 function pkStage(id,counts){
+  // 29.23: the stage the Pi sent, when it sent one -- per week while the app was
+  // in use (training.py), so weeks away from the app do not count against
+  // a shortcut. Josh, 2026-10-08 07:32 v.i. The rule is the same as below.
+  const pi=typeof usageData!=='undefined'&&usageData&&usageData.training&&usageData.training[id];
+  if(pi)return pkPiStage(pi);
   const c=counts.get(_chordNorm(id)),per=c?c.per_week:0;
   const t=+(((cfg&&cfg.kbd_rate)||{})[id])||PK_TARGET;
   if(!per)return {s:'unused',r:0,per,t};
@@ -7886,6 +8203,26 @@ function pkStage(id,counts){
 function pkStageBg(st){
   return st.s==='unused'?'rgba(128,128,128,.25)':st.s==='learned'?'rgba(134,239,172,.35)'
     :`rgba(34,197,94,${(0.35+0.5*Math.min(1,st.r/0.7)).toFixed(2)})`;}
+/* 29.23 i: which keyboard to draw. Josh, 2026-10-08 07:32: the Usage
+   keyboard is the one in use -- the most recently used keyboard that has
+   every key needed. "Used" is the engine's last key-down per device
+   (status.last_key_by_device); "has" is by what each key SENDS after its
+   Baseline, so the Fintie's swapped modifiers count as what they are. Null
+   (the US board) when no keyboard qualifies or the engine has not said. */
+function pkKeyboard(need){
+  if(!cfg||!need.length)return null;
+  const last=(lastEng&&lastEng.last_key_by_device)||{};
+  const devs=((cfg.devices)||[]).filter(d=>d.kind==='kbd'&&last[d.id])
+    .sort((a,b)=>last[b.id]-last[a.id]);
+  for(const d of devs){
+    const keys=[];
+    for(const k of (layoutFor(d).keys||[])){
+      if(k.u==null||k.btn!=null||k.fintie)continue;   // not the Fintie's mode rows
+      const canon=baselineOf(d.id,k.u);if(!canon)continue;
+      keys.push({x:k.x,y:k.y,w:k.w||1,canon,lab:k.label||MODS[canon]||KEYS[canon]||'?'});}
+    const have=new Set(keys.map(k=>k.canon));
+    if(need.every(u=>have.has(u)))return {name:d.name||d.id,id:d.id,keys};}
+  return null;}
 function renderPracticeKbd(){
   const el=$('practicekbd');if(!el)return;
   const chosen=(cfg&&cfg.kbd_train)||[];
@@ -7903,21 +8240,30 @@ function renderPracticeKbd(){
       st:pkStage(ch,counts),d:d?d.text.replace(/^[^—]{1,40}—\s*/,''):''});}
   const bits=heldModBits(heldInputs());
   const U=40;
-  const rowHTML=r=>r.map(k=>{
-    if(!k)return '<span style="display:inline-block;width:10px"></span>';
-    const[lab,u,w]=k,list=by.get(u)||[];
+  const kb=pkKeyboard([...by.keys()]);
+  const keyHTML=(lab,u,w,pos)=>{
+    const list=by.get(u)||[];
     const live=bits?list.filter(x=>x.mods===bits):list;
     const isHeldMod=usageIsMod(u)&&heldInputs().keys.includes(u);
     const top=live[0];
     // ii: the description, in the key, normal weight, wrapped
     const face=bits&&top?esc(top.d||top.ch):esc(lab);
-    const tip=list.length?list.map(x=>`${x.ch} — ${x.d||'(no description)'} [${x.app} · ${x.st.per}/wk of ${x.st.t}]`).join('\n'):'';
+    const tip=list.length?list.map(x=>`${x.ch} — ${x.d||'(no description)'} [${x.app} · ${x.st.per}/wk of ${x.st.t}${
+      x.st.active!=null?`, over the ${x.st.active} of ${x.st.weeks} weeks ${x.app} was in use`:''}]`).join('\n'):'';
     const bg=isHeldMod?'rgba(239,68,68,.55)':top?pkStageBg(top.st):'transparent';
     const outline=top?`box-shadow:inset 0 0 0 2px ${col(top.app)};`:'';
-    return `<span title="${esc(tip)}" style="display:inline-flex;align-items:center;justify-content:center;
-      position:relative;width:${Math.round((w||1)*U)}px;height:${U-8}px;margin:1px;border:1px solid var(--line);
+    return `<span class="pkkey" title="${esc(tip)}" style="display:inline-flex;align-items:center;justify-content:center;
+      ${pos||'position:relative;'}width:${Math.round((w||1)*U)}px;height:${U-8}px;margin:1px;border:1px solid var(--line);
       border-radius:4px;font-size:${bits&&top?'.5rem':'.62rem'};line-height:1.05;overflow:hidden;background:${bg};color:var(--fg);
-      white-space:normal;text-align:center;word-break:break-word;font-weight:400;${outline}">${face}${list.length&&!bits?`<sup style="position:absolute;right:2px;top:1px;font-size:.5rem">${list.length}</sup>`:''}</span>`;}).join('');
+      white-space:normal;text-align:center;word-break:break-word;font-weight:400;${outline}">${face}${list.length&&!bits?`<sup style="position:absolute;right:2px;top:1px;font-size:.5rem">${list.length}</sup>`:''}</span>`;};
+  const rowHTML=r=>r.map(k=>k?keyHTML(k[0],k[1],k[2]):'<span style="display:inline-block;width:10px"></span>').join('');
+  // 29.23 i: his own keyboard, drawn where its keys are, when one has
+  // every key the chosen shortcuts need; else the US board as before.
+  const boardHTML=kb?(()=>{const ks=kb.keys,x0=Math.min(...ks.map(k=>k.x)),y0=Math.min(...ks.map(k=>k.y));
+      const W=Math.max(...ks.map(k=>k.x+(k.w||1)))-x0,H=Math.max(...ks.map(k=>k.y+1))-y0;
+      return `<div style="position:relative;width:${Math.ceil(W*(U+2))}px;height:${Math.ceil(H*(U-4))}px">${ks.map(k=>
+        keyHTML(k.lab,k.canon,k.w,`position:absolute;left:${Math.round((k.x-x0)*(U+2))}px;top:${Math.round((k.y-y0)*(U-6))}px;`)).join('')}</div>`;})()
+    :PK_ROWS.map(r=>`<div>${rowHTML(r)}</div>`).join('');
   // vi: one shortcut to focus on -- his choice, else the top-priority one
   // not yet learned
   let focus=(cfg.kbd_focus&&chosen.includes(cfg.kbd_focus))?cfg.kbd_focus:null;
@@ -7931,17 +8277,27 @@ function renderPracticeKbd(){
       <div class="muted">Focus on</div>
       <div style="font-family:ui-monospace,monospace;font-size:.85rem;font-weight:600">${esc(focus)}</div>
       <div>${esc(fd?fd.text:'')}</div>
-      <div class="muted">${fst.per}/week of ${fst.t} · ${fst.s}</div>
+      <div class="muted" ${fst.active!=null?`title="per week over the ${fst.active} of ${fst.weeks} weeks its app was in use"`:''}>${fst.per}/week of ${fst.t} · ${fst.s}</div>
       <button id="pkchange" style="font-size:.7rem;margin-top:.2rem">change…</button></div>
     <div class="muted" style="margin-top:.3rem;line-height:1.3">
       <span style="background:rgba(128,128,128,.25);padding:0 .25rem">unused</span>
       <span style="background:rgba(34,197,94,.7);padding:0 .25rem">learning</span>
       <span style="background:rgba(134,239,172,.35);padding:0 .25rem">learned</span></div></div>`;
-  el.innerHTML=`<div class="muted" style="font-size:.7rem;margin-bottom:.15rem">Practising ${chosen.length} ·
+  // 29.21: framed and titled "Training"; a click on the frame (not on a key
+  // or a control) opens the Training tab. Josh, 2026-10-08 11:26: "put
+  // "Training" as the titel around the keyboard, and put a little border
+  // around the whole section; and if you click anywhere in that border
+  // (that's not on a specific key or button etc) it opens the training tab."
+  el.innerHTML=`<fieldset class="pkframe" title="Click the frame to open the Training tab"
+    style="border:1.5px solid var(--line);border-radius:8px;padding:.2rem .5rem .4rem;margin:0;cursor:pointer">
+    <legend style="font-size:.8rem;font-weight:600;padding:0 .3rem">Training</legend>
+    <div class="muted" style="font-size:.7rem;margin-bottom:.15rem">Practising ${chosen.length}${kb?` on <b title="the keyboard used most recently that has every key these shortcuts need">${esc(kb.name)}</b>`:''} ·
     ${bits?`holding <b>${esc(modsName(bits))}</b> — each key shows what it would do`
           :'hold a modifier to see what each key does; colour = how far along you are'}</div>
     <div style="display:flex;align-items:flex-start"><div style="font-family:ui-monospace,monospace;white-space:nowrap;overflow-x:auto">${
-      PK_ROWS.map(r=>`<div>${rowHTML(r)}</div>`).join('')}</div>${side}</div>`;
+      boardHTML}</div>${side}</div></fieldset>`;
+  el.onclick=e=>{if(e.target.closest('.pkkey,button,a,input,select,label'))return;
+    const t=document.querySelector('#usagetabs [data-ut="train"]');if(t)t.click();};
   el.querySelectorAll('[data-pkapp]').forEach(b=>b.onclick=()=>{
     const a=b.dataset.pkapp;if(hide.has(a))hide.delete(a);else hide.add(a);
     try{localStorage.setItem('hc.pkhide',JSON.stringify([...hide]));}catch(_){}
@@ -7959,10 +8315,12 @@ function pkChooseFocus(){
       style="font-family:ui-monospace,monospace">${esc(id)}</a> <span class="muted">${esc((d&&d.app)||'')}${sec?' · '+esc(sec[1]):''}
       · ${st.per}/wk · ${st.s}</span><div style="font-size:.74rem">${esc(d?d.text.replace(/^[^—]{1,40}—\s*/,''):'')}</div></div>`;}).join('')}</div>`;
   p.style.maxWidth='28rem';placePopover(p,$('practicekbd').getBoundingClientRect());
+  let close=null;
   p.querySelectorAll('[data-pkf]').forEach(a=>a.onclick=e=>{e.stopPropagation();
-    cfg.kbd_focus=a.dataset.pkf;profileTouched();p.style.display='none';renderPracticeKbd();
+    cfg.kbd_focus=a.dataset.pkf;profileTouched();p.style.display='none';
+    if(close)document.removeEventListener('click',close);renderPracticeKbd();
     toast('focus: '+a.dataset.pkf+' — ⬆ Save to device to keep it');});
-  setTimeout(()=>{const close=ev=>{if(p.contains(ev.target))return;p.style.display='none';
+  setTimeout(()=>{close=ev=>{if(p.contains(ev.target))return;p.style.display='none';
     document.removeEventListener('click',close);};document.addEventListener('click',close);},50);}
 
 /* ===== 28.9: TRAINING -- R SHORTCUTS THIS WEEK ===========================
@@ -8030,6 +8388,30 @@ const R_EDIT_PICKS=[
   ['Ctrl+Shift+A','reformat the selection'],
   ['Ctrl+Shift+C','comment / uncomment'],
   ['Ctrl+D','delete the line']];
+/* 29.23 vi.1: the dated log of crossings, kept by the Pi
+   (usage/training_log.jsonl, training.py). Josh, 2026-10-08 07:32: "Log
+   the dates each item crosses a threshold (started, learning, learned)" so
+   he can look back "from [date] to [date]". The range is this page's only. */
+let trainFrom = '', trainTo = '';
+function trainLogHTML(){
+  const log = (typeof usageData !== 'undefined' && usageData && usageData.training_log) || null;
+  if(!log) return '';
+  const rows = log.filter(r => (!trainFrom || r.date >= trainFrom) && (!trainTo || r.date <= trainTo));
+  const word = s => s == null ? '' : s;
+  return `<details open style="margin-bottom:.5rem" id="trainlog"><summary style="cursor:pointer">
+      <b>Progress log</b> <span class="muted">· ${rows.length} of ${log.length} · kept by the Pi</span></summary>
+    <div class="bar" style="margin:.2rem 0;font-size:.78rem">from <input type="date" id="tlfrom" value="${esc(trainFrom)}">
+      to <input type="date" id="tlto" value="${esc(trainTo)}">
+      <button class="txmini" id="tlclear">all dates</button></div>
+    ${rows.length ? `<table style="width:100%;font-size:.8rem">
+      <tr><td><b>Date</b></td><td><b>Shortcut</b></td><td><b>Crossed</b></td><td><b>Rate then</b></td></tr>
+      ${rows.slice().reverse().map(r => `<tr><td>${esc(r.date)}</td>
+        <td style="font-family:ui-monospace,monospace">${esc(r.chord)}</td>
+        <td>${r.from ? esc(word(r.from)) + ' → ' : ''}<b>${esc(word(r.to))}</b></td>
+        <td class="muted">${r.rate != null ? r.rate + '/wk' : ''}</td></tr>`).join('')}</table>`
+      : '<p class="muted" style="font-size:.8rem">Nothing crossed in those dates.</p>'}
+    <p class="muted" style="font-size:.74rem">"Started" is the day the Pi first saw it on your list.
+      A rate counts only the weeks its app was in use.</p></details>`;}
 function renderTraining(){
   const el = $('trainbody'); if(!el) return;
   const haveU = !!usageData;
@@ -8054,7 +8436,9 @@ function renderTraining(){
           const d = desc[id] || corpusDesc(id);
           // A chosen shortcut never used reads 0 -- the most useful thing this
           // list can say -- rather than being left out for want of a number.
-          const per = c ? c.per_week : 0, tot = c ? c.count : 0;
+          // 29.23: the Pi's rate when it has one (weeks the app was in use).
+          const pi = haveU && usageData.training && usageData.training[id];
+          const per = pi ? pi.rate : c ? c.per_week : 0, tot = c ? c.count : 0;
           return `<tr draggable="true" data-trow="${esc(id)}" style="cursor:grab">
             <td style="white-space:nowrap"><span class="muted" title="drag to reorder">⠿</span>
               <input type="number" min="1" max="${chosen.length}" value="${i+1}"
@@ -8062,7 +8446,7 @@ function renderTraining(){
             <td style="font-family:ui-monospace,monospace">${esc(id)}</td>
             <td class="muted">${d ? esc(d.text) + (d.app ? ` <span style="font-size:.72rem">· ${esc(d.app)}</span>` : '')
                  : (refData('corpus') ? '<i>not in any set</i>' : '<i>reading the shortcut sets…</i>')}</td>
-            <td${per ? '' : ' style="color:var(--warn)"'}>${haveU ? per : '—'}
+            <td${per ? '' : ' style="color:var(--warn)"'}${pi ? ` title="per week over the ${pi.active} of ${pi.weeks} weeks ${esc(pi.app || 'its app')} was in use · ${esc(pi.stage)}"` : ''}>${haveU ? per : '—'}
               <input type="number" min="0.1" step="0.5" data-trate="${esc(id)}" style="width:3.4rem;margin-left:.2rem"
                 value="${((cfg.kbd_rate||{})[id])||''}" placeholder="${PK_TARGET}"
                 title="Its natural rate: how often a week you would use it once learned (default ${PK_TARGET}). Colours on the practice keyboard measure against this."></td>
@@ -8089,6 +8473,10 @@ function renderTraining(){
   const knownHTML = !known.length ? '' : `<p class="muted" style="font-size:.76rem">✓ ${known.length}
     marked "I already know this" — untick them in What to track to practise again.</p>`;
   const bind = () => {
+    const tl = (k, v) => { if(k === 'from') trainFrom = v; else trainTo = v; renderTraining(); };
+    if($('tlfrom')) $('tlfrom').onchange = e => tl('from', e.target.value);
+    if($('tlto')) $('tlto').onchange = e => tl('to', e.target.value);
+    if($('tlclear')) $('tlclear').onclick = () => { trainFrom = trainTo = ''; renderTraining(); };
     el.querySelectorAll('[data-untrain]').forEach(a => a.onclick = () => {
       setTrained(a.dataset.untrain, false); renderTraining(); renderTrack();});
     el.querySelectorAll('[data-tknow]').forEach(a => a.onclick = () => {
@@ -8116,9 +8504,9 @@ function renderTraining(){
   if(typeof renderPracticeKbd === 'function') renderPracticeKbd();
   if(!haveU){
     el.innerHTML = chosenHTML + picksHTML + knownHTML
-      + '<p class="muted">Load the Usage tab for your most- and least-used lists.</p>';
+      + '<p class="muted">Load the Usage tab for your most- and least-used lists, and the progress log.</p>';
     bind(); return;}
-  el.innerHTML = chosenHTML + picksHTML + knownHTML + `
+  el.innerHTML = chosenHTML + trainLogHTML() + picksHTML + knownHTML + `
     <p class="muted" style="font-size:.8rem">Two lists, because "use it more"
     and "delete it" are both good outcomes for something you configured and
     never press.</p>
@@ -9732,6 +10120,15 @@ function renderWfLegend(){
 
 function placePopover(p,r,gap){
   gap=gap||4;
+  // 29.21: the click that OPENS a popover must not reach document. Every
+  // popover closes itself with a document click listener that is removed
+  // only by an outside click; one closed any other way (picking an item,
+  // Escape, a re-render) leaves its listener behind, and that stale
+  // listener hid the NEXT popover in the same click that opened it. Josh,
+  // 2026-10-08 10:50: "Clicking on "Change..." button in Usage "Focus on"
+  // item doesn't do anything." (it did, once; then never again)
+  const ev=window.event;
+  if(ev&&ev.type==='click'&&ev.eventPhase!==Event.CAPTURING_PHASE)ev.stopPropagation();
   p.style.display='block';              // must be laid out before it measures
   p.style.left='0px';p.style.top='0px'; // measure unconstrained by a stale spot
   const pw=p.offsetWidth,ph=p.offsetHeight,M=8;
@@ -11336,6 +11733,41 @@ function macroUsersHTML(list){
 const MW_FONTS={sans:'Sans (Hershey Futura Light)',script:'Handwriting (Hershey Script)',
   serif:'Serif (Hershey Times Roman)'};
 const MW_DEF={font:'sans',size:40,speed:300};
+/* 29.22: a small looping picture of the motion each item makes. Josh,
+   2026-10-08 11:43: "provide little previews of the movement the mouse will
+   take next to each item, that repeat on a loop (so the user can learn to
+   associate them with the different options).  iii) Give option for the
+   user to turn the little previews off entirely." The paths are the
+   engine's own (mouse_write.py circle_path, wiggle_path, nudge_path,
+   square_path), stepped the same way; the timing is the engine's too:
+   feedback runs at 60 steps a second, a shape preview by preview_mode.
+   Off is per browser. */
+const MW_FB_HZ=60;
+const mwPaths={
+  circle:(r=12,n=24)=>{const h=n/2,p=[];for(let i=0;i<=h;i++)p.push([Math.round(r-r*Math.cos(Math.PI*i/h)),Math.round(-r*Math.sin(Math.PI*i/h))]);
+    const f=[];for(let i=0;i<h;i++)f.push([p[i+1][0]-p[i][0],p[i+1][1]-p[i][1]]);return f.concat(f.map(([x,y])=>[-x,-y]));},
+  wiggle:(reps=1,s=4,n=3)=>{const r=Array(n).fill([s,0]),l=Array(n).fill([-s,0]);let o=r.slice();
+    for(let i=1;i<reps;i++)o=o.concat(l,l,r,r);return o.concat(l,l,r);},
+  nudge:(ax,s=3,n=3)=>{const d=ax==='h'?[s,0]:[0,-s];return Array(n).fill(d).concat(Array(n).fill([-d[0],-d[1]]));},
+  square:(s=3,n=3)=>[].concat(Array(n).fill([s,0]),Array(n).fill([0,s]),Array(n).fill([-s,0]),Array(n).fill([0,-s]))};
+function mwAnimOn(){try{return localStorage.getItem('hc.mwanim')!=='0';}catch(_){return true;}}
+function mwAnim(steps,secs,title){
+  if(!mwAnimOn()||!steps.length)return '';
+  let x=0,y=0;const pts=[[0,0]];for(const[dx,dy]of steps){x+=dx;y+=dy;pts.push([x,y]);}
+  const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),x0=Math.min(...xs),y0=Math.min(...ys);
+  const w=Math.max(1,Math.max(...xs)-x0),hh=Math.max(1,Math.max(...ys)-y0);
+  const W=30,H=20,k=Math.min((W-6)/w,(H-6)/hh,1.6);
+  const d=pts.map((p,i)=>(i?'L':'M')+((p[0]-x0)*k+3).toFixed(1)+','+((p[1]-y0)*k+3).toFixed(1)).join(' ');
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle;margin-left:.3rem" aria-label="${esc(title)}">
+    <title>${esc(title)} (${secs.toFixed(2)} s a loop)</title>
+    <path d="${d}" fill="none" stroke="var(--line)" stroke-width="1"/>
+    <circle r="2.2" fill="var(--hi)"><animateMotion dur="${Math.max(0.15,secs).toFixed(3)}s" repeatCount="indefinite" path="${d}"/></circle></svg>`;}
+// The same plan as MouseWriter.preview_plan: (passes, seconds a pass).
+function mwPreviewPlan(steps,c,speed){
+  const len=steps.reduce((a,[dx,dy])=>a+Math.hypot(dx,dy),0),one=len/Math.max(1,speed);
+  const mode=c.preview_mode||'time',T=(c.preview_ms!=null?+c.preview_ms:300)/1000;
+  if(mode==='speed'||!one)return[1,one];
+  return one>=T?[1,T]:[Math.max(1,Math.floor(T/one)),one];}
 function _mwSet(k,v){cfg.mouse_write=cfg.mouse_write||{};cfg.mouse_write[k]=v;profileTouched();}
 function renderMouseWrite(){
   const el=$('mwbody');if(!el||!cfg)return;
@@ -11353,14 +11785,16 @@ function renderMouseWrite(){
     app with a pen tool. Tap <b>Ctrl + Alt + Cmd/Win</b> together twice (within 0.6 s) to start. Then type:
     each key is drawn with the mouse, left button held for each stroke. The host never sees the keys.</p>
     <table style="font-size:.8rem">
-      <tr><td><b>Cmd/Win + → / ←</b></td><td>faster / slower by 25% of the current speed</td></tr>
+      <tr><td><b>the double tap</b></td><td>start — the pointer draws a small circle${mwAnim(mwPaths.circle(),mwPaths.circle().length/MW_FB_HZ,'start: a small circle')}</td></tr>
+      <tr><td><b>Cmd/Win + → / ←</b></td><td>faster / slower by 25% of the current speed${mwAnim(mwPaths.nudge('h'),6/MW_FB_HZ,'speed change: a sideways nudge')}</td></tr>
       <tr><td><b>Cmd/Win + Shift + → / ←</b></td><td>by 1%</td></tr>
-      <tr><td><b>Cmd/Win + ↑ / ↓</b></td><td>bigger / smaller by 25%</td></tr>
+      <tr><td><b>Cmd/Win + ↑ / ↓</b></td><td>bigger / smaller by 25%${mwAnim(mwPaths.nudge('v'),6/MW_FB_HZ,'size change: an up-and-down nudge')}</td></tr>
       <tr><td><b>Cmd/Win + Shift + ↑ / ↓</b></td><td>by 1%</td></tr>
       <tr><td><b>Enter</b></td><td>new line, back under where you started</td></tr>
       <tr><td><b>Backspace</b></td><td>takes back the last letter not drawn yet (drawn ones stay)</td></tr>
-      <tr><td><b>Escape</b>, or the double tap again</td><td>stop — anything not yet drawn is dropped</td></tr>
+      <tr><td><b>Escape</b>, or the double tap again</td><td>stop — anything not yet drawn is dropped${(()=>{const s=mwPaths.wiggle((st?st.speed:+c.speed)>1000?2:1);return mwAnim(s,s.length/MW_FB_HZ,'stop: a wiggle');})()}</td></tr>
     </table>
+    <label class="inl" style="font-size:.76rem"><input type="checkbox" id="mwanim" ${mwAnimOn()?'checked':''}> show the little movement previews</label>
     <p class="muted" style="font-size:.76rem">Speed changes work mid-word. Every mouse report is the same
       length, so pointer acceleration keeps letters in shape but changes their size with speed — turn off
       “Enhance pointer precision” (Windows) for sizes that don't move when you change speed.</p>
@@ -11371,6 +11805,7 @@ function renderMouseWrite(){
       <label>Starting speed (mouse counts per second)</label><input type="number" id="mwspeed" min="20" max="20000" step="10" value="${+c.speed}">
       ${st?`<button id="mwkeep" style="margin-top:.4rem">Keep the current size and speed as the starting ones</button>`:''}
     </div></div>`;
+  $('mwanim').onchange=e=>{try{localStorage.setItem('hc.mwanim',e.target.checked?'1':'0');}catch(_){}renderMouseWrite();};
   $('mwfont').onchange=e=>{_mwSet('font',e.target.value);toast('font set — ⬆ Save to device');};
   $('mwsize').onchange=e=>{_mwSet('size',+e.target.value||MW_DEF.size);toast('starting size set — ⬆ Save to device');};
   $('mwspeed').onchange=e=>{_mwSet('speed',+e.target.value||MW_DEF.speed);toast('starting speed set — ⬆ Save to device');};
@@ -11396,15 +11831,23 @@ function renderMouseWriteMore(el,c){
   // size), which closed it while he read it -- Josh, 2026-10-08 08:09: "I'm
   // just sitting there, reading it, and it closes on it's own." It keeps
   // its open state now.
+  const st=lastEng&&lastEng.mouse_write,spd=st?st.speed:+c.speed;
+  const psz=c.preview_size!=null?+c.preview_size:10,pm=c.preview_mode||'time';
+  const shapeAnim=(steps,name)=>{const[n,each]=mwPreviewPlan(steps,c,spd);
+    return pm==='off'?'':mwAnim(steps,each,name+' preview: '+(n>1?n+' loops':'one pass')+' at '+spd+' counts/s');};
   const d=document.createElement('details');d.style.marginTop='.5rem';
   d.open=!!window._mwMoreOpen;d.ontoggle=()=>{window._mwMoreOpen=d.open;};
   d.innerHTML=`<summary style="cursor:pointer"><b>Shapes, circled numbers and keys</b></summary>
-    <p style="font-size:.8rem">In the mode: hold <b>Alt/Option</b> and drag for an <b>oval</b>, or
-      <b>Ctrl/Cmd</b> and drag for a <b>rectangle</b> — the drag is hidden from the app; the shape is
+    <p style="font-size:.8rem">In the mode: hold <b>Alt/Option</b> and drag for an <b>oval</b>${shapeAnim(mwPaths.circle(Math.max(2,Math.round(psz))),'oval')}, or
+      <b>Ctrl/Cmd</b> and drag for a <b>rectangle</b>${shapeAnim(mwPaths.square(3,Math.max(1,Math.floor(psz/3))),'rectangle')} — the drag is hidden from the app; the shape is
       drawn when you let go. Holding the key alone plays a small preview of the shape. Hold
       <b>Alt/Option</b> while typing digits, and they are <b>circled</b> when you let go.</p>
     <div class="row"><div>
-      <label>Preview length (ms, 0 = off)</label><input type="number" id="mwpms" min="0" max="3000" step="50" value="${c.preview_ms!=null?c.preview_ms:300}">
+      <label>Shape previews</label><select id="mwpmode">
+        <option value="time" ${pm==='time'?'selected':''}>take a set time (loop at the writing speed)</option>
+        <option value="speed" ${pm==='speed'?'selected':''}>follow the writing speed (one pass)</option>
+        <option value="off" ${pm==='off'?'selected':''}>off</option></select>
+      <label>Preview time (ms, 0 = off)</label><input type="number" id="mwpms" min="0" max="3000" step="50" value="${c.preview_ms!=null?c.preview_ms:300}" ${pm==='time'?'':'disabled'}>
       <label>Preview size (mouse counts)</label><input type="number" id="mwpsz" min="0" max="200" step="1" value="${c.preview_size!=null?c.preview_size:10}">
       <label class="inl"><input type="checkbox" id="mwround" ${c.circle_round===false?'':'checked'}> Circled numbers: a true circle (untick for an oval that hugs the number)</label>
       <label>Speed/size steps: ±% per press, and with Shift</label>
@@ -11416,7 +11859,8 @@ function renderMouseWriteMore(el,c){
     </div></div>`;
   el.appendChild(d);
   const sub=(k,obj)=>{const t=Object.assign({},(cfg.mouse_write||{})[k]||{},obj);_mwSet(k,t);};
-  d.querySelector('#mwpms').onchange=e=>{_mwSet('preview_ms',Math.max(0,+e.target.value||0));toast('⬆ Save to device');};
+  d.querySelector('#mwpms').onchange=e=>{_mwSet('preview_ms',Math.max(0,+e.target.value||0));toast('⬆ Save to device');renderMouseWrite();};
+  d.querySelector('#mwpmode').onchange=e=>{_mwSet('preview_mode',e.target.value);toast('⬆ Save to device');renderMouseWrite();};
   d.querySelector('#mwpsz').onchange=e=>{_mwSet('preview_size',Math.max(0,+e.target.value||0));toast('⬆ Save to device');};
   d.querySelector('#mwround').onchange=e=>{_mwSet('circle_round',e.target.checked);toast('⬆ Save to device');};
   d.querySelector('#mwstep').onchange=e=>{_mwSet('step',+e.target.value||25);toast('⬆ Save to device');};
@@ -13266,6 +13710,12 @@ function liveOut(txt){
     heldPaintReset();renderStage();
     if(typeof renderOptChars==='function'&&$('optsec')&&$('optsec').open)renderOptChars();
     toast('Right Alt (double tap): '+(om[1]==='ON'?'Mac option/alt mode — Left Alt is Option and never reaches Windows; Right Alt is Windows Alt':'Windows option/alt mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
+  // 29.24: the calibration's own end, or the reason it was refused
+  if(txt.startsWith('mwtest ')){
+    if(/^mwtest refused/.test(txt)){toast(txt,true);if(testMW&&!testMW.done){testMW.done=true;
+      $('testmwstate').textContent=txt;}}
+    else if(/^mwtest done/.test(txt)&&testMW&&!testMW.done)setTimeout(testMWAnalyse,600);
+    return;}
   if(txt.startsWith('macro start')){macroActive=true;return;}
   if(txt.startsWith('macro end')){macroActive=false;return;}
   if(txt.startsWith('expand')){expandFlash=Date.now()+600;return;}
@@ -15637,7 +16087,8 @@ const PF_DEFAULT_RECIPE =
   'lat.mean|Lat ; lat.p95|p95 ; lat.max|max ; lat.sd|± ; lat.n|n ; apm.mean|APM ; apm.band|';
 
 let PREFS = {
-  look: { btnpad: 0.1, headpad: 0.25 },   // 27.8 / 29.20: Preferences → Layout
+  // 29.21: hidebt / mwtab -- which top tabs show (Preferences → Layout)
+  look: { btnpad: 0.1, headpad: 0.25, hidebt: false, mwtab: false },   // 27.8 / 29.20: Preferences → Layout
   bench: {
     recipe: PF_DEFAULT_RECIPE,
     show: true,
@@ -15674,8 +16125,31 @@ function pfApplyLook(){
   const hp = +((PREFS.look || {}).headpad ?? 0.25);
   document.documentElement.style.setProperty('--headpad',
     String(isFinite(hp) ? Math.max(0, Math.min(1, hp)) : 0.25));
+  pfApplyTabs();
   try{ stickSync(); stickScan(); }catch(_){}   // the sticky pile changes height
 }
+/* 29.21: which top tabs show. Josh, 2026-10-08 11:39: "Give option to not
+   show "Bluetooth" as its own pill (in the settings)" and Mouse writing in
+   its own section, shown when chosen. The Mouse writing panel is MOVED, not
+   copied, so there is only ever one of it and its handlers stay attached.
+   Leaving a tab that has just been hidden goes to Mapping. */
+function pfApplyTabs(){
+  const L = PREFS.look || {}, bt = document.querySelector('#toptabs [data-t="bt"]');
+  if(bt) bt.style.display = L.hidebt ? 'none' : '';
+  const tab = $('tab-mw'), sec = $('mwsec'), page = $('page-mw'), stub = $('mwstub');
+  if(!tab || !sec || !page) return;
+  tab.style.display = L.mwtab ? '' : 'none';
+  if(L.mwtab && sec.parentElement !== page){ page.appendChild(sec); sec.open = true; }
+  if(!L.mwtab && sec.parentElement === page) stub.after(sec);
+  if(stub) stub.innerHTML = L.mwtab
+    ? '✍ Mouse writing has its own tab. <a class="mlink" data-mwtab="0">put it back here</a>'
+    : '<a class="mlink" data-mwtab="1" title="Show Mouse writing as its own tab at the top">✍ give Mouse writing its own tab</a>';
+  const on = document.querySelector('#toptabs .tab.on');
+  if(on && on.style.display === 'none') switchTab('map');}
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('[data-mwtab]'); if(!a) return;
+  (PREFS.look = PREFS.look || {}).mwtab = a.dataset.mwtab === '1';
+  pfSave(); pfApplyTabs(); if(PREFS.look.mwtab) switchTab('mw');});
 function pfSave(){
   try{ localStorage.setItem(PF_LS, JSON.stringify(PREFS)); }
   catch(e){ toast('could not save preferences in this browser', true); }
@@ -15850,6 +16324,16 @@ const PF_SECTIONS = {
         <p>The space inside and around the section heading pills (Debug
         monitors, Copy / Paste, All custom remappings…). It was 0.6 (about
         0.6 of a line); the default is now 0.25. Kept in this browser only.</p>`)}
+    </div>
+    <div class="pfrow">
+      <label>Top tabs</label>
+      <label class="inl"><input type="checkbox" id="pf-hidebt" ${(PREFS.look||{}).hidebt?'checked':''}> hide Bluetooth</label>
+      <label class="inl"><input type="checkbox" id="pf-mwtab" ${(PREFS.look||{}).mwtab?'checked':''}> Mouse writing as its own tab</label>
+      ${pfHelp('What this changes', `
+        <p>Bluetooth is mostly for first-time pairing; hiding its tab takes
+        nothing away, and ticking it again brings it back. Mouse writing
+        normally sits at the top of the Macros page; as its own tab it moves
+        there instead. Kept in this browser only.</p>`)}
     </div>`;
   },
 
@@ -16019,6 +16503,8 @@ function pfInit(){
     else if(id === 'pf-secs')   b.random_seconds = +e.target.value || 20;
     else if(id === 'pf-from')   { b.random_from = e.target.value; pfSchedule(); }
     else if(id === 'pf-to')     { b.random_to = e.target.value; pfSchedule(); }
+    else if(id === 'pf-hidebt' || id === 'pf-mwtab'){
+      (PREFS.look = PREFS.look || {})[id === 'pf-hidebt' ? 'hidebt' : 'mwtab'] = e.target.checked; pfApplyTabs(); }
     else if(id === 'pf-headpad'){
       (PREFS.look = PREFS.look || {}).headpad = +e.target.value; pfApplyLook();
       const o = $('pf-headpadv'); if(o) o.textContent = (+e.target.value).toFixed(2); }
@@ -16564,6 +17050,12 @@ async function testKFinish(){
   const r={kind:'typing',device:testK.dev,suite:testK.suite,os:testK.os,ui:UI_VERSION,engine_before_ts:testK.before_ts,
     expected_chars:exp.length,typed_chars:got.length,keys:testK.keys,backspaces:testK.backspaces,
     seconds:+secs.toFixed(2),wpm:secs>0?+((got.length/5)/(secs/60)).toFixed(1):0,
+    // 29.21: Josh, 2026-10-08 11:29: "Give the total APM (including
+    // deletions) And then the "effective WPM" of just what it took to get
+    // the text correct". APM counts every key pressed, Backspace included;
+    // effective WPM counts only characters that ended up right (matched).
+    apm:secs>0?+(testK.keys/(secs/60)).toFixed(0):0,
+    wpm_eff:secs>0?+((d.matched/5)/(secs/60)).toFixed(1):0,
     missing:d.missing,extra:d.extra,matched:d.matched,
     gap_ms:{median:pct(gaps,.5),p95:pct(gaps,.95),max:gaps.length?Math.max(...gaps):null,
       stalls_400:gaps.filter(g=>g>400).length},
@@ -16576,7 +17068,9 @@ async function testKFinish(){
 function testShowTyping(r){
   const g=r.gap_ms||{};
   const ex=(r.expansions||[]).map(x=>`${esc(x.name)}: ${x.found?'✓':'✗ '+(x.raw_left?'(trigger text left behind — set off, or not fired)':'(missing)')}`).join(' · ');
-  $('testkstats').innerHTML=`<b>${r.wpm} wpm</b> over ${r.seconds}s · ${r.keys} keys for ${r.expected_chars} chars`+
+  $('testkstats').innerHTML=`<b title="words per minute, counting only the characters that ended up correct">${r.wpm_eff!=null?r.wpm_eff:r.wpm} wpm effective</b>`+
+    (r.apm!=null?` · <b title="actions per minute: every key you pressed, deletions included">${r.apm} APM</b> total`:'')+
+    ` over ${r.seconds}s · ${r.keys} keys for ${r.expected_chars} chars`+
     ` · <b style="color:${r.missing?'var(--hi,#d33)':'inherit'}">${r.missing} missing</b>, ${r.extra} extra, ${r.backspaces} backspaces`+
     ` · gaps median ${g.median!=null?g.median.toFixed(0):'–'}ms, p95 ${g.p95!=null?g.p95.toFixed(0):'–'}ms, max ${g.max!=null?g.max.toFixed(0):'–'}ms, ${g.stalls_400} over 400ms`+
     (ex?`<br>${ex}`:'')+`<br><span class="muted">engine share (per device) arrives with the history row below once the Pi has filed the run</span>`;
@@ -16618,13 +17112,17 @@ function testMScroll(){
   const ar=$('testarena');ar.innerHTML='<div class="muted" style="padding:1rem;font-size:.8rem">targets done — now the wheel</div>';
   const w=$('testscrollwrap'),box=$('testscroll');w.style.display='';
   box.innerHTML=Array.from({length:40},(_,i)=>`<div>line ${i+1}${i===39?' — bottom, thank you':''}</div>`).join('');
-  box.scrollTop=0;testM.scrollT0=performance.now();testM.wheelEvents=0;
-  box.onwheel=()=>{testM.wheelEvents++;};
-  box.onscroll=()=>{if(testM.done)return;if(box.scrollTop+box.clientHeight>=box.scrollHeight-2){testMFinish();}};
+  // 29.21: the clock starts at the FIRST wheel movement, not when the box
+  // appears. Josh, 2026-10-08 11:35: "make sure the time taken to realize
+  // there is a scroll section to the test is not included".
+  box.scrollTop=0;testM.scrollT0=null;testM.wheelEvents=0;
+  const t0=()=>{if(testM.scrollT0==null)testM.scrollT0=performance.now();};
+  box.onwheel=()=>{t0();testM.wheelEvents++;};
+  box.onscroll=()=>{if(testM.done)return;t0();if(box.scrollTop+box.clientHeight>=box.scrollHeight-2){testMFinish();}};
   $('testmstate').textContent='scroll the box to the bottom';}
 async function testMFinish(){
   if(!testM||testM.done)return;testM.done=true;
-  const scrollMs=+(performance.now()-testM.scrollT0).toFixed(0);
+  const scrollMs=testM.scrollT0!=null?+(performance.now()-testM.scrollT0).toFixed(0):0;
   $('testmstate').textContent='reading engine…';
   const h=testM.hits,ms=h.map(x=>x.ms),eff=h.map(x=>x.efficiency).filter(x=>x!=null);
   const r={kind:'mouse',device:testM.dev,os:testM.os,ui:UI_VERSION,engine_before_ts:testM.before_ts,targets:h.length,misses:testM.misses,
@@ -16695,6 +17193,119 @@ function testShowFidget(r){
     ` · sweep median ${r.sweep_ms&&r.sweep_ms.median!=null?r.sweep_ms.median.toFixed(0):'–'}ms`+
     `<br><span class="muted">a short sweep is lost motion; a pause is the pointer at rest mid-sweep. What the Pi was doing at the time arrives with the history row once the run is filed.</span>`;
   $('testmstate').textContent='done';}
+/* ---- 29.24: mouse writing calibration -------------------------------------- */
+// The Pi draws (mouse_write.run_test, asked for through s0's `mwtest`); this
+// page only records and compares. Every line is judged against the FIRST,
+// which is the slowest speed or the largest size -- the one most likely to
+// be clean -- because the font's own strokes are not on this side of the
+// channel, and a line compared with itself needs no font at all.
+const MW_CAL_DEF={speed:'150, 300, 600, 1200, 2400',size:'80, 48, 32, 20, 12'};
+const MW_CAL_ERR=5;         // % of the line's height: above this, not clean
+let testMW=null;
+function testMWVals(){
+  const kind=$('testmwkind').value;
+  let v=$('testmwvals').value.split(/[ ,;]+/).map(Number).filter(x=>x>0);
+  v=[...new Set(v)].sort((a,b)=>kind==='speed'?a-b:b-a).slice(0,8);
+  return {kind,v};}
+function testMWStart(){
+  const {kind,v}=testMWVals(),text=$('testmwtext').value.trim();
+  if(v.length<2){toast('give at least two values',true);return;}
+  if(!text){toast('give a line of text',true);return;}
+  testMW={kind,v,text,armed:true,strokes:[],cur:null,done:false,last:0};
+  $('testmwpad').innerHTML='<div class="muted" style="padding:1rem;font-size:.85rem">Click inside this box where the writing should start — top left is best. Then keep your hands off the mouse and keyboard until it finishes.</div>';
+  $('testmwstats').innerHTML='';$('testmwdone').disabled=false;
+  $('testmwstate').textContent='waiting for your click in the box';}
+function testMWPt(e){const r=$('testmwpad').getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top,performance.now()];}
+function testMWDown(e){
+  if(!testMW||testMW.done)return;e.preventDefault();
+  if(testMW.armed){
+    // the user's own click places the pointer; the Pi starts from there
+    testMW.armed=false;$('testmwpad').innerHTML='<svg id="testmwsvg" width="100%" height="100%" style="position:absolute;inset:0"></svg>';
+    if(!device){toast('not connected — nothing to draw',true);testMW=null;return;}
+    pfCmd('mwtest '+JSON.stringify({text:testMW.text,[testMW.kind==='speed'?'speeds':'sizes']:testMW.v}))
+      .catch(err=>toast('could not ask the Pi: '+err,true));
+    $('testmwstate').textContent='the Pi is writing '+testMW.v.length+' lines…';return;}
+  testMW.cur=[testMWPt(e)];}
+function testMWMove(e){
+  if(!testMW||!testMW.cur||!(e.buttons&1))return;
+  testMW.cur.push(testMWPt(e));testMW.last=performance.now();}
+function testMWUp(e){
+  if(!testMW||!testMW.cur)return;
+  if(testMW.cur.length>1)testMW.strokes.push(testMW.cur);
+  testMW.cur=null;testMW.last=performance.now();testMWDraw();}
+function testMWDraw(){
+  const s=$('testmwsvg');if(!s||!testMW)return;
+  s.innerHTML=testMW.strokes.map(st=>`<polyline fill="none" stroke="var(--fg)" stroke-width="1.2"
+    points="${st.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`).join('');}
+// Strokes in time order -> lines: a new line starts when a stroke begins
+// well to the LEFT of where the line so far had reached and below it.
+function testMWLines(strokes){
+  const lines=[];let cur=null;
+  for(const st of strokes){
+    const xs=st.map(p=>p[0]),ys=st.map(p=>p[1]);
+    const b={x0:Math.min(...xs),x1:Math.max(...xs),y0:Math.min(...ys),y1:Math.max(...ys)};
+    if(cur&&b.x0<cur.x0+(cur.x1-cur.x0)*0.5&&b.y0>(cur.y0+cur.y1)/2){lines.push(cur);cur=null;}
+    if(!cur)cur={strokes:[],x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1};
+    cur.strokes.push(st);cur.x0=Math.min(cur.x0,b.x0);cur.x1=Math.max(cur.x1,b.x1);
+    cur.y0=Math.min(cur.y0,b.y0);cur.y1=Math.max(cur.y1,b.y1);}
+  if(cur)lines.push(cur);
+  return lines;}
+// A line's points, scaled so its height is 1 and its top-left is 0,0.
+function testMWNorm(l){const h=Math.max(1,l.y1-l.y0);
+  return l.strokes.map(st=>st.map(p=>[(p[0]-l.x0)/h,(p[1]-l.y0)/h]));}
+function testMWDist(pts,segs){
+  let tot=0,n=0;const step=Math.max(1,Math.floor(pts.length/300));
+  for(let i=0;i<pts.length;i+=step){const[px,py]=pts[i];let best=Infinity;
+    for(const st of segs)for(let j=1;j<st.length;j++){
+      const[ax,ay]=st[j-1],[bx,by]=st[j],dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy;
+      let t=L?((px-ax)*dx+(py-ay)*dy)/L:0;t=Math.max(0,Math.min(1,t));
+      const d=Math.hypot(px-ax-t*dx,py-ay-t*dy);if(d<best)best=d;}
+    tot+=best;n++;}
+  return n?tot/n:Infinity;}
+// Shape difference, both ways round, as % of the line height.
+function testMWErr(a,b){
+  const A=testMWNorm(a),B=testMWNorm(b);
+  return 100*(testMWDist(A.flat(),B)+testMWDist(B.flat(),A))/2;}
+function testMWAnalyse(){
+  if(!testMW||testMW.done)return;testMW.done=true;$('testmwdone').disabled=true;
+  const lines=testMWLines(testMW.strokes),ref=lines[0],v=testMW.v;
+  if(!ref){$('testmwstate').textContent='nothing arrived — was the click inside the box?';return;}
+  const rows=v.map((val,i)=>{const l=lines[i];if(!l)return{v:val,missing:true,clean:false};
+    const err=i?testMWErr(l,ref):0,same=l.strokes.length===ref.strokes.length;
+    return{v:val,strokes:l.strokes.length,w:+(100*(l.x1-l.x0)/Math.max(1,ref.x1-ref.x0)).toFixed(0),
+      h:+(100*(l.y1-l.y0)/Math.max(1,ref.y1-ref.y0)).toFixed(0),err:+err.toFixed(1),
+      clean:same&&err<=MW_CAL_ERR};});
+  // the answer is the last value in an UNBROKEN run of clean lines from the
+  // first: a clean line after a failed one is luck, not a setting.
+  let best=null;for(const r of rows){if(!r.clean)break;best=r.v;}
+  const kind=testMW.kind,unit=kind==='speed'?'counts/s':'counts';
+  $('testmwstats').innerHTML=`<table class="testtbl"><tr><th>${kind}</th><th>strokes</th><th>width</th><th>height</th><th>shape off by</th><th></th></tr>
+    ${rows.map((r,i)=>`<tr><td>${r.v} ${unit}</td>${r.missing?'<td colspan="5" class="muted">no line arrived</td>'
+      :`<td>${r.strokes}${i&&r.strokes!==rows[0].strokes?` <span style="color:var(--err)">(${rows[0].strokes})</span>`:''}</td>
+      <td>${r.w}%</td><td>${r.h}%</td><td>${i?r.err+'%':'reference'}</td><td>${r.clean?'✓':'✗'}</td>`}</tr>`).join('')}</table>
+    <p style="margin:.3rem 0">${best!=null?`<b>${kind==='speed'?'Fastest':'Smallest'} clean ${kind}: ${best} ${unit}</b>
+      <button id="testmwuse" class="txmini">use it as the starting ${kind}</button>`
+      :'<b>No line matched the first.</b> Try lower values, or check “Enhance pointer precision” is off.'}</p>
+    <p class="muted" style="font-size:.74rem">Width and height are against the first line: with pointer
+      acceleration on, faster lines come out bigger. "Shape off by" is the average distance between the two
+      lines once both are scaled to the same height; above ${MW_CAL_ERR}% counts as not clean.</p>`;
+  $('testmwstate').textContent='done';
+  const u=$('testmwuse');if(u)u.onclick=()=>{if(!cfg){toast('read the device first',true);return;}
+    _mwSet(kind,best);toast('starting '+kind+' set to '+best+' — ⬆ Save to device');};
+  testSend({kind:'mwcal',device:'mouse writing',mode:kind,text:testMW.text,best,ui:UI_VERSION,
+    lines:rows.map(r=>({v:r.v,clean:r.clean,strokes:r.strokes,err:r.err,w:r.w,h:r.h}))});}
+(function(){
+  const on=(id,ev,fn)=>{const e=$(id);if(e)e.addEventListener(ev,fn);};
+  const fill=()=>{const k=$('testmwkind');if(k)$('testmwvals').value=MW_CAL_DEF[k.value];};
+  on('testmwkind','change',fill);fill();
+  on('testmwstart','click',testMWStart);on('testmwdone','click',testMWAnalyse);
+  on('testmwpad','pointerdown',testMWDown);on('testmwpad','pointermove',testMWMove);
+  on('testmwpad','pointerup',testMWUp);
+  // Finished: the engine's "done", or four quiet seconds after the strokes
+  // stop (the page may not be reading the debug stream).
+  setInterval(()=>{if(testMW&&!testMW.done&&!testMW.armed&&testMW.strokes.length
+    &&performance.now()-testMW.last>4000)testMWAnalyse();},1000);
+})();
 /* ---- ledger --------------------------------------------------------------- */
 async function testSend(r){
   if(!device){toast('not connected — run shown, not recorded',true);return;}
@@ -16707,38 +17318,59 @@ async function testSend(r){
    you can choose which metric you're looking at?; ii) make them collapsible
    (the device names)". Each metric names the run kind it exists for; a run
    of another kind simply has no point on that chart. */
+// 29.21: every metric names its unit, and the chart prints it beside the
+// number. Josh, 2026-10-08 11:35: "Ensure that you put the unit of
+// measurement along with the number for any graphs as well."
 const TEST_METRICS=[
-  {id:'eng',  label:'engine ms (this device)', get:(r,dev)=>((r.engine_delta||{})[dev]||{}).mean},
-  {id:'wpm',  label:'typing: wpm',           kind:'typing', get:r=>r.wpm},
-  {id:'miss', label:'typing: missing keys',  kind:'typing', get:r=>r.missing},
-  {id:'gap',  label:'typing: gap p95 ms',    kind:'typing', get:r=>(r.gap_ms||{}).p95},
-  {id:'stall',label:'typing: stalls',        kind:'typing', get:r=>(r.gap_ms||{}).stalls_400||0},
-  {id:'click',label:'targets: median ms',    kind:'mouse',  get:r=>(r.click_ms||{}).median},
-  {id:'mmiss',label:'targets: misses',       kind:'mouse',  get:r=>r.misses},
-  {id:'pause',label:'fidget: pauses',        kind:'fidget', get:r=>(r.pauses||{}).n},
-  {id:'plong',label:'fidget: longest pause ms',kind:'fidget',get:r=>(r.pauses||{}).longest}];
-let testMetric='eng';
+  {id:'eng',  label:'engine (this device)', unit:'ms', get:(r,dev)=>((r.engine_delta||{})[dev]||{}).mean},
+  {id:'wpm',  label:'typing: effective speed', unit:'wpm', kind:'typing', get:r=>r.wpm_eff!=null?r.wpm_eff:r.wpm},
+  {id:'apm',  label:'typing: every key, deletions too', unit:'APM', kind:'typing', get:r=>r.apm},
+  {id:'miss', label:'typing: missing',       unit:'keys', kind:'typing', get:r=>r.missing},
+  {id:'gap',  label:'typing: gap p95',       unit:'ms', kind:'typing', get:r=>(r.gap_ms||{}).p95},
+  {id:'stall',label:'typing: stalls over 400 ms', unit:'stalls', kind:'typing', get:r=>(r.gap_ms||{}).stalls_400||0},
+  {id:'click',label:'targets: median to click', unit:'ms', kind:'mouse',  get:r=>(r.click_ms||{}).median},
+  {id:'mmiss',label:'targets: misses',       unit:'misses', kind:'mouse',  get:r=>r.misses},
+  {id:'scrl', label:'targets: scroll to bottom', unit:'ms', kind:'mouse', get:r=>r.scroll_ms},
+  {id:'mwsp', label:'mouse writing: fastest clean speed', unit:'counts/s', kind:'mwcal', get:r=>r.mode==='speed'?r.best:null},
+  {id:'mwsz', label:'mouse writing: smallest clean size', unit:'counts', kind:'mwcal', get:r=>r.mode==='size'?r.best:null},
+  {id:'pause',label:'fidget: pauses',        unit:'pauses', kind:'fidget', get:r=>(r.pauses||{}).n},
+  {id:'plong',label:'fidget: longest pause', unit:'ms', kind:'fidget',get:r=>(r.pauses||{}).longest}];
+// 29.21: the charts read EITHER the engine's own time OR how you did, by a
+// toggle; the dropdown picks which human measure. Josh, 2026-10-08 11:35:
+// "a little button that toggles between reading the engine ms and the human
+// performance". Per browser.
+let testMetric='eng',testHuman='wpm';
+try{const v=localStorage.getItem('test.metric');if(v&&TEST_METRICS.some(m=>m.id===v))testMetric=v;
+  const hu=localStorage.getItem('test.human');if(hu&&TEST_METRICS.some(m=>m.id===hu&&m.id!=='eng'))testHuman=hu;}catch(_){}
 const _testDevOpen={};                 // page memory: which devices are open
 function testSpark(runs,dev){
   const m=TEST_METRICS.find(x=>x.id===testMetric)||TEST_METRICS[0];
   const pts=runs.filter(r=>!m.kind||r.kind===m.kind)
     .map(r=>m.get(r,dev)).filter(v=>typeof v==='number'&&isFinite(v));
   if(!pts.length)return '<span class="muted" style="font-size:.72rem">no '+esc(m.label)+' yet</span>';
+  const u=m.unit?' '+m.unit:'';
   const W=180,H=26,lo=Math.min(...pts),hi=Math.max(...pts),sp=(hi-lo)||1;
   const xy=pts.map((v,i)=>[pts.length>1?i*(W/(pts.length-1)):W/2,H-2-(v-lo)/sp*(H-4)]);
   const line=xy.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
   const area=`0,${H} ${line} ${xy[xy.length-1][0].toFixed(1)},${H}`;
   const last=pts[pts.length-1];
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle"
-      role="img" aria-label="${esc(m.label)} over ${pts.length} run(s)"><title>${esc(m.label)}: ${pts.length} run(s), ${lo.toFixed(1)} – ${hi.toFixed(1)}</title>
+      role="img" aria-label="${esc(m.label)} over ${pts.length} run(s)"><title>${esc(m.label)}: ${pts.length} run(s), ${lo.toFixed(1)} – ${hi.toFixed(1)}${esc(u)}</title>
       <polygon points="${area}" fill="var(--ok)" fill-opacity=".22"/>
       <polyline points="${line}" fill="none" stroke="var(--ok)" stroke-width="1.5"/></svg>
-    <span style="font-size:.72rem">${Math.abs(last)>=100?last.toFixed(0):last.toFixed(1)}</span>`;}
+    <span style="font-size:.72rem">${Math.abs(last)>=100?last.toFixed(0):last.toFixed(1)}${esc(u)}</span>`;}
 function renderTestHistory(){
   const el=$('testhistbody');if(!el)return;
-  const ms=$('testmetric');
-  if(ms&&!ms.options.length){ms.innerHTML=TEST_METRICS.map(m=>`<option value="${m.id}">${esc(m.label)}</option>`).join('');
-    ms.value=testMetric;ms.onchange=()=>{testMetric=ms.value;renderTestHistory();};}
+  const ms=$('testmetric'),mb=$('testmetricmode');
+  const keep=()=>{try{localStorage.setItem('test.metric',testMetric);localStorage.setItem('test.human',testHuman);}catch(_){}};
+  if(ms&&!ms.options.length){ms.innerHTML=TEST_METRICS.filter(m=>m.id!=='eng')
+      .map(m=>`<option value="${m.id}">${esc(m.label)} (${esc(m.unit)})</option>`).join('');
+    ms.onchange=()=>{testHuman=testMetric=ms.value;keep();renderTestHistory();};}
+  if(mb&&!mb.onclick)mb.onclick=()=>{testMetric=testMetric==='eng'?testHuman:'eng';keep();renderTestHistory();};
+  if(ms){ms.value=testHuman;ms.style.display=testMetric==='eng'?'none':'';}
+  if(mb){const eng=testMetric==='eng';mb.textContent=eng?'engine ms':'you';mb.classList.toggle('on',eng);
+    mb.title=eng?'Charts show the engine\'s own time per keystroke. Click for how you did.'
+                :'Charts show how you did (pick the measure). Click for the engine\'s own time.';}
   if(!testRuns.length){el.textContent=testHistMeta.error?('ledger error: '+testHistMeta.error):(device?'no runs yet':'connect to load');return;}
   const byDev={};for(const r of testRuns){(byDev[r.device||'?']=byDev[r.device||'?']||[]).push(r);}
   const fmt=v=>v==null?'–':(typeof v==='number'?(Math.abs(v)>=100?v.toFixed(0):v.toFixed(1)):esc(String(v)));
@@ -16755,8 +17387,10 @@ function renderTestHistory(){
       const when=r.ts?new Date(r.ts*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'–';
       const d=(r.engine_delta||{}),mine=d[dev],others=Object.keys(d).filter(k=>k!==dev).map(k=>`${esc(k)} ${fmt(d[k].mean)}ms (${d[k].n})`).join(', ');
       let res,gaps;
-      if(r.kind==='typing'){res=`${fmt(r.wpm)} wpm · <b${r.missing?' style="color:var(--hi,#d33)"':''}>${r.missing} missing</b> / ${r.extra} extra`;
+      if(r.kind==='typing'){res=`${fmt(r.wpm_eff!=null?r.wpm_eff:r.wpm)} wpm${r.apm!=null?` · ${fmt(r.apm)} APM`:''} · <b${r.missing?' style="color:var(--hi,#d33)"':''}>${r.missing} missing</b> / ${r.extra} extra`;
         const g=r.gap_ms||{};gaps=`median ${fmt(g.median)} · p95 ${fmt(g.p95)} · ${g.stalls_400||0} stalls`;}
+      else if(r.kind==='mwcal'){res=`${r.mode==='size'?'smallest clean size':'fastest clean speed'} <b>${r.best!=null?fmt(r.best):'none'}</b>`;
+        gaps=(r.lines||[]).map(l=>`${fmt(l.v)}${l.clean?'✓':'✗'}`).join(' ');}
       else if(r.kind==='fidget'){const a=r.amp_px||{},p=r.pauses||{};res=`${r.sweeps} sweeps · ${a.mean}px ±${a.cv!=null?(a.cv*100).toFixed(0)+'%':'–'} · <b${p.n?' style="color:var(--hi,#d33)"':''}>${p.n} pauses</b>`;
         gaps=`longest pause ${fmt(p.longest)}ms · sweep ${fmt(r.sweep_ms&&r.sweep_ms.median)}ms`;}
       else{const c=r.click_ms||{};res=`${fmt(c.median)}ms median · ${r.misses} misses · eff ${r.efficiency&&r.efficiency.mean!=null?(r.efficiency.mean*100).toFixed(0)+'%':'–'}`;
@@ -16773,14 +17407,18 @@ function renderTestHistory(){
 (function(){
   const on=(id,ev,fn)=>{const e=$(id);if(e)e.addEventListener(ev,fn);};
   on('testkstart','click',testKStart);on('testkfinish','click',testKFinish);on('testkreset','click',testKReset);
-  on('testkinput','keydown',testKKey);on('testkinput','input',()=>{if(testK&&!testK.done)testKLive();});
+  // 29.21: the run finishes itself once the text is all green -- exactly
+  // the passage, nothing missing or extra. Josh, 2026-10-08 11:30: "Have the
+  // Test autofinish as soon as the progress has completed everything".
+  on('testkinput','keydown',testKKey);on('testkinput','input',()=>{if(!testK||testK.done)return;
+    testKLive();if($('testkinput').value===testExpected())testKFinish();});
   on('testmstart','click',testMStart);on('testfstart','click',testFStart);
   on('testarena','pointermove',e=>{testMMove(e);testFMove(e);});on('testarena','click',testMClick);
   on('testhistload','click',()=>{if(device)getFile(TESTS_FID);else toast('connect first',true);});
 })();
 function switchTab(t){
   document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
-  for(const p of['map','macros','exp','expr','os','bt','log','tx','usage','perf','test'])$('page-'+p).style.display=p===t?'':'none';
+  for(const p of['map','macros','exp','expr','os','bt','log','tx','usage','perf','test','mw'])$('page-'+p).style.display=p===t?'':'none';
   if(t==='test')renderTest();
   if(t==='tx')txInit();
   if(t==='os')renderOsTab();
@@ -16860,5 +17498,19 @@ document.querySelectorAll('#usagetabs .tab').forEach(t=>t.onclick=()=>{
   $('trainpane').style.display=usageTab==='train'?'':'none';
   if(usageTab==='train')renderTraining();});
 window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
-$('stage').onclick=e=>{if(e.target.id==='chordsvg'||e.target.id==='stage')clearChordSel();};
+// 29.21: a click on BACKGROUND anywhere in the wireframes closes the
+// editor, as ✕ does. Josh, 2026-10-08 11:26: "if I click on any bakcground
+// space in the wireframe UI that isn't a button etc, that it exits out of
+// the dialogue box just like if I'd pressed the "x" at top right."
+// Background = nothing between the target and #stage is a control: no
+// interactive tag, no click handler, no pointer/grab/text cursor (every key,
+// button and pill here sets one).
+function stageIsBackground(t){
+  for(let n=t;n&&n.id!=='stage';n=n.parentElement){
+    if(/^(BUTTON|A|INPUT|SELECT|TEXTAREA|LABEL|SUMMARY|OPTION)$/.test(n.tagName)||n.onclick||n.isContentEditable)return false;
+    const c=getComputedStyle(n).cursor;if(c&&c!=='auto'&&c!=='default')return false;}
+  return true;}
+$('stage').onclick=e=>{if(!stageIsBackground(e.target))return;
+  if(chordSel)clearChordSel();
+  if(sel!=null)closeEditor();};
 </script></body></html>
