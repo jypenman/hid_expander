@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.24.1</title>
+<title>HID Config 29.24.2</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1565,6 +1565,27 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       A <b>+</b> means the other end of the range is not on screen. Ranges that end before
       they start are read as crossing midnight, so <code>2300h-0100h</code> is 2h.
       Remember <b>⬆ Save to device</b>.</p>
+      <!-- 29.24.2: Josh, 2026-10-09 10:11: "Expose the logic and make it
+           user editable ... I want the user to be able to set that up in a
+           user-friendly format." -->
+      <div style="margin-top:.45rem;border-top:1px dashed var(--line);padding-top:.4rem">
+        <b style="font-size:.8rem">Times it reads</b>
+        <span class="muted" style="font-size:.74rem">— one per line, tried in this order (put longer ones first).
+          <code>H</code> hour, <code>HH</code> 2-digit hour, <code>MM</code> minutes, <code>SS</code> seconds,
+          <code>a</code> am/pm (a, p, am, pm, a.m.), <code>h</code> the letter h as in 1440h,
+          and <code>:</code> <code>.</code> or a space as themselves.</span>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-start;margin-top:.3rem">
+          <textarea id="durforms" rows="7" style="width:8rem;font-family:ui-monospace,monospace;font-size:.8rem"></textarea>
+          <div style="font-size:.78rem">
+            <label style="margin:0">Between the two times
+              <input id="durseps" style="width:14rem" title="comma-separated: -, to, until …"></label>
+            <div style="margin-top:.35rem">Try it: <input id="durtry" value="849a - 1030a" style="width:11rem">
+              → <b id="durtryout" style="font-family:ui-monospace,monospace"></b></div>
+            <div id="durformerr" style="color:var(--err);margin-top:.25rem"></div>
+            <button id="durformsreset" class="txmini" style="margin-top:.3rem">reset to the defaults</button>
+          </div>
+        </div>
+      </div>
     </div>
     <details style="margin-top:.4rem">
       <summary class="muted" style="cursor:pointer;font-size:.78rem">Format tokens</summary>
@@ -1877,6 +1898,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.24.2',d:'2026-10-09',items:[
+   {t:'Expansions: the times a duration range is read from are yours to edit -- written like times (H:MMa, HMMh, HHMM …), with the separators between them, and a Try-it box',k:'durforms'},
+   {t:'Expansions: a time form the engine cannot read is refused with the reason, before it is saved',k:'durforms'},
+   {t:'The floating focus window is readable: it follows your light/dark theme instead of white text on white',k:'focuschip'}]},
  {v:'29.24.1',d:'2026-10-09',items:[
    {t:'Focus on is in the top bar on every tab, with change… and a ⧉ button',k:'focuschip'},
    {t:'⧉ opens the focus in a small floating window that stays on top (Edge and Chrome; a normal window elsewhere), with ◀ ▶ to step through your list',k:'focuschip'},
@@ -8456,11 +8481,17 @@ async function focusFloat(){
   renderFocusFloat();}
 function renderFocusFloat(flash){
   if(!focusWin||focusWin.closed)return;
-  const cs=getComputedStyle(document.body),bg=cs.backgroundColor,fg=cs.color;
+  // 29.24.2: the window's OWN theme colours. Copying the page's body colours
+  // gave white on white: the page's background is transparent (the canvas
+  // shows through), so the new window drew its default white under the
+  // page's light dark-mode text. Josh, 2026-10-09 10:11: "it is white text
+  // on a white background!" Canvas/CanvasText with color-scheme set are
+  // always a readable pair, in either theme.
   const hi=getComputedStyle(document.documentElement).getPropertyValue('--hi').trim()||'#2563eb';
   const id=pkFocus(),f=id?focusInfo(id):null;
   const d=focusWin.document;
-  d.body.style.cssText=`margin:0;padding:.5rem .7rem;font:14px system-ui,sans-serif;background:${flash?'rgba(34,197,94,.35)':bg};color:${fg};transition:background .4s`;
+  d.documentElement.style.colorScheme='light dark';
+  d.body.style.cssText=`margin:0;padding:.5rem .7rem;font:14px system-ui,sans-serif;background:${flash?'rgba(34,197,94,.35)':'Canvas'};color:CanvasText;transition:background .4s`;
   d.body.innerHTML=!f?'<p>Nothing chosen to practise yet.</p>':`
     <div style="font-size:.75rem;opacity:.7">Focus on${f.app?' · '+esc(f.app):''}${f.sec?' · '+esc(f.sec):''}</div>
     <div style="font:600 1.5rem ui-monospace,monospace;margin:.1rem 0">${esc(id)}</div>
@@ -12818,7 +12849,42 @@ function strftimePreview(fmt){
    seconds, and is read with parseDurationMs -- the parser that already reads
    format_elapsed's own output back. A second parser for the same job is how
    two things that must agree stop agreeing. */
-const DUR_DEFAULTS={max_gap_s:7*24*3600,units:2,sign:true,wrap:'()'};
+const DUR_DEFAULTS={max_gap_s:7*24*3600,units:2,sign:true,wrap:'()',
+  // 29.24.2: the engine's own defaults (s4_expansions DURATION_DEFAULTS)
+  time_forms:['H:MM:SS','H:MMa','H:MM','HMMa','HMMh','Ha'],
+  range_seps:['-','–','—','to','until','till']};
+/* 29.24.2: the engine's compile_time_form, in JS, for the "Try it" box --
+   the same tokens, the same refusals, the same order. test_release_29242
+   pins the engine; this mirrors it so the page never promises a form the
+   Pi would refuse (both say WHY a form is refused). */
+const DUR_TOK=[['HH','(\\d{2})','h'],['H','(\\d{1,2})','h'],['MM','(\\d{2})','m'],['SS','\\d{2}',''],
+  ['a','\\s*([apAP])\\.?[mM]?\\.?','mer'],['h','\\s*[hH](?![a-zA-Z])',''],[':',':',''],['.','\\.',''],[' ','\\s*','']];
+function durCompileForm(f){
+  let out='',i=0;const groups=[],seen=new Set();
+  while(i<f.length){
+    const t=DUR_TOK.find(([tok])=>f.startsWith(tok,i));
+    if(!t)throw new Error(`“${f}”: “${f[i]}” is not H, HH, MM, SS, a, h, “:”, “.” or a space`);
+    const k=t[0].replace(/H/g,'')||'';
+    if(['H','HH','MM','a'].includes(t[0])&&seen.has(k))throw new Error(`“${f}”: ${t[0]} twice`);
+    seen.add(k);if(t[2])groups.push(t[2]);out+=t[1];i+=t[0].length;}
+  if(!seen.has(''))throw new Error(`“${f}” has no hour (H)`);
+  return {rx:out,groups};}
+function durRangeMinutes(text,forms,seps){
+  const comp=forms.map(durCompileForm);
+  const esc_=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const sep='\\s*(?:'+seps.map(s=>esc_(String(s).trim())).filter(Boolean).join('|')+')\\s*';
+  const alt='(?<![\\d:])(?:'+comp.map(c=>c.rx).join('|')+')';
+  const m=new RegExp(alt+sep+alt+'\\s*$').exec(text.trimEnd());if(!m)return null;
+  // walk the groups in order, form by form, for each end
+  let gi=1;const ends=[];
+  for(let side=0;side<2;side++){let v=null;
+    for(const c of comp){const g={};for(const name of c.groups)g[name]=m[gi++];
+      if(v===null&&g.h!==undefined){let hh=+g.h,mm=g.m!==undefined?+g.m:0;const mer=(g.mer||'').toLowerCase();
+        if(mer){if(hh<1||hh>12)return null;hh=hh%12+(mer==='p'?12:0);}else if(hh>23)return null;
+        if(mm>59)return null;v=hh*60+mm;}}
+    ends.push(v);}
+  if(ends[0]===null||ends[1]===null)return null;
+  let d=ends[1]-ends[0];if(d<0)d+=1440;return d;}
 function durSettings(){
   return Object.assign({},DUR_DEFAULTS,(cfg&&cfg.duration_settings)||{});}
 // The engine's format_elapsed, for the preview only. Kept to two units max
@@ -12850,6 +12916,18 @@ function renderDurSettings(){
     ?s.wrap:'()';
   g.checked=!!s.sign;
   m.value=fmtGap(s.max_gap_s);
+  // 29.24.2: the forms and separators, and the tester
+  const fa=$('durforms'),fs=$('durseps'),ft=$('durtry');
+  if(fa&&document.activeElement!==fa)fa.value=(s.time_forms||DUR_DEFAULTS.time_forms).join('\n');
+  if(fs&&document.activeElement!==fs)fs.value=(s.range_seps||DUR_DEFAULTS.range_seps).join(', ');
+  const readForms=()=>({forms:fa.value.split('\n').map(x=>x.trim()).filter(Boolean),
+    seps:fs.value.split(',').map(x=>x.trim()).filter(Boolean)});
+  const tryIt=()=>{const {forms,seps}=readForms();const er=$('durformerr'),o=$('durtryout');
+    try{const d=durRangeMinutes(ft.value,forms,seps);er.textContent='';
+      o.textContent=d===null?'no range read':durPreviewText(d*60,Object.assign({},s,{sign:false}));}
+    catch(e){er.textContent=e.message+' — not saved';o.textContent='';return false;}
+    return true;};
+  tryIt();
   const prev=$('durprev');
   if(prev)prev.textContent=durPreviewText(133,s)+'  ·  '
     +durPreviewText(3860,s)+'  ·  '+durPreviewText(266400,s);
@@ -12858,6 +12936,12 @@ function renderDurSettings(){
                sign:g.checked,
                wrap:w.value,
                max_gap_s:DUR_DEFAULTS.max_gap_s};
+    // 29.24.2: the forms travel with the rest -- this object REPLACES
+    // duration_settings, so leaving them out would delete them
+    const rf=readForms();
+    if(!tryIt()){toast('a time form is not readable — fix it first. Not saved.',true);return;}
+    if(rf.forms.join('|')!==DUR_DEFAULTS.time_forms.join('|'))out.time_forms=rf.forms;
+    if(rf.seps.join('|')!==DUR_DEFAULTS.range_seps.join('|'))out.range_seps=rf.seps;
     const ms=parseDurationMs(m.value);
     if(ms===null||ms<=0){
       // REFUSE rather than fall back silently. A cap that quietly reverted to
@@ -12874,7 +12958,10 @@ function renderDurSettings(){
     renderDurSettings();
     toast('duration settings changed — press ⬆ Save to device to apply');};
   [u,w,g].forEach(el=>el.onchange=write);
-  m.onchange=write;}
+  m.onchange=write;
+  if(fa){fa.onchange=write;fs.onchange=write;fa.oninput=tryIt;fs.oninput=tryIt;ft.oninput=tryIt;
+    $('durformsreset').onclick=()=>{fa.value=DUR_DEFAULTS.time_forms.join('\n');
+      fs.value=DUR_DEFAULTS.range_seps.join(', ');write();};}}
 
 function renderDynTable(view){
   const t=$('dyntable');if(!t)return;
