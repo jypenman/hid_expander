@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.25</title>
+<title>HID Config 29.27</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -116,6 +116,14 @@ input:focus-visible,textarea:focus-visible,.dockgrip:focus-visible{
    leave a gap the rest of the layout has to be told about, which breaks the
    first time the row wraps on a narrow window. Sticky keeps it in flow and
    costs nothing. */
+/* 29.27: pinned to the bar's top-right corner, out of the wrapping row, so
+   the buttons can wrap without moving it. The bar reserves its width on the
+   right and is at least as tall as it (initTopbarSync measures). On a
+   narrow window it rejoins the row. */
+#topright{position:absolute;top:.35rem;right:0;display:flex;flex-direction:column;
+  align-items:flex-end;gap:.2rem;max-width:18rem}
+#topbar.topbar{padding-right:18.5rem}   /* id: the .topbar rule below sets padding */
+@media(max-width:800px){#topright{position:static;margin-left:auto}#topbar.topbar{padding-right:0}}
 .topbar{position:sticky;top:0;z-index:60;
   background:Canvas;border-bottom:1px solid var(--line);
   margin:0 0 .5rem;padding:.45rem 0;
@@ -183,6 +191,7 @@ input:focus-visible,textarea:focus-visible,.dockgrip:focus-visible{
    access them no matter where I am on the page." A closed <details> is its
    summary and nothing else, and it is a direct child of <body>, so sticking
    the element IS sticking the bar. */
+#clipdock[data-nostick="true"],#debugmon[data-nostick="true"]{position:static!important}
 #clipdock:not([open]),
 #debugmon:not([open]){position:sticky;
   top:calc(var(--topbar-h,0px) + var(--tabs-h,0px) + var(--stick-top,0px));
@@ -300,6 +309,12 @@ font-size:.7rem;cursor:pointer;min-width:2.1rem;background:rgba(128,128,128,.12)
    is a fixed-height strip, filled RIGHT TO LEFT (row-reverse) so the first
    group sits against the right edge; items that do not fit are hidden and
    counted rather than clipped half-way. Expanded it drops into the flow. */
+/* 29.27: the Wireframes header paints over the Connected header below it,
+   so the legend (inside it) is not covered where the two overlap. An OPEN
+   legend is a full panel: the header stops sticking then, or it would pin
+   half the screen. */
+#wfsection>summary{z-index:32}
+#wfsection>summary:has(.wflegend.open){position:static}
 .wflegend{position:absolute;top:.3rem;right:.6rem;width:min(64%,62rem);height:3.4rem;
   overflow:hidden;font-size:.68rem;line-height:1.15;z-index:2}
 .wflegend .lgrow{display:flex;flex-direction:row-reverse;gap:.7rem;align-items:flex-start;
@@ -372,6 +387,10 @@ stroke:var(--warn)!important;stroke-width:3!important}
 /* absolute + overflow:visible lets the rotated labels OVERLAP each other, so
    the column itself can shrink to checkbox width (the 45deg alone did not
    reclaim any space because the label still reserved its full box). */
+/* 29.27: the Assignments header is <th> now; sticky still anchors the
+   rotated label, and the class's `relative` must not un-stick it */
+th.lyrhead{position:sticky}
+#asgtbl th{text-align:left}
 .lyrhead span{position:absolute;left:50%;bottom:.25rem;transform-origin:left bottom;
   transform:rotate(-55deg);white-space:nowrap;font-weight:700;font-size:.7rem;
   pointer-events:none}
@@ -556,6 +575,13 @@ button.clicked{animation:clickflash .45s ease-out}
 textarea{font-family:ui-monospace,monospace;font-size:.85rem}
 .row{display:flex;gap:.6rem;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
 .loggrid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+/* 29.27: the open Debug monitor is only as wide as its panes, so the page
+   shows beside it while it is pinned. Josh, 2026-10-13 11:25:37: "have them
+   only be as wide as they need to be, and let the rest of the content show
+   through ... (righ tnow they're masking the entire horizontal space)". */
+#debugmon[data-open="true"]{width:fit-content;max-width:100%;box-sizing:border-box}
+#debugmon[data-open="true"] .loggrid{grid-template-columns:repeat(2,minmax(18rem,max-content))}
+#debugmon[data-open="true"] .logbox{max-width:46vw}
 @media(max-width:700px){.loggrid{grid-template-columns:1fr}}
 /* 24.5 Performance tab. Priorities sit LEFT of the features table when there
    is room and ABOVE it when there is not -- which is what a two-column grid
@@ -746,28 +772,11 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <button id="dl" disabled>💾 Download profile</button>
   <label style="margin:0"><input type="file" id="up" accept=".json" style="display:none">
     <button onclick="document.getElementById('up').click()">📂 Load profile file</button></label>
-  <span id="uisearchwrap" style="position:relative;display:inline-block">
-    <input type="search" id="uisearch" placeholder="🔎 Search this page…" autocomplete="off"
-      style="width:13rem" title="Find anything in the UI — settings, mappings, triggers, macro names. Enter jumps to the first match; Esc closes.">
-    <div id="uisearchdrop" style="display:none;position:absolute;top:100%;right:0;z-index:60;
-      min-width:min(26rem,calc(100vw - 16px));max-width:min(34rem,calc(100vw - 16px));max-height:60vh;overflow:auto;margin-top:.2rem;
-      background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;
-      box-shadow:0 8px 24px rgba(0,0,0,.28)"></div>
-  </span>
   <button id="ostoggle" title="Which OS profile the engine applies (per-OS macro/mapping overlays). Click to switch, then ⬆ Save to device to apply & persist.">🪟 Win</button>
   <span id="toast"></span>
   <span id="toasterr" style="display:none;color:var(--err);font-size:.85rem"
     title="The last error stays until you clear it or another replaces it (27.7)"><span id="toasterrtxt"></span>
     <button id="toasterrx" style="padding:0 .35rem;margin-left:.25rem" title="Clear">×</button></span>
-  <span id="qnotewrap" style="position:relative;display:inline-block;margin-left:auto">
-    <textarea id="qnote" rows="1" spellcheck="true"
-      placeholder="✎ New HID Note — ⌘/Ctrl+Enter saves"
-      title="Type a note; ⌘+Enter (Ctrl+Enter) saves it to HID Notes on the Pi, timestamped, exactly as ;;n;; does. Grows as you type, up to half the screen; drag the corner to resize. Esc leaves it; the draft is kept in this browser."
-      style="width:17rem;min-height:1.6rem;max-height:50vh;resize:both;font:inherit;font-size:.82rem;
-             padding:.2rem .4rem;vertical-align:middle;background:var(--bg);color:var(--fg);
-             border:1px solid var(--line);border-radius:6px"></textarea></span>
-  <!-- 29.24.1: the current learning focus, on every tab -->
-  <span id="focuschip" style="display:none;font-size:.8rem;border:1.5px solid var(--hi);border-radius:999px;padding:.05rem .45rem;white-space:nowrap"></span>
   <span style="position:relative;display:inline-block">
     <button id="msglogbtn" title="Every message this page has shown since it was loaded, with the time. Kept in this page's memory only — nothing is read from or sent to the Pi.">🗒</button>
     <div id="msglog" style="display:none;position:absolute;top:100%;right:0;z-index:60;
@@ -775,6 +784,31 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;
       box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:.8rem"></div>
   </span>
+  <!-- 29.27: a fixed top-right corner -- Search, then the HID Note, then
+       the shortcut being learned -- so they stay put however the buttons to
+       their left wrap. Josh, 2026-10-13 11:27:54: "Have Search be
+       consistently top right; ii) Have the HID Note be consistently second
+       line top right, and iii) the current shortcut being learned
+       underneath that." -->
+  <div id="topright">
+    <span id="uisearchwrap" style="position:relative;display:inline-block">
+      <input type="search" id="uisearch" placeholder="🔎 Search this page…" autocomplete="off"
+        style="width:13rem" title="Find anything in the UI — settings, mappings, triggers, macro names. Enter jumps to the first match; Esc closes.">
+      <div id="uisearchdrop" style="display:none;position:absolute;top:100%;right:0;z-index:60;
+        min-width:min(26rem,calc(100vw - 16px));max-width:min(34rem,calc(100vw - 16px));max-height:60vh;overflow:auto;margin-top:.2rem;
+        background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;
+        box-shadow:0 8px 24px rgba(0,0,0,.28)"></div>
+    </span>
+    <span id="qnotewrap" style="position:relative;display:inline-block">
+      <textarea id="qnote" rows="1" spellcheck="true"
+        placeholder="✎ New HID Note — ⌘/Ctrl+Enter saves"
+        title="Type a note; ⌘+Enter (Ctrl+Enter) saves it to HID Notes on the Pi, timestamped, exactly as ;;n;; does. Grows as you type, up to half the screen; drag the corner to resize. Esc leaves it; the draft is kept in this browser."
+        style="width:17rem;min-height:1.6rem;max-height:50vh;resize:both;font:inherit;font-size:.82rem;
+               padding:.2rem .4rem;vertical-align:middle;background:var(--bg);color:var(--fg);
+               border:1px solid var(--line);border-radius:6px"></textarea></span>
+    <!-- 29.24.1: the current learning focus, on every tab -->
+    <span id="focuschip" style="display:none;font-size:.8rem;border:1.5px solid var(--hi);border-radius:999px;padding:.05rem .45rem;white-space:nowrap"></span>
+  </div>
 </div>
 <div id="svcwarn" style="display:none;border:2px solid var(--err);border-radius:10px;
   padding:.6rem .9rem;margin:.5rem 0;font-size:.85rem">
@@ -858,11 +892,14 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
        Worse, PONG is the BROWSER's own keepalive, so it kept arriving after
        ⏸ Stop -- Josh reasonably read that as Stop being broken. Neither line
        is an input event, so neither belongs in an input log. -->
-  <div style="margin-top:.5rem"><div class="muted"><b>🔗 LINK &amp; ENGINE</b>
-    — keepalives and background notices, not things you pressed. This pane
+  <!-- 29.27: an accordion. Josh, 2026-10-13 11:25:37: "Allow "Link &
+       Engine" notifications to be accordioned shut". -->
+  <details id="linksec" data-uikey="linkeng" open style="margin-top:.5rem"><summary class="muted" style="cursor:pointer"><b>🔗 LINK &amp; ENGINE</b>
+    — keepalives and background notices, not things you pressed.</summary>
+    <div class="muted" style="font-size:.78rem">This pane
     keeps filling after ⏸ Stop: Stop halts the event stream from the Pi, and
     these are not events.</div><div class="logbox" id="linklog"
-    style="max-height:9rem"></div></div></div>
+    style="max-height:9rem"></div></details></div>
 </details>
 
 <details class="dbg" id="clipdock" data-uikey="clipdock"><summary>📋 Copy / Paste</summary>
@@ -964,13 +1001,20 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
          drift apart is precisely the confusion this is meant to end. -->
     <summary style="cursor:pointer;font-weight:600">🖼 Wireframes
       <span class="muted" id="wfcount" style="font-weight:400;font-size:.8rem"></span>
-</summary>
     <!-- 27.9: THE legend -- one copy, in the space to the right of the
          "Wireframes" and "Connected" headers, readable without a click.
          Built by renderWfLegend(). The 26.0 chips and the separate 🎨 Legend
          panel below the wireframes are gone: Josh, 2026-09-23, "(legend should
-         not be repeated)". -->
-    <div id="legend" class="wflegend" onclick="event.stopPropagation()"></div>
+         not be repeated)".
+         29.27: INSIDE the summary. Beside it, the legend sat under both
+         sticky headers (z-index 30, opaque Canvas -- black in dark mode), so
+         it was always covered. Josh, 2026-10-13 11:22:57: "The legend should
+         be on top (and should be sticky along with the titles". In here it
+         sticks with the header, and preventDefault keeps a click on its
+         text from folding the section (buttons are their own activation
+         target, so they still work). -->
+    <div id="legend" class="wflegend" onclick="if(!event.target.closest('button,a,input,select,label'))event.preventDefault();event.stopPropagation()"></div>
+</summary>
     <div id="stage" style="position:relative">
       <svg id="chordsvg"></svg>
       <details id="wfconn" data-uikey="wf-connected" open style="margin:.3rem 0">
@@ -1901,6 +1945,23 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.27',d:'2026-10-13',items:[
+   {t:'Wireframe legend is on top again (it was under the black header bars) and stays pinned with the Wireframes header',k:'legend'},
+   {t:'Column headers in Mapping\'s assignment tables stay pinned while you scroll',k:'asgtbl'},
+   {t:'With the Debug monitor open, a closed Copy/Paste no longer leaves a gap in the pinned headers',k:'debug'},
+   {t:'Debug monitor: Link & Engine folds shut; RAW and SENT resize together; the pinned monitor is only as wide as it needs to be',k:'linkeng'},
+   {t:'Top-right corner stays put: Search, then the HID Note, then the shortcut you are learning (hidden while it is in its own window)',k:'topright'},
+   {t:'Clicking an input in the assignment list shows the keys it is made of: change each, change a modifier\'s side, remove one or add another',k:'asgtbl'},
+   {t:'Changes: filter by category -- one button per tab, plus UI Misc',k:'page-log'}]},
+ {v:'29.26',d:'2026-10-13',items:[
+   {t:'Shortcuts can name a side: LAlt, RAlt, LCtrl … -- "Alt" still means either, and a one-sided rule wins over an either-sided one. The shortcut editor has either side / left only / right only per modifier',k:'editor'},
+   {t:'Mac option/alt mode can be the mapping group "Mac Option characters" (Left Alt rules, switched by double-tapping Right Alt); the OS tab\'s ⌥ panel shows the group and its "Left Alt never reaches Windows" setting',k:'optsec'},
+   {t:'Every shortcut named in host terms also says what you press when the OS swap changes it -- "Ctrl + ← (you press Cmd/Win)" -- and a pack says which swap its rules assume',k:'asgtbl'},
+   {t:'Groups that only work in Mac option/alt mode say so, in Mapping and in the Groups card',k:'asgtbl'}]},
+ {v:'29.25.1',d:'2026-10-13',items:[
+   {t:'Wireframe: a key pressed while this page has focus lights the key whose centred label it is (on Windows, the Kinesis\'s Cmd lights the key labelled LCtrl), and when the Pi\'s key stream is running it is the only source -- one press never lights two keys',k:'devcards'},
+   {t:'Mapping editor: shift-clicking a new modifier shortcut no longer writes "Nothing (swallow)" by itself -- nothing is saved until you choose what it does',k:'editor'},
+   {t:'Fixed "shortcut sets unreadable: Cannot access \'sel\' before initialization" when the shortcut sets arrive',k:'trackpane'}]},
  {v:'29.25',d:'2026-10-13',items:[
    {t:'Mapping editor: "Everything on this key" -- Baseline, the OS swap, layer role, each layer\'s mapping, every shortcut ending in it (yours, per-OS and packs, on/off/skipped), combos, Mac option/alt mode characters, same-report chords, and their groups',k:'editor'},
    {t:'Shortcuts name their modifiers as the computer receives them -- the same words as the wireframe\'s centred label (a pack\'s "Cmd+Left" on Windows now reads Ctrl+Left, which is what fires it)',k:'editor'},
@@ -3139,11 +3200,16 @@ function pfResult(text){
     return;}
   if(text.includes('failed')||text.includes('unknown')){toast('\u2717 '+text,true);return;}
   // otherwise: a list
-  const sel=$('proflist'); sel.disabled=false; sel.innerHTML='';
+  // 29.25.1: NOT `sel`. A `const sel` here shadowed the global selection for
+  // the WHOLE of pfResult, so the CORPUS branch above -- `if(sel) render()`
+  // -- hit it before this line had run: "shortcut sets unreadable: Cannot
+  // access 'sel' before initialization" (Josh, 2026-10-13 10:37). The TDZ
+  // scan cannot see a shadowing that only bites on one branch at runtime.
+  const plist=$('proflist'); plist.disabled=false; plist.innerHTML='';
   $('profbackups').disabled=false;      // 19.6: backups browser available too
   const cs=$('clipsave');if(cs)cs.disabled=false;
   for(const name of text.split('\n')){
-    const o=document.createElement('option'); o.textContent=name; sel.appendChild(o);}
+    const o=document.createElement('option'); o.textContent=name; plist.appendChild(o);}
 }
 $('setsaveone').onclick=()=>saveOneSet();
 $('clipnew').onclick=()=>addClip();
@@ -3481,6 +3547,7 @@ for(let i=0;i<12;i++)KEYS[0x3a+i]='F'+(i+1);
 for(let i=13;i<=23;i++)KEYS[0x68+i-13]='F'+i;
 KEYS[0x73]='F24';
 const MODS={0xe0:'LCtrl',0xe1:'LShift',0xe2:'LAlt',0xe3:'LWin',0xe4:'RCtrl',0xe5:'RShift',0xe6:'RAlt',0xe7:'RWin'};
+const SIDE_R=8,SIDE_L=12;   // 29.26: one-sided rule bits, as s2_mapping.SIDE_R/SIDE_L
 const NAME2KEY={};for(const[u,n]of Object.entries(KEYS))NAME2KEY[n.toLowerCase()]=+u;
 // 29.0: the spellings shortcut SETS use for keys whose face here is a symbol
 // or an abbreviation. Without these, "Ctrl+Alt+Up" or "Ctrl+PageDown" parsed
@@ -4792,12 +4859,28 @@ const BROWSER_CODE2HID=(()=>{const m={};
     ControlRight:0xe4,ShiftRight:0xe5,AltRight:0xe6,MetaRight:0xe7});
   return m;})();
 const _browserHeld=new Set();
+/* 29.25.1 (URGENT): a key the BROWSER reports is what the host RECEIVED --
+   after the OS modifier swap -- so it must light the key whose centred
+   label says that, not the key with that physical code. Josh, 2026-10-13
+   10:50: "if I press the "Command" Key on the Kinesis keyboard, it shows up
+   as "LWin" (the far left key)". Modifiers are the only keys the OS swap
+   moves, so the inverse is per modifier; anything else is itself. */
+function browserPhys(u){
+  if(!(u>=0xe0&&u<=0xe7))return u;
+  for(let m=0xe0;m<=0xe7;m++)if(remapModUsage(m)===u)return m;
+  return u;}
+// ...and the Pi's own key stream, when it is running, is the ONE source:
+// "it shows BOTH LWin and LCtrl as red when the focus is on the wireframe"
+// was the browser and the Pi each lighting the key it believed was meant.
+let _piRawAt=0;
+const _piKeysLive=()=>Date.now()-_piRawAt<15000;
 function _browserKeysTyping(e){
   if(typeof _showKeysState!=='undefined'&&_showKeysState>0)return false;
   const t=e&&e.target,tn=(t&&t.tagName||'').toLowerCase();
   return tn==='input'||tn==='textarea'||!!(t&&t.isContentEditable);}
 function _browserKeysActive(e){
   if(typeof _showKeysState!=='undefined'&&_showKeysState>0)return false;
+  if(_piKeysLive())return false;              // 29.25.1: the Pi is reporting
   const t=e&&e.target,tn=(t&&t.tagName||'').toLowerCase();
   if(tn==='input'||tn==='textarea'||tn==='select'||(t&&t.isContentEditable))return false;
   const pm=$('page-map'),pu=$('page-usage');
@@ -4808,14 +4891,16 @@ document.addEventListener('keydown',e=>{
   // keyboard keys even if writing in other areas of the HID Config HTML
   // doc". A flash only -- holding a key in a text box must not repaint
   // every label while he types.
-  if(!e.repeat&&_browserKeysTyping(e)){const u=BROWSER_CODE2HID[e.code];
-    if(u!==undefined)document.querySelectorAll(`.key[data-canon="${u}"],.key[data-usage="${u}"]`)
-      .forEach(el=>flash(el,'flash-yel'));return;}
+  if(!e.repeat&&_browserKeysTyping(e)){const u0=BROWSER_CODE2HID[e.code];
+    if(u0!==undefined&&!_piKeysLive()){const u=browserPhys(u0);
+      document.querySelectorAll(`.key[data-usage="${u}"]`).forEach(el=>flash(el,'flash-yel'));}return;}
   if(e.repeat||!_browserKeysActive(e))return;
-  const u=BROWSER_CODE2HID[e.code];if(u===undefined)return;
+  const u0=BROWSER_CODE2HID[e.code];if(u0===undefined)return;
+  const u=browserPhys(u0);
   _browserHeld.add(u);holdKey(u,true,'');});
 document.addEventListener('keyup',e=>{
-  const u=BROWSER_CODE2HID[e.code];if(u===undefined||!_browserHeld.has(u))return;
+  const u0=BROWSER_CODE2HID[e.code];if(u0===undefined)return;
+  const u=browserPhys(u0);if(!_browserHeld.has(u))return;
   _browserHeld.delete(u);holdKey(u,false,'');});
 // Leaving the window mid-chord never delivers the keyup: let go of everything.
 window.addEventListener('blur',()=>{for(const u of [..._browserHeld]){_browserHeld.delete(u);holdKey(u,false,'');}
@@ -5243,6 +5328,9 @@ function drawGroupTags(d,lay,div,unit,offx,offy,srcs){
     div.appendChild(pill);});
   div.appendChild(svg);}
 /* ---- groups pseudo-device card ---- */
+// 29.26: a group with a toggle (the "Mac Option characters" group) fires
+// only while its mode is on.
+const GROUP_TOGGLES={ralt_double:'only in Mac option/alt mode (double-tap Right Alt)'};
 const GROUP_COLORS=['#a855f7','#06b6d4','#f97316','#84cc16','#ec4899','#eab308'];
 function renderGroupsCard(c){
   const host=$('groupshost');if(!host)return;
@@ -5276,7 +5364,7 @@ function renderGroupsCard(c){
       <label class="sw" style="background:${col};cursor:pointer;position:relative" title="Change this group's colour">
         <input type="color" data-gcol="${esc(n)}" value="${/^#[0-9a-f]{6}$/i.test(col)?col:'#a855f7'}"
           style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0"></label>${esc(n)}
-      <span class="muted">(${(g.members||[]).length})</span>
+      <span class="muted">(${(g.members||[]).length})</span>${GROUP_TOGGLES[g.toggle]?`<span class="muted" title="${esc(GROUP_TOGGLES[g.toggle])}">⇄RAlt×2</span>`:''}
       ${_groupEnableBoxes?`<input type="checkbox" ${active?'checked':''} data-gact="${esc(n)}" title="enable/disable this group's mappings (stays in the config)">`
         :(active?'':'<span class="muted" title="this group is switched off">off</span>')}
       <a class="mlink" data-gpar="${esc(n)}" title="Put this group under a parent group (organising only)">⤷</a></span>`;
@@ -6052,12 +6140,16 @@ function addComboSel(dev,u,canonIn){
     if(!curAction&&isBtnMc(canon2)){
       const own=effMouse(md[canon2]||'',layer,canon2-BTN_MC);
       if(Array.isArray(own))curAction=own.slice();}
-    const t=mcTable(curOs);
-    t[k]=curAction||['suppress'];
-    sel={type:'modchord',mods,canon:canon2,keys,mcKey:k,os:curOs};
+    // 29.25.1: NOTHING is written until an action is picked. This used to
+    // store the new rule as ["suppress"] the moment the combination was
+    // clicked, so a Save swallowed it although nothing had been chosen.
+    // Josh, 2026-10-13 10:37: "it defaults to CHANGING to "Nothing
+    // (swallow)" even though I haven't selected anything! That is bad."
+    sel={type:'modchord',mods,canon:canon2,keys,mcKey:k,os:curOs,
+         initial:curAction||null};
     render();
     toast(modsName(mods)+' + '+(bL>0?layerName(bL)+' + ':'')+mcName(canon2)
-      +' rule ready — set its action, then ⬆ Save');
+      +': choose what it does — nothing is written until you do');
     return;}
   if(keys.some(isBtnMc)){toast(BTN_NO_COMBO,true);render();return;}
   // ---- otherwise a plain multi-key combo ----------------------------------
@@ -6288,7 +6380,7 @@ function asgInputLabel(r){
   if(r.kind==='special')return r.label||'(pack setting)';
   if(r.kind==='combo')return (r.keys||[]).map(u=>KEYS[u]||MODS[u]||'?').join(' + ')
     +(r.dev?` (${devName(r.dev)})`:'');
-  if(r.kind==='mc')return modsName(r.mods)+' + '+(KEYS[r.canon]||MODS[r.canon]||'?');
+  if(r.kind==='mc')return modsName(r.mods)+' + '+(KEYS[r.canon]||MODS[r.canon]||'?')+pressNote(r.mods);
   return r.type==='key'?asgKeyName(r.id):btnLabel(r.id);}
 // select this row's rule in the editor
 function asgSelect(r){
@@ -6651,9 +6743,15 @@ function stickSync(){
   // 26.8: closed bars stack too. Offsets are assigned in document order over
   // ALL of them, open or closed, so a closed bar under an open panel sits
   // below it rather than on top of it.
+  /* 29.27: with a panel OPEN, a closed bar does not stick at all. It was
+     given a slot in the pile whether or not it had reached the top yet, so
+     a closed Copy/Paste below an open Debug monitor left a Copy/Paste-sized
+     gap. Josh, 2026-10-13 11:08:49: "I want that gap closed, and I'm happy
+     for Copy/Paste not to be sticky in that situation if it's not opened." */
   let top=0;
   for(const el of all){
-    if(!el.open){el.style.setProperty('--stick-top',top+'px');
+    el.dataset.nostick=(open.length&&!el.open)?'true':'false';
+    if(!el.open&&!open.length){el.style.setProperty('--stick-top',top+'px');
       top+=Math.round(el.getBoundingClientRect().height);}}
   // 29.20: what the global sticky headers must clear (see the CSS)
   const pile=()=>document.documentElement.style.setProperty('--pile-h',pileH+'px');
@@ -6667,7 +6765,7 @@ function stickSync(){
   const share=Math.max(18,Math.floor(60/open.length));
   let cumulative=0;
   for(const el of all){
-    if(!el.open){cumulative+=Math.round(el.getBoundingClientRect().height);continue;}
+    if(!el.open)continue;                 // 29.27: not stuck, takes no slot
     el.style.setProperty('--stick-top',cumulative+'px');
     el.style.setProperty('--stick-max',share+'vh');
     // Measured, not assumed: the panels are not a uniform height, and the
@@ -6707,6 +6805,20 @@ window.addEventListener('resize',()=>stickScan());
 // Toggle only -- never on scroll. That is the whole point of the technique:
 // the browser does the sticking, JS only says where each header stops.
 window.addEventListener('resize',stickSync);
+/* 29.27: RAW and SENT resize together. Josh, 2026-10-13 11:25:37: "have
+   "RAW" and "SENT" default to both resize when I resize one". Each pane's
+   drag handle sets its own inline height; the other copies it. Same value
+   twice is a no-op for the observer, so the pair cannot ping-pong. */
+// Runs now if the page has already parsed (this script can run after
+// DOMContentLoaded, and a listener added then never fires).
+function _twinLogs(){
+  const a=$('log'),b=$('outlog');
+  if(!a||!b||!window.ResizeObserver)return;
+  const twin=(src,dst)=>new ResizeObserver(()=>{
+    const h=src.style.height;if(h&&dst.style.height!==h)dst.style.height=h;}).observe(src);
+  twin(a,b);twin(b,a);}
+if(document.readyState==='loading')window.addEventListener('DOMContentLoaded',_twinLogs);
+else _twinLogs();
 window.addEventListener('DOMContentLoaded',()=>{
   const dbg=$('debugmon');
   if(dbg)dbg.addEventListener('toggle',stickSync);
@@ -8493,7 +8605,10 @@ function focusStep(dir){
 function renderFocusChip(){
   const el=$('focuschip');if(!el)return;
   const id=cfg&&pkFocus();
-  if(!id){el.style.display='none';return;}
+  // 29.27: not here while it is in its own window. Josh, 2026-10-13
+  // 11:27:54: "Have the current shortcut dissapear from the main HID Config
+  // UI if it is popped out into its own window."
+  if(!id||(focusWin&&!focusWin.closed)){el.style.display='none';return;}
   const f=focusInfo(id);
   el.style.display='';
   el.innerHTML=`<span title="${esc(f.text)}${f.app?' · '+esc(f.app):''} — ${f.st.per}/wk of ${f.st.t}, ${esc(f.st.s)}">🎯 <b style="font-family:ui-monospace,monospace">${esc(id)}</b>
@@ -8568,11 +8683,11 @@ async function focusFloat(){
     if(focusWin&&why)toast('floating window opened as a normal window (stays on top only in Edge/Chrome 116+: '+why+')');}
   if(!focusWin){toast('the browser would not open a window — allow pop-ups for this page',true);return;}
   focusWin.document.title='Focus';
-  focusWin.addEventListener('pagehide',()=>{focusWin=null;});
+  focusWin.addEventListener('pagehide',()=>{focusWin=null;renderFocusChip();});
   focusWin.document.addEventListener('click',e=>{const b=e.target.closest('[data-ff]');if(!b)return;
     if(b.dataset.ff==='next')focusStep(1);else if(b.dataset.ff==='prev')focusStep(-1);
     else if(b.dataset.ff==='pick'){window.focus();focusPick();}});
-  renderFocusFloat();}
+  renderFocusFloat();renderFocusChip();}
 function renderFocusFloat(flash){
   if(!focusWin||focusWin.closed)return;
   // 29.24.2: the window's OWN theme colours. Copying the page's body colours
@@ -8914,9 +9029,14 @@ function openInputPicker(anchorEl,r){
   const box=document.createElement('div');box.className='asgsearch';
   box.style.maxHeight='60vh';box.style.overflow='auto';box.style.width='320px';
   const keyOptsList=[...Object.entries(KEYS),...Object.entries(MODS)];
+  // 29.27: THE PARTS FIRST. Josh, 2026-10-13 11:08:49: "I expect to see a
+  // list of the different buttons that combine for that input, with a way
+  // to edit each of them or add. ; instead I see "Filter keys" dialogue."
+  // The picker for a different kind of input is still here, folded below.
   box.innerHTML=`
-    <input type="text" id="ipfilter" placeholder="filter keys…" style="width:100%">
-    <details open style="margin-top:.35rem"><summary style="cursor:pointer;font-weight:600">⌨ Single key</summary>
+    <div id="ipparts"></div>
+    <details style="margin-top:.35rem"><summary style="cursor:pointer;font-weight:600">⌨ Single key</summary>
+      <input type="text" id="ipfilter" placeholder="filter keys…" style="width:100%;margin-top:.25rem">
       <div id="ipkeys" style="max-height:150px;overflow:auto;margin:.25rem 0"></div></details>
     <details style="margin-top:.25rem"><summary style="cursor:pointer;font-weight:600">🖱 Mouse button</summary>
       <div id="ipbtns" style="margin:.25rem 0"></div></details>
@@ -8951,7 +9071,7 @@ function openInputPicker(anchorEl,r){
       close();asgRetype(r,{kind:'key',id:+a.dataset.ipkey});});};
   fillKeys('');
   $('ipfilter').oninput=()=>fillKeys($('ipfilter').value);
-  $('ipfilter').focus();
+  inputPartsUI($('ipparts'),r,close);
   $('ipbtns').innerHTML=[1,2,3,4,5].map(b=>
     `<a class="mlink" data-ipbtn="${b}" style="display:inline-block;min-width:4rem">${esc(btnLabel(b))}</a>`).join(' ');
   $('ipbtns').querySelectorAll('[data-ipbtn]').forEach(a=>a.onclick=()=>{
@@ -8975,6 +9095,60 @@ function openInputPicker(anchorEl,r){
     close();asgRetype(r,{kind:'combo',keys:[a,b]});};
   setTimeout(()=>document.addEventListener('click',function h(ev){
     if(!box.contains(ev.target)&&ev.target!==anchorEl){close();document.removeEventListener('click',h);}}),80);}
+/* 29.27: the parts of one input -- each modifier (with its side) and each
+   key -- editable, removable, and "＋ add…" for another. Nothing is written
+   until "Use this": the result's kind follows from its parts (modifiers +
+   one key = a shortcut; one key = a single key; several keys = a combo)
+   and goes through asgRetype like any other change of input. */
+function inputPartsUI(host,r,close){
+  if(!host)return;
+  const st=r.kind==='mc'?{mods:r.mods,keys:[r.canon]}
+    :r.kind==='combo'?{mods:0,keys:[...(r.keys||[])]}
+    :r.type==='key'&&r.id!=null&&!r.pending?{mods:0,keys:[r.id]}:null;
+  if(!st){host.innerHTML=r.type==='btn'
+      ?`<div class="muted" style="font-size:.78rem">A mouse button: pick another below.</div>`
+      :`<div class="muted" style="font-size:.78rem">Pick an input below.</div>`;return;}
+  const ro=!!r.fromAdd;
+  const MN=[[0x01,'Ctrl'],[0x02,'Shift'],[0x04,'Alt'],[0x08,'Win']];
+  const draw=()=>{
+    const mods=MN.filter(([b])=>st.mods&b).map(([b,n])=>`<span class="pill" style="cursor:default;padding:.1rem .4rem">
+        <select data-ppside="${b}" ${ro?'disabled':''} style="font-size:.75rem">${['either','L','R'].map(s=>
+          `<option value="${s}" ${modSide(st.mods,b)===s?'selected':''}>${s==='either'?n:s+n}</option>`).join('')}</select>
+        ${ro?'':`<a class="mlink" data-ppdelm="${b}" title="remove">×</a>`}</span>`).join(' + ');
+    const keys=st.keys.map((u,i)=>`<span class="pill" style="cursor:default;padding:.1rem .4rem">
+        <select data-ppkey="${i}" ${ro?'disabled':''} style="font-size:.75rem;max-width:8rem">${keyOpts(u)}</select>
+        ${ro||st.keys.length<2?'':`<a class="mlink" data-ppdelk="${i}" title="remove">×</a>`}</span>`).join(' + ');
+    const free=MN.filter(([b])=>!(st.mods&b));
+    host.innerHTML=`<div style="font-weight:600;margin-bottom:.2rem">This input is made of</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.25rem;align-items:center">${mods}${mods?' + ':''}${keys}</div>
+      ${ro?`<div class="muted" style="font-size:.74rem;margin-top:.2rem">A pack line: ⤴ un-pack it to edit its keys.</div>`
+      :`<div style="display:flex;gap:.3rem;margin-top:.3rem;align-items:center">
+        <select id="ppadd" style="flex:1;font-size:.78rem"><option value="">＋ add…</option>
+          <optgroup label="Modifier">${free.map(([b,n])=>`<option value="m${b}">${n}</option>`).join('')}</optgroup>
+          <optgroup label="Key">${keyOpts(-1)}</optgroup></select>
+        <button id="ppuse" class="primary">Use this</button></div>
+        <div class="muted" style="font-size:.72rem;margin-top:.15rem">Modifiers + one key = a shortcut · one key = a single key · several keys = a combo.</div>`}`;
+    if(ro)return;
+    host.querySelectorAll('[data-ppside]').forEach(s=>s.onchange=()=>{
+      st.mods=withSide(st.mods,+s.dataset.ppside,s.value==='either'?'either':s.value);});
+    host.querySelectorAll('[data-ppdelm]').forEach(a=>a.onclick=e=>{e.stopPropagation();
+      const b=+a.dataset.ppdelm;st.mods=withSide(st.mods,b,'either')&~b;draw();});
+    host.querySelectorAll('[data-ppkey]').forEach(s=>s.onchange=()=>{st.keys[+s.dataset.ppkey]=+s.value;});
+    host.querySelectorAll('[data-ppdelk]').forEach(a=>a.onclick=e=>{e.stopPropagation();
+      st.keys.splice(+a.dataset.ppdelk,1);draw();});
+    $('ppadd').onchange=e=>{const v=e.target.value;if(!v)return;
+      if(v[0]==='m')st.mods|=+v.slice(1);else if(!st.keys.includes(+v))st.keys.push(+v);draw();};
+    $('ppuse').onclick=()=>{
+      const keys=[...new Set(st.keys)];
+      if(st.mods&&keys.length!==1){toast('a shortcut is modifiers plus ONE key — remove a key, or the modifiers for a combo',true);return;}
+      const to=st.mods?{kind:'mc',mods:st.mods,canon:keys[0]}
+        :keys.length===1?{kind:'key',id:keys[0]}:{kind:'combo',keys};
+      const same=r.kind==='mc'?(to.kind==='mc'&&to.mods===r.mods&&to.canon===r.canon)
+        :r.kind==='combo'?(to.kind==='combo'&&JSON.stringify(to.keys)===JSON.stringify(r.keys))
+        :(to.kind==='key'&&to.id===r.id);
+      close();if(same){toast('unchanged');return;}
+      asgRetype(r,to);};};
+  draw();}
 /* Convert a row to a different input kind, carrying its action and note. */
 function asgRetype(r,to){
   const act=r.out,note=r.isNew?'':getNote(rowNoteKey(r));
@@ -9044,6 +9218,23 @@ function asgGroupsOf(r){
   const gs=Object.keys(cfg.mapping_groups||{}).filter(n=>
     (cfg.mapping_groups[n].members||[]).some(m=>ids.includes(m)));
   return gs.length?gs:['(ungrouped)'];}
+/* 29.26: a pack's shortcut rules are stored in HOST terms -- after the
+   active OS's modifier swap -- so "Cmd+Left" in "macOS shortcuts on
+   Windows" is Ctrl+Left and fires from the key labelled LCtrl. The pack
+   header says so, and names the swap, rather than leaving it to be found
+   by pressing the wrong key. Josh, 2026-10-13: "So why is it firing when I
+   hit What the Windows swap makes "Ctrl"?" */
+function packSwapNote(an){
+  const pack=(additions||{})[an];
+  if(!pack||!Array.isArray(pack.entries)||!pack.entries.some(e=>e.scope==='modchord'))return '';
+  const sw=[0x01,0x04,0x08].filter(b=>modBitToPhysical(b)!==b)
+    .map(b=>`${_MODNAME[b]} = the key you press as ${_PRESSNAME[modBitToPhysical(b)]}`);
+  const os=cfg.active_os||'win',osn={win:'Windows',mac:'macOS',ios:'iOS'}[os]||os;
+  return `<div class="muted" style="font-weight:400;font-size:.72rem">Shortcuts here are written as the host sees them,
+    after ${esc(osn)}'s modifier swap${sw.length?': '+esc(sw.join(', ')):' (none on this OS)'}.</div>`;}
+function groupToggleNote(n){
+  const g=(cfg.mapping_groups||{})[n];
+  return g&&GROUP_TOGGLES[g.toggle]?`<span class="muted" style="font-weight:400;font-size:.72rem"> · ${esc(GROUP_TOGGLES[g.toggle])}</span>`:'';}
 function renderAssignTable(){
   const host=$('asgtbl');if(!host||!cfg)return;
   const rows=asgRows();
@@ -9056,9 +9247,12 @@ function renderAssignTable(){
   window._asgRows=rows;
   // 19.4 #1.3: layer headers rotated 45 deg so the checkbox columns pack
   // tightly, freeing horizontal room for the Explanation column.
-  const head=`<tr><td><b>Input</b></td><td><b>Output</b></td>`
-    +allLayers().map(L=>`<td class="lyrhead" title="layer ${L}"><span>${esc(layerName(L))}</span></td>`).join('')
-    +`<td><b>Explanation</b></td><td><b>Group</b></td><td></td></tr>`;
+  // 29.27: <th>, so the header row sticks (29.20's global rule is on <th>
+  // only). Josh, 2026-10-13 11:08:49: "MacOS shortcuts on Windows "Input |
+  // Output..." will scroll out of sight".
+  const head=`<tr><th>Input</th><th>Output</th>`
+    +allLayers().map(L=>`<th class="lyrhead" title="layer ${L}"><span>${esc(layerName(L))}</span></th>`).join('')
+    +`<th>Explanation</th><th>Group</th><th></th></tr>`;
   let h='';
   if(!rows.length)h='<span class="muted" style="font-size:.8rem">No mappings yet — use ＋ Add mapping, or click a key on a wireframe.</span>';
   for(const g of names){
@@ -9069,7 +9263,7 @@ function renderAssignTable(){
         <button data-asgexp="${esc(g)}" style="margin-left:.5rem;font-size:.72rem"
           title="save this group as an importable addition file">⬇ Export group</button>
         ${g.startsWith('📦 ')?`<span class="muted" style="font-weight:400;font-size:.72rem">
-          · type “${esc(g.slice(2))}” in any row's Group box to move that rule in here</span>`:''}</summary>
+          · type “${esc(g.slice(3))}” in any row's Group box to move that rule in here</span>${packSwapNote(g.slice(3))}`:''}${groupToggleNote(g)}</summary>
       <table style="width:100%;font-size:.82rem">${head}`;
     for(const ri of ris){
       const r=rows[ri];
@@ -10107,6 +10301,33 @@ function renderOptRules(){
   host.querySelectorAll('[data-omove]').forEach(a=>a.onclick=()=>{const k=a.dataset.omove;
     const tbl=a.dataset.ofrom==='win'?cfg.os_profiles.win.mod_chords:cfg.mod_chords;
     const v=tbl[k];delete tbl[k];_optRuleSet(k,v);});}
+/* 29.26: MAC OPTION/ALT MODE AS A MAPPING GROUP. Josh, 2026-10-13: "that
+   whole "MacOS Option Charaters on Left Alt" should be a Mapping Group. It
+   can be seen in the "OS" tab as well for ease of use, but at base it
+   should just be a custom mapping group." fix_config's option-group writes
+   the engine's table as LAlt rules in a group whose `toggle` is
+   "ralt_double"; while it exists the engine's built-in table stands down.
+   This panel shows that group and its one setting; it never creates it --
+   that is a migration, run on the Pi (CLAUDE.md §5). */
+function optToggleGroup(){
+  const gs=cfg.mapping_groups||{};
+  const n=Object.keys(gs).find(k=>gs[k]&&gs[k].toggle==='ralt_double');
+  return n?[n,gs[n]]:null;}
+function renderOptGroup(){
+  const host=$('optgroup');if(!host||!cfg)return;
+  const tg=optToggleGroup();
+  if(!tg){host.innerHTML=`<b>Mac option/alt mode</b> <span class="muted">— uses the engine's built-in table.
+      To make it the mapping group “Mac Option characters” (its rules then listed, editable and exportable like any group),
+      run on Pi1: <code>python3 fix_config.py --only option-group</code> (a dry run), then again with <code>--apply</code>.</span>`;return;}
+  const [n,g]=tg,mem=(g.members||[]).length,hide=g.hide_lalt!==false;
+  host.innerHTML=`<b>Mac option/alt mode is the mapping group <span style="color:${esc(g.color||'var(--hi)')}">${esc(n)}</span></b>
+    <span class="muted">— ${mem} rule${mem===1?'':'s'} (Left Alt + key, Left Alt+Shift + key), on only while double-tapping Right Alt
+    has switched Mac option/alt mode on. Edit them in Mapping, under the group.</span>
+    <div><label class="inl" style="font-weight:400"><input type="checkbox" id="opthide" ${hide?'checked':''}>
+      Left Alt never reaches Windows while it is on</label>
+      <span class="muted">(the exceptions below still apply)</span></div>`;
+  $('opthide').onchange=e=>{g.hide_lalt=e.target.checked;profileTouched();
+    toast('⬆ Save to device to apply');};}
 function renderOptChars(){
   const el=$('optbody');if(!el||!cfg)return;
   const haveU=!!(typeof usageData!=='undefined'&&usageData),haveC=!!refData('corpus');
@@ -10138,6 +10359,7 @@ function renderOptChars(){
       <div style="margin-top:.3rem">Now: ${lastEng&&typeof lastEng.option_mode==='boolean'
         ?(lastEng.option_mode?'<b style="color:var(--ok)">Mac option/alt mode</b>':'<b style="color:var(--hi)">Windows option/alt mode</b>')
         :'<span class="muted">unknown until connected</span>'} · the engine starts in Windows option/alt mode.</div></div>
+    <div id="optgroup" style="font-size:.8rem;margin:.2rem 0 .5rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem"></div>
     <div id="optrules" style="font-size:.8rem;margin:.2rem 0 .5rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem"></div>
     <p style="font-size:.78rem;margin:.2rem 0 .4rem">Collisions: <span style="color:var(--err)">red</span> = you have used that Alt chord ·
     <span style="color:var(--warn)">amber</span> = one of your own chords · grey = an app or Windows shortcut in the shortcut sets.
@@ -10152,6 +10374,7 @@ function renderOptChars(){
   renderOptAltKeys();                                       // 29.15
   renderOptAltWith();                                       // 29.18
   renderOptRules();                                         // 29.17
+  renderOptGroup();                                         // 29.26
   el.querySelectorAll('[data-opt]').forEach(cb=>cb.onchange=()=>{
     const row=OPT_CHARS.find(r=>r[0]===+cb.dataset.opt);
     _optSet(row,cb.dataset.sh==='1',cb.checked);profileTouched();renderOptChars();});
@@ -10681,9 +10904,34 @@ function modsName(m){
   // "Cmd/Win+Left" while the key that fired it was labelled LCtrl. Josh,
   // 2026-10-13: "Ensure that what the labels say MATCHES WHAT THE USER SEES
   // AS THE CENTERED, LIGHT GREY KEY IN THE UI WIREFRAME".
+  // 29.26: a one-sided rule names its side -- LAlt, RCtrl -- exactly as
+  // the centred labels do (bits above the nibble; s2_mapping.SIDE_L/R).
   const p=[];
-  for(const b of [0x01,0x02,0x04,0x08])if(m&b)p.push(_MODNAME[b]);
+  for(const b of [0x01,0x02,0x04,0x08])if(m&b)
+    p.push((m&(b<<SIDE_L)?'L':m&(b<<SIDE_R)?'R':'')+_MODNAME[b]);
   return p.join('+')||'(none)';}
+// "either" | "L" | "R" for one modifier family in a stored mods value
+const modSide=(m,b)=>m&(b<<SIDE_L)?'L':m&(b<<SIDE_R)?'R':'either';
+function withSide(m,b,side){
+  m&=~((b<<SIDE_L)|(b<<SIDE_R));
+  return side==='L'?m|(b<<SIDE_L):side==='R'?m|(b<<SIDE_R):m;}
+/* 29.26: what you PRESS for a rule named in host terms. Josh, 2026-10-13:
+   the pack line "Cmd+Left" is stored as post-swap Ctrl+Left, "and nothing
+   on screen said so". The label stays the host's (29.25: it must match the
+   wireframe's centred grey label); this adds the physical key beside it,
+   only when the active OS's modifier swap makes the two differ. A device
+   whose modifier is Baselined skips the swap -- its wireframe shows that. */
+// the physical key's name: the red top-left corner of the wireframe
+const _PRESSNAME={0x01:'Ctrl',0x02:'Shift',0x04:'Alt',0x08:'Cmd/Win'};
+function modsPress(m){
+  const p=[];
+  for(const b of [0x01,0x02,0x04,0x08])if(m&b){
+    const ph=modBitToPhysical(b);
+    p.push([ph,(m&(b<<SIDE_L)?'L':m&(b<<SIDE_R)?'R':'')+_PRESSNAME[ph]]);}
+  p.sort((a,c)=>[1,2,4,8].indexOf(a[0])-[1,2,4,8].indexOf(c[0]));
+  return p.map(x=>x[1]).join('+')||'(none)';}
+function pressNote(m){const a=modsName(m),b=modsPress(m);
+  return a===b.replace('Cmd/Win','Win')?'':` (you press ${b})`;}
 function recordChanges(){
   if(!cfg)return;
   let before={};
@@ -10719,6 +10967,23 @@ function changelogText(){
    which is what makes "the third one down" a thing you can say. The .txt
    export still goes through changelogText(), unchanged -- a file you keep
    should not change shape because the screen did. */
+/* 29.27: each recorded line belongs to the top-level tab where that kind
+   of setting is edited; anything else is "UI Misc". Josh, 2026-10-13
+   11:08:49: "allow the user to filter the changes by different categories
+   (with buttons on the top for each major category (i.e.; each of the
+   top-level "Tabs" should be a category; and then perhaps "UI Misc"". The
+   prefixes are diffConfig's own; a line it adds later lands in UI Misc
+   until it is named here, rather than vanishing from a filter. */
+const CHG_CATS=[...document.querySelectorAll('#toptabs .tab')].map(t=>t.textContent.trim()).filter(Boolean);
+let _chgCat='';
+function changeCat(l){
+  const s=String(l).replace(/^[+~−-]\s*/,'');
+  // A "[win only]" mapping is still edited in Mapping: OS means the OS
+  // tab's own settings.
+  if(/^(Scroll inversion|Unicode method|Active OS)/.test(s))return 'OS';
+  if(/^Macro /.test(s))return 'Macros';
+  if(/^(Key mapping|Button mapping|Mod-chord|Baseline|Combo|Group|Device)/.test(s))return 'Mapping';
+  return 'UI Misc';}
 function renderChangelog(){
   const el=$('logbody');if(!el)return;
   const es=(cfg&&cfg._changelog)||[];
@@ -10727,16 +10992,27 @@ function renderChangelog(){
     el.innerHTML='<p class="muted">No changes recorded yet. A numbered entry '
       +'is added each time you ⬆ Save to device.</p>';
   }else{
+    const cnt={};for(const e of es)for(const l of e.changes||[]){const c=changeCat(l);cnt[c]=(cnt[c]||0)+1;}
+    const cats=[...(CHG_CATS.length?CHG_CATS:['Mapping','Macros','OS']),'UI Misc'];
+    const bar=`<div class="pills" style="margin:.2rem 0 .5rem">`
+      +`<span class="pill ${_chgCat?'':'on'}" data-chgcat="">All</span>`
+      +cats.map(c=>`<span class="pill ${_chgCat===c?'on':''}" data-chgcat="${esc(c)}"
+          style="${cnt[c]?'':'opacity:.45'}" title="${cnt[c]||0} change line(s)">${esc(c)} <span class="muted">${cnt[c]||0}</span></span>`).join('')
+      +`</div>`;
     let n=0;
-    el.innerHTML=es.slice().reverse().map(e=>{
+    el.innerHTML=bar+es.slice().reverse().map(e=>{
       n++;
-      const lines=(e.changes||[]).map(l=>
+      const keep=(e.changes||[]).filter(l=>!_chgCat||changeCat(l)===_chgCat);
+      if(_chgCat&&!keep.length)return '';
+      const lines=keep.map(l=>
         `<div style="margin-left:1.4rem">• ${esc(l)}</div>`).join('');
       return `<div style="margin:.45rem 0">`
         +`<span class="muted" style="font-variant-numeric:tabular-nums">${n}.</span> `
         +`<b>${esc(fmtWhen(e.ts))}</b> <span class="muted">— ${esc(e.profile||'')}`
         +`</span>${lines||'<div class="muted" style="margin-left:1.4rem">'
-        +'(no detail recorded)</div>'}</div>`;}).join('');}
+        +'(no detail recorded)</div>'}</div>`;}).join('');
+    el.querySelectorAll('[data-chgcat]').forEach(p=>p.onclick=()=>{
+      _chgCat=p.dataset.chgcat;renderChangelog();});}
   renderAppHistory();
   // The Pi's version list only exists once it has been read. Say which it is
   // rather than showing an empty panel that looks like "no versions".
@@ -10876,27 +11152,34 @@ function renderModChordEd(ed){
   const cur=findModChord(sel.mods,sel.canon,sel.mcKey);
   const os=cur?cur.os:(sel.os||'');
   const key=cur?cur.key:mcKey(sel.mods,sel.canon,-1);
-  const a=(cur&&cur.action)||['suppress'];
-  const ui=actionToUI(a);
+  const a=(cur&&cur.action)||sel.initial||null;    // 29.25.1: null = none yet
+  const ui=actionToUI(a||['suppress']);
   const kL=+String(key).split(',')[0];
   const title=modsName(sel.mods)+' + '+(kL>=0?layerName(kL)+' + ':'')+mcName(sel.canon);
   ed.innerHTML=`<h2 style="font-size:1rem">${esc(title)}</h2>
-    <p class="muted" style="font-size:.78rem">Fires whenever <b>${esc(modsName(sel.mods))}</b> is held and
+    <p class="muted" style="font-size:.78rem">Fires whenever <b>${esc(modsName(sel.mods))}</b>${esc(pressNote(sel.mods))} is held and
     <b>${esc(mcName(sel.canon))}</b> is pressed, ${kL>=0?'on <b>'+esc(layerName(kL))+'</b> only':'on any layer'} and any device. The held modifier is
     <i>not</i> passed through — the action below replaces it entirely.
     <b>Shift-click</b> another key to change the combination.<br>
     <b>Pass through unchanged</b> is the exception: it means “this exact combination is deliberately
     <i>not</i> rewritten”. Use it to carve one Shift variant out of a rule — without it, a missing
     Shift rule falls back to the no-Shift rule and sends that instead.</p>
+    <div style="font-size:.78rem;margin:.2rem 0 .3rem">${[0x01,0x02,0x04,0x08].filter(b=>sel.mods&b).map(b=>
+      `<label class="inl" style="margin-right:.6rem" title="Which ${_MODNAME[b]} this rule answers to">${_MODNAME[b]}
+        <select data-mcside="${b}" style="width:auto;font-size:.76rem">
+          <option value="either" ${modSide(sel.mods,b)==='either'?'selected':''}>either side</option>
+          <option value="L" ${modSide(sel.mods,b)==='L'?'selected':''}>left only</option>
+          <option value="R" ${modSide(sel.mods,b)==='R'?'selected':''}>right only</option></select></label>`).join('')}</div>
     <div class="row"><div>
-      <label>On press</label><select id="mcact">
-        <option value="suppress" ${a[0]==='suppress'?'selected':''}>Nothing (swallow)</option>
-        <option value="passthru" ${a[0]==='passthru'?'selected':''}>Pass through unchanged</option>
-        <option value="keymods" ${a[0]==='keymods'?'selected':''}>Key with modifiers…</option>
-        <option value="key" ${a[0]==='key'?'selected':''}>Key (no modifiers)…</option>
-        <option value="macro" ${a[0]==='macro'?'selected':''}>Macro…</option>
-        <option value="text" ${a[0]==='text'?'selected':''}>Type text…</option>
-        ${a[0]==='expansion'?`<option value="expansion" selected>Expansion: ${esc(a[2]||'')}</option>`:''}
+      <label>On press${a?'':' <span class="muted" style="font-weight:400">(not a rule yet)</span>'}</label><select id="mcact">
+        ${a?'':'<option value="" selected disabled>— choose what it does —</option>'}
+        <option value="suppress" ${a&&a[0]==='suppress'?'selected':''}>Nothing (swallow)</option>
+        <option value="passthru" ${a&&a[0]==='passthru'?'selected':''}>Pass through unchanged</option>
+        <option value="keymods" ${a&&a[0]==='keymods'?'selected':''}>Key with modifiers…</option>
+        <option value="key" ${a&&a[0]==='key'?'selected':''}>Key (no modifiers)…</option>
+        <option value="macro" ${a&&a[0]==='macro'?'selected':''}>Macro…</option>
+        <option value="text" ${a&&a[0]==='text'?'selected':''}>Type text…</option>
+        ${a&&a[0]==='expansion'?`<option value="expansion" selected>Expansion: ${esc(a[2]||'')}</option>`:''}
       </select><div id="mcargwrap"></div>
       <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
@@ -10930,6 +11213,7 @@ function renderModChordEd(ed){
     bindArgs();};
   const commit=()=>{
     const k=$('mcact').value,el=$('mcarg'),v=el?el.value:null;
+    if(!k)return;                            // 29.25.1: nothing chosen yet
     let act;
     if(k==='suppress')act=['suppress'];
     else if(k==='expansion')act=(findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action||['suppress'];
@@ -10960,7 +11244,23 @@ function renderModChordEd(ed){
   $('mcdel').onclick=()=>{
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
-    sel=null;render();toast('shortcut deleted — ⬆ Save to device');};}
+    sel=null;render();toast('shortcut deleted — ⬆ Save to device');};
+  // 29.26: "this side only", per modifier -- Josh's choice (C). A rule
+  // that exists MOVES to its new key (with its group membership); one not
+  // created yet only changes what will be created.
+  ed.querySelectorAll('[data-mcside]').forEach(s=>s.onchange=()=>{
+    const nm=withSide(sel.mods,+s.dataset.mcside,s.value);
+    const nk=mcKey(nm,sel.canon,kL);
+    if(nk===key)return;
+    if(cur){
+      for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
+        if(t[key]!==undefined){
+          if(t[nk]!==undefined){toast(modsName(nm)+' + '+mcName(sel.canon)+' already has a rule — change that one instead',true);s.value=modSide(sel.mods,+s.dataset.mcside);return;}
+          t[nk]=t[key];delete t[key];}
+      for(const g of Object.values(cfg.mapping_groups||{})){
+        const i=(g.members||[]).indexOf('mc:'+key);if(i>=0)g.members[i]='mc:'+nk;}
+      toast('now '+modsName(nm)+' + '+mcName(sel.canon)+' — ⬆ Save to device');}
+    sel.mods=nm;sel.mcKey=nk;render();});}
 function renderComboEd(ed){
   const c=cfg.combos[sel.id];
   if(!c){sel=null;return renderEditor();}
@@ -11241,7 +11541,7 @@ function keyFeatures(dev,u){
       const note=r.fromAdd&&additions[r.fromAdd]&&(additions[r.fromAdd].entries[r.addIdx]||{}).note;
       const altOnly=(r.mods&0x0f)===0x04||(r.mods&0x0f)===0x06;
       const off=r.fromAdd?r.addOff:dis.has('mc:'+r.id);
-      out.push({what:'Shortcut',how:`${modsName(r.mods)} + ${kn(canon)} → ${actShort(r.out)}`,
+      out.push({what:'Shortcut',how:`${modsName(r.mods)} + ${kn(canon)}${pressNote(r.mods)} → ${actShort(r.out)}`,
         src:r.fromAdd?`pack “${r.fromAdd}”`:(r.os?r.os+' profile':'your rules'),
         note,off,
         osOnly:r.os&&r.os!==os?r.os:'',
@@ -13361,7 +13661,15 @@ function initTopbarSync(){
   // itself where the browser supports it.
   if(window.ResizeObserver){
     const bar=document.querySelector('.topbar');
-    if(bar)new ResizeObserver(syncTopbarHeight).observe(bar);}}
+    if(bar)new ResizeObserver(syncTopbarHeight).observe(bar);
+    // 29.27: the bar is at least as tall as the top-right column (it is
+    // positioned, so it adds no height of its own) -- capped, so a HID Note
+    // dragged tall does not make the sticky bar eat the screen.
+    const tr=document.getElementById('topright');
+    if(bar&&tr)new ResizeObserver(()=>{
+      const abs=getComputedStyle(tr).position==='absolute';
+      bar.style.minHeight=abs?Math.min(tr.getBoundingClientRect().height+8,
+        innerHeight*0.25)+'px':'';}).observe(tr);}}
 
 function initUiSearch(){
   const box=$('uisearch');if(!box)return;
@@ -14073,6 +14381,10 @@ function liveRaw(txt){
     if(legacy!==undefined&&legacy!==logical)holdBtn(legacy,down);
     return; }
   const m=txt.match(/key code=(\d+) val=([012]) port2=(True|False)/);if(!m)return;
+  // 29.25.1: the Pi is reporting keys -- it is now the only source; drop
+  // anything the browser had lit, so a press never lights two keys
+  if(!_piKeysLive()&&_browserHeld.size)for(const b of [..._browserHeld]){_browserHeld.delete(b);holdKey(b,false,'');}
+  _piRawAt=Date.now();
   const code=+m[1],isPort2=m[3]==='True',down=+m[2]!==0;
   const dm=txt.match(/ dev=(\S+)/),rdev=dm?dm[1]:'';   // 19.1 #3.1: which device
   if(isPort2){
