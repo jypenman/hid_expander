@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.24.2</title>
+<title>HID Config 29.25</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1341,31 +1341,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     </div>
     <div id="testmstats" style="font-size:.8rem;margin-top:.4rem"></div>
   </div>
-  <!-- 29.24: Josh, 2026-10-07 (decided "A"): "the page shows a drawing canvas
-       and asks the Pi to mouse-write a test line into it at rising speeds;
-       the page records the pointer itself, so it can compare what arrived
-       ... and report the fastest speed that still draws cleanly -- and the
-       same for size." -->
-  <div class="panel" id="testmw" data-uikey="test-mw" style="margin-top:.6rem">
-    <h2 style="font-size:1rem;margin:0 0 .3rem">Mouse writing calibration</h2>
-    <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">The Pi writes the same line
-      once per speed (or per size) into the box below, and this page records the pointer
-      itself, here on your computer. Each line is compared with the slowest (or largest)
-      one: the same number of strokes, and the same shape once scaled. The fastest speed
-      (or smallest size) that still matches is the answer.</p>
-    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem;font-size:.8rem">
-      <label>Find the <select id="testmwkind"><option value="speed">fastest clean speed</option>
-        <option value="size">smallest clean size</option></select></label>
-      <label>values <input id="testmwvals" style="width:14rem"></label>
-      <label>text <input id="testmwtext" value="Quick fox 25" maxlength="40" style="width:9rem"></label>
-      <button id="testmwstart" class="txmini">▶ Calibrate</button>
-      <button id="testmwdone" class="txmini" disabled>Analyse now</button>
-      <span id="testmwstate" class="muted" style="font-size:.78rem"></span>
-    </div>
-    <div id="testmwpad" style="position:relative;height:360px;border:1px solid var(--line);
-      border-radius:6px;overflow:hidden;user-select:none;touch-action:none;background:var(--panel2)"></div>
-    <div id="testmwstats" style="font-size:.8rem;margin-top:.4rem"></div>
-  </div>
   <div class="panel" id="testhist" data-uikey="test-hist" style="margin-top:.6rem">
     <h2 style="font-size:1rem;margin:0 0 .3rem">History, per device
       <button id="testhistload" class="txmini" style="margin-left:.5rem">↻ load</button>
@@ -1448,6 +1423,33 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">✍ Mouse writing — type, and the mouse draws it
       <span class="muted" id="mwstate" style="font-weight:400;font-size:.8rem"></span></h3></summary>
     <div id="mwbody"></div>
+  <!-- 29.25: moved here from the Test tab -- Josh, 2026-10-09 08:59: "put it
+       on the same page as the mouse writing (so you can immediately choose
+       your settings having seen the values in the test." 29.24: Josh, 2026-10-07 (decided "A"): "the page shows a drawing canvas
+       and asks the Pi to mouse-write a test line into it at rising speeds;
+       the page records the pointer itself, so it can compare what arrived
+       ... and report the fastest speed that still draws cleanly -- and the
+       same for size." -->
+  <div id="testmw" data-uikey="test-mw" style="margin-top:.6rem;border-top:1px solid var(--line);padding-top:.4rem">
+    <h3 style="font-size:.9rem;margin:0 0 .3rem">Calibration</h3>
+    <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">The Pi writes the same line
+      once per speed (or per size) into the box below, and this page records the pointer
+      itself, here on your computer. The hardest value goes first; each line is compared with the last, easiest
+      one (the slowest, or the largest): the same number of strokes, and the same shape once scaled. The fastest speed
+      (or smallest size) that still matches is the answer.</p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem;font-size:.8rem">
+      <label>Find the <select id="testmwkind"><option value="speed">fastest clean speed</option>
+        <option value="size">smallest clean size</option></select></label>
+      <label>values <input id="testmwvals" style="width:14rem"></label>
+      <label>text <input id="testmwtext" value="Quick fox 25" maxlength="40" style="width:9rem"></label>
+      <button id="testmwstart" class="txmini">▶ Calibrate</button>
+      <button id="testmwdone" class="txmini" disabled>Analyse now</button>
+      <span id="testmwstate" class="muted" style="font-size:.78rem"></span>
+    </div>
+    <div id="testmwpad" style="position:relative;height:360px;border:1px solid var(--line);
+      border-radius:6px;overflow:hidden;user-select:none;touch-action:none;background:var(--panel2)"></div>
+    <div id="testmwstats" style="font-size:.8rem;margin-top:.4rem"></div>
+  </div>
   </details>
   <div class="panel" id="macrolist"></div>
 </div>
@@ -1850,8 +1852,9 @@ function syncClock(){const t=Date.now()+' '+(-new Date().getTimezoneOffset());
 // The irony is three lines below: "a second hard-coded string would drift
 // from it the first time one of us forgot". This WAS that second string, and
 // it drifted. So it is now derived from the same <title> the badge uses, and
-// there is nothing left to forget. Convention (CLAUDE.md §4) is that the UI
-// and engine versions are bumped together, so equality is the right test.
+// there is nothing left to forget. 2026-10-09: the engine may be BEHIND (or
+// ahead) -- each moves only with its own code, so a number can be skipped --
+// and the engine's ui_min floor (25.5) is the real compatibility test.
 //
 // Compared on the numeric part only: a UI shipped as "23.6 BF1" still expects
 // engine 23.6, and treating a bugfix suffix as a mismatch would put the false
@@ -1898,6 +1901,19 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.25',d:'2026-10-13',items:[
+   {t:'Mapping editor: "Everything on this key" -- Baseline, the OS swap, layer role, each layer\'s mapping, every shortcut ending in it (yours, per-OS and packs, on/off/skipped), combos, Mac option/alt mode characters, same-report chords, and their groups',k:'editor'},
+   {t:'Shortcuts name their modifiers as the computer receives them -- the same words as the wireframe\'s centred label (a pack\'s "Cmd+Left" on Windows now reads Ctrl+Left, which is what fires it)',k:'editor'},
+   {t:'Mouse writing calibration moved into the Mouse writing section, and runs hardest first (fastest speed / smallest size), checked against the last, easiest line',k:'mousewrite'},
+   {t:'Wireframe group tags sit level with their group\'s keys, ordered so the lines never cross; a tag is dotted only when another group shares its colour',k:'devcards'}]},
+ {v:'29.24.6',d:'2026-10-13',items:[
+   {t:'The Pi no longer writes its engine status on a timer: only when this page (or a test, or the benchmark) asks, and never while a key is held -- less work on the Pi while you type',k:'engstat'},
+   {t:'A hidden page stops asking the Pi for status; it catches up the moment you come back to it',k:'engstat'},
+   {t:'Usage: opening it no longer recomputes your training figures from every hourly file each time (about 2.8 s of the Pi) -- only when something new was recorded',k:'trainpane'}]},
+ {v:'29.24.4',d:'2026-10-09',items:[
+   {t:'✎ Layout: "Capture keys" (was Capture in order) takes every key the Pi reports -- the Fintie\'s F1 (On-screen Keyboard) and keys with no standard name, labelled as the Pi names them',k:'devcards'},
+   {t:'Clicking a key shows what it is: its key code, its usage and, where it says little, what it does ("shows or hides the on-screen keyboard (iOS & Android)")',k:'devcards'},
+   {t:'Security: device and Bluetooth names are cleaned by the Pi and escaped here -- a nearby device could name itself as code that ran in this page',k:'btdevices'}]},
  {v:'29.24.2',d:'2026-10-09',items:[
    {t:'Expansions: the times a duration range is read from are yours to edit -- written like times (H:MMa, HMMh, HHMM …), with the separators between them, and a Try-it box',k:'durforms'},
    {t:'Expansions: a time form the engine cannot read is refused with the reason, before it is saved',k:'durforms'},
@@ -2702,7 +2718,7 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===8){testRuns=(obj&&obj.runs)||[];testHistMeta=obj||{};renderTestHistory();}
       else if(curFile===3){
-        lastEng=obj;adoptEffective(obj);updateConStat();
+        lastEng=obj;adoptEffective(obj);adoptAdvertised(obj);updateConStat();
         if($('mwsec')&&$('mwsec').open)try{renderMouseWrite();}catch(e){}   // 29.2
         // 26.5: the Test tab asks for a FRESH status at the start and end of
         // a run; resolve anyone waiting on this read.
@@ -3186,15 +3202,27 @@ function btResult(text){
   let h='<table style="width:100%">';
   for(const[mac,info]of Object.entries(secs)){
     const conn=info.tags.has('Connected'),paired=info.tags.has('Paired');
-    h+=`<tr><td><b>${info.name}</b><br><span class="muted">${mac}</span></td>
+    // 29.24.4: a Bluetooth name is whatever a nearby device ADVERTISES --
+    // anyone's, chosen by them. It was put into this HTML raw, and into a
+    // confirm('Remove …') inside an onclick, so a crafted name could run
+    // script in a page that can rewrite the Pi's config. Escaped now, and
+    // the buttons carry only the MAC (already matched to hex above), read
+    // by one listener -- no name in any handler.
+    h+=`<tr><td><b>${esc(info.name)}</b><br><span class="muted">${mac}</span></td>
     <td>${conn?'<span class="status on">connected</span>':paired?'<span class="status">paired</span>':''}</td>
     <td style="text-align:right">
-    ${!paired?`<button onclick="btPairFlow('${mac}')">Pair</button>`:''}
-    ${paired&&!conn?`<button onclick="btAction('connect','${mac}')">Connect</button>`:''}
-    ${conn?`<button onclick="btAction('disconnect','${mac}')">Disconnect</button>`:''}
-    ${paired?`<button onclick="if(confirm('Remove ${info.name}?'))btAction('remove','${mac}')">Remove</button>`:''}
+    ${!paired?`<button data-bt="pair" data-mac="${mac}">Pair</button>`:''}
+    ${paired&&!conn?`<button data-bt="connect" data-mac="${mac}">Connect</button>`:''}
+    ${conn?`<button data-bt="disconnect" data-mac="${mac}">Disconnect</button>`:''}
+    ${paired?`<button data-bt="remove" data-mac="${mac}">Remove</button>`:''}
     </td></tr>`;}
-  $('btdevices').innerHTML=h+'</table>';}
+  const box=$('btdevices');box.innerHTML=h+'</table>';
+  box.onclick=e=>{const b=e.target.closest('[data-bt]');if(!b)return;
+    const mac=b.dataset.mac,a=b.dataset.bt;
+    if(!/^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(mac))return;
+    if(a==='pair')btPairFlow(mac);
+    else if(a==='remove'){if(confirm('Remove '+((secs[mac]||{}).name||mac)+'?'))btAction('remove',mac);}
+    else btAction(a,mac);};}
 window.btCmd=btCmd;
 window.btAction=async(verb,mac)=>{await btCmd(verb+' '+mac);
   // state chips come from parsing `bluetoothctl devices ...`; refresh them
@@ -3211,6 +3239,10 @@ function boundMacs(){return cfg?allDevices().map(d=>d.mac).filter(Boolean):[];}
 function startStatusPoll(){clearInterval(statTimer);
   statTimer=setInterval(()=>{
     if(!device)return;
+    // 29.24.6: the engine writes its status only when asked now, so each
+    // poll is a write on the Pi. A page nobody can see asks for nothing;
+    // it catches up the moment it is shown again (below).
+    if(document.hidden)return;
     // ONE MAC per command: a vendor-HID report only carries ~29 payload
     // bytes, so batching MACs silently truncated the command ("status
     // 36:12:.. C9:8C") and the poll failed for every MAC after the first
@@ -3221,6 +3253,8 @@ function startStatusPoll(){clearInterval(statTimer);
     if(!editDev&&!_reading&&!_readQ.length)getFile(3);
   },10000);}
 let lastEng=null;
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&device&&!editDev&&!_reading&&!_readQ.length)getFile(3);});
 window.btConnectDev=mac=>{
   btStat[mac]=undefined;updateConStat();
   btCmd('connect '+mac);
@@ -3485,19 +3519,64 @@ const CONSUMER_NAMES={158:'Web Back',159:'Web Forward',113:'Mute',114:'Vol−',1
 166:'Stop Media',161:'Eject',168:'Rewind',208:'Fast Fwd',225:'Brightness+',224:'Brightness−',
 230:'Kbd Light+',229:'Kbd Light−',228:'Kbd Light',173:'Refresh',156:'Bookmarks',155:'Mail',
 140:'Calculator',150:'Browser',144:'Files',171:'Settings',152:'Lock Screen',204:'All Apps',
-120:'Mission Control',582:'Voice',418:'Zoom In',419:'Zoom Out',420:'Zoom Reset',372:'Full Screen'};
+120:'Mission Control',582:'Voice',418:'Zoom In',419:'Zoom Out',420:'Zoom Reset',372:'Full Screen',
+374:'On-screen Keyboard'};
 // evdev code -> consumer USAGE id, the same table as s2_mapping.CONSUMER_KEYS
 const CONSUMER_USAGE={158:0x224,159:0x225,113:0xe2,114:0xea,115:0xe9,163:0xb5,164:0xcd,165:0xb6,
 166:0xb7,161:0xb8,168:0xb4,208:0xb3,225:0x6f,224:0x70,230:0x79,229:0x7a,228:0x7c,172:0x223,217:0x221,
 173:0x227,156:0x22a,155:0x18a,140:0x192,150:0x196,144:0x194,171:0x183,152:0x19e,204:0x1a2,120:0x29f,
-142:0x182,582:0xcf,418:0x22d,419:0x22e,420:0x22f,372:0x232};
+142:0x182,582:0xcf,418:0x22d,419:0x22e,420:0x22f,372:0x232,374:0x1ae};
 for(const[c,u]of Object.entries(CONSUMER_USAGE))KEYS[(0x0c<<16)|u]='♪ '+CONSUMER_NAMES[c];
+/* 29.24.4: EVERY KEY A DEVICE ADVERTISES. The engine (29.24.3) gives a code
+   no table names its own usage on page 0xFE -- (0xFE<<16)|code -- and lists
+   each device's in status.advertised_keys with the kernel's name, already
+   cleaned (engine/safe_text.py). This side uses the same usage, so a key
+   captured here is the key the engine maps. Names are cleaned AGAIN here
+   before they are kept: a label is shown in many places, and not every one
+   of them escapes. */
+const EVDEV_PAGE=0xFE;
+const evdevUsage=code=>(EVDEV_PAGE<<16)|(code&0xffff);
+const isEvdevUsage=u=>(u>>>16)===EVDEV_PAGE;
+function cleanName(s,max){
+  s=String(s==null?'':s).normalize('NFKC').replace(/\s+/g,' ');
+  s=[...s].filter(c=>/[\p{L}\p{N} \-_.,()\/+&#:]/u.test(c)).join('').trim().slice(0,max||64);
+  return s;}
+const _evNames={};
+function adoptAdvertised(eng){
+  for(const list of Object.values((eng&&eng.advertised_keys)||{}))
+    for(const[code,name]of list||[]){const c=+code;if(!(c>=0))continue;
+      const n=cleanName(name)||('Key '+c);_evNames[c]=n;
+      if(KEYS[evdevUsage(c)]===undefined)KEYS[evdevUsage(c)]='⌁ '+n;}}
+function evdevName(code){return _evNames[code]||('Key '+code);}
+// Plain language for keys whose name says little. Shown when a key is
+// clicked (Josh, 2026-10-09: "the plain language of what the code means,
+// like "on-screen-keyboard (iOS & Android)"").
+const KEY_MEANS={
+  [(0x0c<<16)|0x1ae]:'shows or hides the on-screen keyboard (iOS & Android)',
+  [(0x0c<<16)|0x221]:'opens search (the OS’s own)',
+  [(0x0c<<16)|0x223]:'goes to the home screen / browser home page',
+  [(0x0c<<16)|0x224]:'Back (browser / app)',[(0x0c<<16)|0x225]:'Forward (browser / app)',
+  [(0x0c<<16)|0x19e]:'locks the screen',[(0x0c<<16)|0x29f]:'Mission Control / Task View',
+  [(0x0c<<16)|0xcf]:'starts voice input / the assistant'};
+// What a key IS: the code the device sends, its usage, and what it means.
+function keyIdentity(u){
+  if(u==null)return '';
+  const page=u>>>16,id=u&0xffff;
+  let code=null;
+  if(page===EVDEV_PAGE)code=id;
+  else if(page===0x0c){for(const[c,v]of Object.entries(CONSUMER_USAGE))if(v===id){code=+c;break;}}
+  else{for(const[c,v]of Object.entries(EV2HID))if(v===u){code=+c;break;}}
+  const name=page===EVDEV_PAGE?evdevName(id):(MODS[u]||KEYS[u]||('0x'+u.toString(16)));
+  const usage=page===EVDEV_PAGE?'no HID usage — the engine’s own id (map it to use it)'
+    :page===0x0c?'consumer 0x'+id.toString(16).toUpperCase().padStart(4,'0')
+    :'keyboard 0x'+id.toString(16).toUpperCase().padStart(2,'0');
+  return `${name}${code!=null?' · key code '+code:''} · ${usage}${KEY_MEANS[u]?' · '+KEY_MEANS[u]:''}`;}
 const EVBTN={272:1,273:2,274:3,275:4,276:5,277:6,278:7,279:8,256:9,257:10,258:11,259:12,260:13,261:14,262:15};
 function ev2name(code){const u=EV2HID[code];
 if(u!==undefined)return MODS[u]||KEYS[u]||('0x'+u.toString(16));
 if(EVBTN[code]!==undefined)return'btn'+EVBTN[code];
 if(CONSUMER_NAMES[code])return CONSUMER_NAMES[code]+' (consumer)';
-return null;}
+return evdevName(code)+' (no HID usage)';}   // 29.24.4: never [?]
 function annotate(txt){
   // engine's consumer-page line: "consumer code=158 usage=0x0224 Web Back val=1 dev=x"
   let cm=txt.match(/^consumer code=(\d+) usage=(0x[0-9a-fA-F]+) (.+?) val=(\d)/);
@@ -5120,7 +5199,20 @@ function drawGroupTags(d,lay,div,unit,offx,offy,srcs){
   let maxx=0,maxy=0;
   for(const k of lay.keys){maxx=Math.max(maxx,k.x+offx+(k.w||1));maxy=Math.max(maxy,k.y+offy+(k.h||1));}
   const px=(maxx+0.6)*unit,pillW=150,pitch=24;
-  const W=px+pillW+8,H=Math.max(maxy*unit+12,tags.length*pitch+8);
+  // 29.25: each tag sits LEVEL WITH its group's largest cluster, and the
+  // tags are ordered top to bottom by those clusters -- so the lines from
+  // the tag column run in the same order as their targets and do not
+  // cross. Josh, 2026-10-08 18:27: "The little group lozenge is supposed to
+  // be NEXT to the largest grouping of keys of a given group (and sorted out
+  // so that no lines overlap)". They used to stack in config order.
+  const cy=c=>(Math.min(...c.map(p=>p.y))+Math.max(...c.map(p=>p.y+p.h)))/2*unit;
+  tags.sort((a,b)=>cy(a.cl[0])-cy(b.cl[0]));
+  let prev=-Infinity;
+  for(const t of tags){t.py=Math.max(cy(t.cl[0])-9,prev+pitch,4);prev=t.py;}
+  // ii: dotted only when needed -- another group on screen has this colour
+  const colN={};for(const t of tags)colN[t.col]=(colN[t.col]||0)+1;
+  for(const t of tags)if(colN[t.col]<2)t.dash='';
+  const W=px+pillW+8,H=Math.max(maxy*unit+12,prev+pitch+8);
   div.style.width=W+'px';div.style.height=H+'px';
   const NS='http://www.w3.org/2000/svg';
   const svg=document.createElementNS(NS,'svg');
@@ -5130,8 +5222,8 @@ function drawGroupTags(d,lay,div,unit,offx,offy,srcs){
   const box=c=>{const x0=Math.min(...c.map(p=>p.x)),y0=Math.min(...c.map(p=>p.y)),
     x1=Math.max(...c.map(p=>p.x+p.w)),y1=Math.max(...c.map(p=>p.y+p.h));
     return{x0:x0*unit,y0:y0*unit,x1:x1*unit-4,y1:y1*unit-4};};
-  tags.forEach((t,i)=>{
-    const py=6+i*pitch,anchor={x:px,y:py+9};
+  tags.forEach(t=>{
+    const py=t.py,anchor={x:px,y:py+9};
     t.cl.forEach((c,ci)=>{
       if(ci>0&&c.length<2)return;
       const b=box(c),end={x:b.x1+2,y:Math.max(b.y0,Math.min(b.y1,anchor.y))};
@@ -5142,12 +5234,12 @@ function drawGroupTags(d,lay,div,unit,offx,offy,srcs){
       ln.setAttribute('x1',anchor.x);ln.setAttribute('y1',anchor.y);
       ln.setAttribute('x2',end.x);ln.setAttribute('y2',end.y);
       ln.setAttribute('stroke',t.col);ln.setAttribute('stroke-width','1.6');
-      ln.setAttribute('stroke-dasharray',t.dash);ln.setAttribute('opacity','.85');
+      if(t.dash)ln.setAttribute('stroke-dasharray',t.dash);ln.setAttribute('opacity','.85');
       svg.appendChild(ln);});
     const pill=document.createElement('div');
     pill.className='grouptag';pill.textContent=t.name;pill.title=t.name;
     pill.style.cssText=`position:absolute;left:${px}px;top:${py}px;max-width:${pillW}px;`
-      +`border:1.5px dashed ${t.col};color:${t.col};`;
+      +`border:1.5px ${t.dash?'dashed':'solid'} ${t.col};color:${t.col};`;
     div.appendChild(pill);});
   div.appendChild(svg);}
 /* ---- groups pseudo-device card ---- */
@@ -5448,7 +5540,8 @@ function lcapElement(s,x,y){
   if(!s.length)return{note:1,ghost:1,x,y,...sz,label:'—',
     title:'captured: this key sent nothing'};
   if(s.length===1)return s[0].b!=null?{btn:s[0].b,x,y,...sz,label:btnLabel(s[0].b)}
-    :{u:s[0].u,x,y,...sz};
+    // 29.24.4: a key with no HID name is labelled as the Pi names it
+    :{u:s[0].u,x,y,...sz,...(isEvdevUsage(s[0].u)?{label:cleanName(evdevName(s[0].u&0xffff),40)}:{})};
   const l=_lcapSlotLabel(s);
   return{note:1,x,y,...sz,label:l,
     title:'captured: this key sends '+l+'. HIDConfig cannot tell that from you '
@@ -5472,7 +5565,7 @@ function layoutCaptureHtml(){
       Add any key or button I press that isn't on this layout</label>
     <select id="lcapdelim" style="width:100%;margin-top:.3rem" title="what separates one key from the next">${
         LCAP_DELIMS.map(d=>`<option value="${d[0]}${d[1]}" ${d===cur?'selected':''}>between keys: ${esc(d[2])}</option>`).join('')}</select>
-    <button id="lcapgo" style="width:100%;margin-top:.3rem" title="Press keys (media keys, chords, mouse buttons) one after another with the chosen key between them; each becomes an element, in order, in a new row">⏺ Capture in order</button>
+    <button id="lcapgo" style="width:100%;margin-top:.3rem" title="Press keys (media keys, chords, mouse buttons) one after another with the chosen key between them; each becomes an element, in order, in a new row — named as the Pi names it">⏺ Capture keys</button>
     <div class="muted" style="font-size:.72rem;margin-top:.2rem">Capture reads the Pi (it turns Show key
       presses on while it runs), so it sees every key, media key and mouse button the device sends,
       even one the computer never receives.</div>`;}
@@ -5488,7 +5581,7 @@ function bindLayoutCapture(d,lay){
   // it was the one that turned it on.
   const keysOff=c=>{if(c&&c.startedKeys&&_showKeysState>0){_showKeysState=2;$('showkeys').click();}};
   if($('lcapgo'))$('lcapgo').onclick=()=>{
-    if(!device){toast('Capture in order reads the Pi — connect first',true);return;}
+    if(!device){toast('Capture keys reads the Pi — connect first',true);return;}
     editMulti.clear();editSel=null;     // so Delete/Backspace are keys, not "remove"
     let started=false;
     if(_showKeysState!==2){_showKeysState=1;$('showkeys').click();started=true;}
@@ -5604,6 +5697,7 @@ function renderPalette(){
      <label style="flex:1;margin:0">↻°<input type="number" id="palmr" value="${same(k=>k.rot||0)??''}" placeholder="mixed" step="15"></label></div>
    <button id="palmdel" style="margin-top:.4rem;width:100%">🗑 Remove ${selAll.length} elements</button>`
   :selk?`<hr><b>Selected:</b> ${esc(selLabel)} <span class="muted">(${selKind})</span>
+   ${selk.u!=null?`<div class="muted" style="font-size:.72rem;margin-top:.15rem">${esc(keyIdentity(selk.u))}</div>`:''}
    <div style="display:flex;gap:.4rem;margin-top:.3rem">
      <label style="flex:1;margin:0">W<input type="number" id="palsw" value="${selk.w||1}" step="0.25" min="0.5"></label>
      <label style="flex:1;margin:0">H<input type="number" id="palsh" value="${selk.h||1}" step="0.25" min="0.5"></label>
@@ -5690,7 +5784,7 @@ function renderPalette(){
     // 29.20.1: rename any element (Josh, 13:10: "we get "Lalt+D", then
     // next it's going to need to be able to be renamed to "Home"").
     // Drawing only: the label is in the layout, not the mapping.
-    $('palslbl').onchange=()=>{const v=$('palslbl').value.trim();
+    $('palslbl').onchange=()=>{const v=cleanName($('palslbl').value,40);
       if(v)selk.label=v;else delete selk.label;
       if(selk.note&&!v)selk.label='—';
       render();};
@@ -10578,15 +10672,17 @@ function diffConfig(a,b){
 // but a label has to name the key you physically HOLD, so it reads back through
 // the swap. Without this, Josh's resize chords showed as "Cmd+Alt" while only
 // physical Ctrl+Alt would fire them.
-const _MODNAME={0x01:'Ctrl',0x02:'Shift',0x04:'Alt',0x08:'Cmd/Win'};
+const _MODNAME={0x01:'Ctrl',0x02:'Shift',0x04:'Alt',0x08:'Win'};
 function modsName(m){
-  // Translate to physical bits FIRST, then emit in the conventional order.
-  // Emitting as we translate follows the engine's bit order instead and reads
-  // as "Alt+Ctrl".
-  const phys=new Set();
-  for(const b of [0x01,0x02,0x04,0x08])if(m&b)phys.add(modBitToPhysical(b));
+  // 29.25: named as the HOST sees them -- the same words as the wireframe's
+  // centred grey label (LCtrl, LWin ...), which is also what a rule
+  // matches (after the OS modifier swap). It used to translate back to the
+  // PHYSICAL key, so on Windows the pack rule stored as Ctrl+Left read
+  // "Cmd/Win+Left" while the key that fired it was labelled LCtrl. Josh,
+  // 2026-10-13: "Ensure that what the labels say MATCHES WHAT THE USER SEES
+  // AS THE CENTERED, LIGHT GREY KEY IN THE UI WIREFRAME".
   const p=[];
-  for(const b of [0x01,0x02,0x04,0x08])if(phys.has(b))p.push(_MODNAME[b]);
+  for(const b of [0x01,0x02,0x04,0x08])if(m&b)p.push(_MODNAME[b]);
   return p.join('+')||'(none)';}
 function recordChanges(){
   if(!cfg)return;
@@ -11111,8 +11207,81 @@ function sharedInputs(s){
       if(/^\d+$/.test(k)&&+k!==K&&+v===K)out.push('key '+_kname(+k));
       if(k.startsWith('btnkey:')&&+v===K)out.push(_EVBTN_NAME[+k.slice(7)]||('button evdev '+k.slice(7)));}}
   return out;}
+/* 29.25: EVERYTHING ON THIS KEY. Josh, 2026-10-09 09:38 (TOP PRIORITY):
+   "If there are multiple features that potentially affect a key
+   combination, show all of them when editing (for example, right now I
+   have Lalt+Left assigned to a Macro, but I don't know if I delete it if it
+   will be part of the "Mac Option Behavior" toggl or not". Every source a
+   press of this key can meet, in engine order (MAPPING_MODEL §1), each
+   with where it lives and whether it is on. Keys and modifiers are named
+   as the wireframe's centred label names them (what the host is sent). */
+function keyFeatures(dev,u){
+  const out=[],e=effKey(dev,layer,u),canon=e.canon,os=cfg.active_os||'win';
+  const kn=k=>MODS[k]||KEYS[k]||('0x'+Number(k).toString(16));
+  const dis=new Set(cfg.disabled||[]);
+  const grp=id=>Object.entries(cfg.mapping_groups||{})
+    .filter(([,g])=>(g.members||[]).includes(id))
+    .map(([n,g])=>n+(g.active===false?' (group off)':''));
+  const optOn=!!(lastEng&&lastEng.option_mode);
+  if(canon!==u)out.push({what:'Baseline',how:`this key (${kn(u)}) is ${kn(canon)} on this device`});
+  if(e.sends!==canon)out.push({what:'OS modifier swap',how:`${kn(canon)} reaches ${os} as ${kn(e.sends)}`});
+  const lr=layerOfSource('key',canon,dev);
+  if(lr!=null)out.push({what:'Layer key',how:`holding it opens layer ${lr}`});
+  for(const L of allLayers()){
+    const dd=(cfg.kbd_mappings_by_device||{})[dev]||{};
+    const k=`${L},${canon}`,dv=dd[k],sv=(cfg.kbd_mappings||{})[k];
+    const ov=((cfg.os_profiles||{})[os]||{}).kbd_mappings||{};
+    for(const[src,v]of[['this device',dv],[os+' profile',ov[k]],['all devices',sv]]){
+      if(v===undefined)continue;
+      out.push({what:`Layer ${L} mapping`,how:`${kn(canon)} → ${v===null?'nothing here (device override)':v===0?'∅':(Array.isArray(v)?actShort(v):kn(v))}`,
+        src,off:dis.has('kbd:'+k),groups:grp('kbd:'+k)});
+      break;}}
+  for(const r of asgRows()){
+    if(r.kind==='mc'&&r.canon===canon){
+      const note=r.fromAdd&&additions[r.fromAdd]&&(additions[r.fromAdd].entries[r.addIdx]||{}).note;
+      const altOnly=(r.mods&0x0f)===0x04||(r.mods&0x0f)===0x06;
+      const off=r.fromAdd?r.addOff:dis.has('mc:'+r.id);
+      out.push({what:'Shortcut',how:`${modsName(r.mods)} + ${kn(canon)} → ${actShort(r.out)}`,
+        src:r.fromAdd?`pack “${r.fromAdd}”`:(r.os?r.os+' profile':'your rules'),
+        note,off,
+        osOnly:r.os&&r.os!==os?r.os:'',
+        skipped:!!(r.fromAdd&&altOnly&&os==='win'&&!optOn),
+        groups:r.fromAdd?[]:grp('mc:'+r.id)});}
+    if(r.kind==='combo'&&(r.keys||[]).includes(canon))
+      out.push({what:'Combo',how:`${(r.keys||[]).map(kn).join(' + ')} together → ${actShort(r.out)}`,
+        src:r.fromAdd?`pack “${r.fromAdd}”`:'your rules',off:r.fromAdd?r.addOff:dis.has('combo:'+r.id),
+        groups:r.fromAdd?[]:grp('combo:'+r.id)});}
+  const oc=OPT_CHARS.find(x=>x[0]===canon);
+  if(oc&&os==='win')out.push({what:'Mac option/alt mode',
+    how:`LAlt + ${kn(canon)} types ${oc[2]}${oc[4]?' (dead key)':''}; LAlt+Shift types ${oc[3]}`,
+    src:'built in',state:optOn?'Mac option/alt mode is ON now':'only in Mac option/alt mode (Right Alt twice)'});
+  for(const[k,v]of Object.entries(cfg.option_rules||{})){
+    const p=k.split(',').map(Number);if(p[2]!==canon)continue;
+    out.push({what:'Mac option/alt mode rule',how:`${modsName(p[1])} + ${kn(canon)} → ${actShort(v)}`,
+      src:'Option list',state:optOn?'on now':'only in Mac option/alt mode'});}
+  for(const[k,v]of Object.entries(((cfg.synth_chords_by_device||{})[dev])||{})){
+    const p=k.split(',').map(Number);if(p[1]!==u)continue;
+    out.push({what:'Same-report chord',how:`this device's own ${modsName(p[0])}+${kn(u)} → ${actShort(v)}`,
+      src:'this device',off:false,groups:grp(`synth:${dev},${k}`)});}
+  return out;}
+function keyFeaturesHTML(dev,u){
+  const f=keyFeatures(dev,u);
+  const row=x=>{const st=x.off?'<span style="color:var(--mut)">off</span>'
+      :x.osOnly?`<span class="muted">only on ${esc(x.osOnly)}</span>`
+      :x.skipped?'<span class="muted">skipped in Windows option/alt mode</span>'
+      :x.state?`<span class="muted">${esc(x.state)}</span>`:'<span style="color:var(--ok)">on</span>';
+    return `<tr${x.off?' style="opacity:.55"':''}><td style="white-space:nowrap"><b>${esc(x.what)}</b></td>
+      <td>${esc(x.how)}${x.note?`<div class="muted" style="font-size:.7rem">pack says: “${esc(x.note)}”</div>`:''}</td>
+      <td class="muted">${esc(x.src||'')}${x.groups&&x.groups.length?'<br>group: '+x.groups.map(esc).join(', '):''}</td><td>${st}</td></tr>`;};
+  return `<details id="edkeyall" open style="margin:.2rem 0 .45rem;font-size:.76rem"><summary style="cursor:pointer"><b>Everything on this key</b>
+    <span class="muted">· ${f.length} · named as the wireframe's centre label (what the computer is sent)</span></summary>
+    ${f.length?`<table style="width:100%">${f.map(row).join('')}</table>`:'<div class="muted">nothing but itself</div>'}</details>`;}
 function renderEditor(){
   _renderEditorBody();
+  // 29.24.4: what the clicked key IS -- its code, usage and meaning
+  if(sel&&sel.type==='key'&&sel.id!=null){const ed=$('editorbody');
+    if(ed)ed.insertAdjacentHTML('afterbegin',`<div class="muted" id="edkeyid" style="font-size:.74rem;margin-bottom:.3rem">This key: ${esc(keyIdentity(sel.id))}</div>`
+      +keyFeaturesHTML(sel.dev||'',sel.id));}
   if(!sel||!sel.edit||(sel.type!=='btn'&&sel.type!=='key'))return;
   const ins=sharedInputs(sel);if(ins.length<2)return;
   const ed=$('editorbody');if(!ed)return;
@@ -13927,7 +14096,10 @@ function liveRaw(txt){
     return;
   }
   // 29.18: a media key arrives as a key code too; its usage is page-tagged
-  const u=EV2HID[code]??(CONSUMER_USAGE[code]!==undefined?(0x0c<<16)|CONSUMER_USAGE[code]:0);
+  // 29.24.4: a code no table here names is still a key -- the engine's own
+  // id for it (page 0xFE). It was 0 and dropped, which is why Capture saw
+  // nothing when the Fintie's F1 (374) was pressed.
+  const u=EV2HID[code]??(CONSUMER_USAGE[code]!==undefined?(0x0c<<16)|CONSUMER_USAGE[code]:evdevUsage(code));
   if(!u)return;
   holdKey(u,down,rdev);
   if(+m[2]!==2){layoutKeyEvent({u,down,dev:rdev});
@@ -17463,7 +17635,10 @@ let testMW=null;
 function testMWVals(){
   const kind=$('testmwkind').value;
   let v=$('testmwvals').value.split(/[ ,;]+/).map(Number).filter(x=>x>0);
-  v=[...new Set(v)].sort((a,b)=>kind==='speed'?a-b:b-a).slice(0,8);
+  // 29.25: hardest first -- fastest speed, smallest size -- working back to
+  // the easiest, which is drawn LAST and is the reference. Josh, 2026-10-09
+  // 08:59: "Start with the fastest value and work back from there".
+  v=[...new Set(v)].sort((a,b)=>kind==='speed'?b-a:a-b).slice(0,8);
   return {kind,v};}
 function testMWStart(){
   const {kind,v}=testMWVals(),text=$('testmwtext').value.trim();
@@ -17526,25 +17701,30 @@ function testMWErr(a,b){
   return 100*(testMWDist(A.flat(),B)+testMWDist(B.flat(),A))/2;}
 function testMWAnalyse(){
   if(!testMW||testMW.done)return;testMW.done=true;$('testmwdone').disabled=true;
-  const lines=testMWLines(testMW.strokes),ref=lines[0],v=testMW.v;
-  if(!ref){$('testmwstate').textContent='nothing arrived — was the click inside the box?';return;}
+  const lines=testMWLines(testMW.strokes),v=testMW.v;
+  const ref=lines.length===v.length?lines[lines.length-1]:null;
+  if(!ref){$('testmwstate').textContent=lines.length
+      ?`${lines.length} of ${v.length} lines arrived — the reference (the last, easiest) is missing; run it again`
+      :'nothing arrived — was the click inside the box?';return;}
+  const last=v.length-1;
   const rows=v.map((val,i)=>{const l=lines[i];if(!l)return{v:val,missing:true,clean:false};
-    const err=i?testMWErr(l,ref):0,same=l.strokes.length===ref.strokes.length;
+    const err=i<last?testMWErr(l,ref):0,same=l.strokes.length===ref.strokes.length;
     return{v:val,strokes:l.strokes.length,w:+(100*(l.x1-l.x0)/Math.max(1,ref.x1-ref.x0)).toFixed(0),
       h:+(100*(l.y1-l.y0)/Math.max(1,ref.y1-ref.y0)).toFixed(0),err:+err.toFixed(1),
       clean:same&&err<=MW_CAL_ERR};});
-  // the answer is the last value in an UNBROKEN run of clean lines from the
-  // first: a clean line after a failed one is luck, not a setting.
-  let best=null;for(const r of rows){if(!r.clean)break;best=r.v;}
+  // the answer is the hardest value in an UNBROKEN run of clean lines back
+  // from the reference: a clean line beyond a failed one is luck, not a
+  // setting.
+  let best=null;for(let i=last;i>=0;i--){if(!rows[i].clean)break;best=rows[i].v;}
   const kind=testMW.kind,unit=kind==='speed'?'counts/s':'counts';
   $('testmwstats').innerHTML=`<table class="testtbl"><tr><th>${kind}</th><th>strokes</th><th>width</th><th>height</th><th>shape off by</th><th></th></tr>
     ${rows.map((r,i)=>`<tr><td>${r.v} ${unit}</td>${r.missing?'<td colspan="5" class="muted">no line arrived</td>'
-      :`<td>${r.strokes}${i&&r.strokes!==rows[0].strokes?` <span style="color:var(--err)">(${rows[0].strokes})</span>`:''}</td>
-      <td>${r.w}%</td><td>${r.h}%</td><td>${i?r.err+'%':'reference'}</td><td>${r.clean?'✓':'✗'}</td>`}</tr>`).join('')}</table>
+      :`<td>${r.strokes}${i<last&&r.strokes!==rows[last].strokes?` <span style="color:var(--err)">(${rows[last].strokes})</span>`:''}</td>
+      <td>${r.w}%</td><td>${r.h}%</td><td>${i<last?r.err+'%':'reference'}</td><td>${r.clean?'✓':'✗'}</td>`}</tr>`).join('')}</table>
     <p style="margin:.3rem 0">${best!=null?`<b>${kind==='speed'?'Fastest':'Smallest'} clean ${kind}: ${best} ${unit}</b>
       <button id="testmwuse" class="txmini">use it as the starting ${kind}</button>`
-      :'<b>No line matched the first.</b> Try lower values, or check “Enhance pointer precision” is off.'}</p>
-    <p class="muted" style="font-size:.74rem">Width and height are against the first line: with pointer
+      :'<b>No line matched the reference (the last, easiest one).</b> Try lower values, or check “Enhance pointer precision” is off.'}</p>
+    <p class="muted" style="font-size:.74rem">Width and height are against the reference (the last line): with pointer
       acceleration on, faster lines come out bigger. "Shape off by" is the average distance between the two
       lines once both are scaled to the same height; above ${MW_CAL_ERR}% counts as not clean.</p>`;
   $('testmwstate').textContent='done';
