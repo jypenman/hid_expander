@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.0</title>
+<title>HID Config 30.1</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -1704,6 +1704,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.1',d:'2026-10-13',items:[
+   {t:'Shortcuts and keys can fire on a repeated tap: "Fires on 2nd tap (double)" within a time you set; fewer taps either wait and then act as usual, or go through at once',k:'editor'},
+   {t:'Macros can type text and symbols (a line in double quotes, "☑") and include another macro or an expansion ({{macro:12}}, {{expansion:set:trigger}}); typing {{ opens a search to pick one',k:'page-macros'},
+   {t:'A macro\'s "Fired by" shows ×2 for a double-tap binding, and clicking a binding opens it in the mapping editor',k:'page-macros'},
+   {t:'How macros are written: every key name says what it is on hover; obscure ones like "again" are explained',k:'page-macros'}]},
  {v:'30.0',d:'2026-10-13',items:[
    {t:'The page is under 1 MB again (1,134,773 to about 996,000 bytes): comments now say what the code does and when, nothing else',k:'uiver'},
    {t:'No change to anything the page does: the JavaScript is byte-for-byte the same once comments are removed',k:'uiver'},
@@ -3692,6 +3697,8 @@ function setIdent(dev,ref,n){
   if(!Object.keys(bl).length)delete cfg.baseline[dev];}
 function macroLabel(n){const nm=(cfg.macro_names||{})[n];return nm?nm:('M'+n);}
 function actShort(a){if(!a)return'';const k=a[0];
+// 30.1: a tap rule reads as its count, then what it does
+if(k==='taps')return(+((a[1]||{}).n)||2)+'× → '+(asgActLabel(a[2])||'?');
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
 // 29.19: a key with modifiers -- was printed as the bare word "keymods"
 if(k==='keymods')return [[1,'Ctrl'],[8,'Win'],[4,'Alt'],[2,'Shift']].filter(([b])=>(+a[2]||0)&b)
@@ -9404,7 +9411,28 @@ function dropOn(e,target){
 $('pluspill').ondragstart=e=>{window._plusDrag=true;e.dataTransfer.setData('pluspill','1');};
 
 /* ============ editor panel ============ */
-function actionToUI(a){if(!a)return{press:'pass',release:'none'};const k=a[0];
+/* 30.1 (2026-10-13): TAP COUNTS. A rule's action may be
+   ["taps", {n, gap_ms, first}, inner]: inner runs on the Nth tap, each
+   within gap_ms of the last (engine: s6 _taps_press, MAPPING_MODEL §1).
+   Editors show and edit `inner`, and wrap it again on write. */
+const TAPS_GAP_DEFAULT=350;
+function tapsInner(a){return Array.isArray(a)&&a[0]==='taps'?(a[2]??null):a;}
+function tapsSpec(a){return Array.isArray(a)&&a[0]==='taps'?(a[1]||{}):null;}
+function tapsWrap(spec,inner){return spec&&(+spec.n||1)>1&&inner!=null?['taps',spec,inner]:inner;}
+function tapsRead(){const n=$('tapsn');if(!n||+n.value<=1)return null;
+  return{n:+n.value,gap_ms:Math.max(50,+($('tapsgap')||{}).value||TAPS_GAP_DEFAULT),
+    first:(($('tapsfirst')||{}).value)||'wait'};}
+function tapsHTML(spec){const n=spec?+spec.n||1:1,g=spec?+spec.gap_ms||TAPS_GAP_DEFAULT:TAPS_GAP_DEFAULT;
+  return `<div style="font-size:.78rem;margin:.25rem 0;display:flex;gap:.3rem;flex-wrap:wrap;align-items:center"
+      title="Fire only on a repeated tap, each within the time of the last">
+    Fires on <select id="tapsn" style="width:auto">${[1,2,3,4].map(i=>`<option value="${i}" ${i===n?'selected':''}>${i===1?'every tap':i===2?'2nd tap (double)':i+'th tap'}</option>`).join('')}</select>
+    <span ${n>1?'':'style="display:none"'} class="tapsmore">within <input id="tapsgap" type="number" min="50" step="25" value="${g}" style="width:4.5rem"> ms;
+      fewer taps: <select id="tapsfirst" style="width:auto">
+        <option value="wait" ${(spec&&spec.first)!=='pass'?'selected':''}>wait, then send as usual</option>
+        <option value="pass" ${(spec&&spec.first)==='pass'?'selected':''}>send at once</option></select></span></div>`;}
+function actionToUI(a){if(!a)return{press:'pass',release:'none'};
+if(a[0]==='taps')return Object.assign(actionToUI(tapsInner(a)),{taps:tapsSpec(a)});   // 30.1
+const k=a[0];
 if(k==='btn')return{press:'btn',pressBtn:a[1],release:'none'};
 if(k==='key')return{press:'key',pressKey:a[1],release:'none'};
 if(k==='macro')return{press:'macro',pressMacro:a[1],release:'none'};
@@ -9918,7 +9946,8 @@ function renderModChordEd(ed){
   const cur=findModChord(sel.mods,sel.canon,sel.mcKey);
   const os=cur?cur.os:(sel.os||'');
   const key=cur?cur.key:mcKey(sel.mods,sel.canon,-1);
-  const a=(cur&&cur.action)||sel.initial||null;    // 29.25.1: null = none yet
+  const a=tapsInner(cur&&cur.action)||sel.initial||null;    // 29.25.1: null = none yet
+  const tsp=tapsSpec(cur&&cur.action);                         // 30.1
   const ui=actionToUI(a||['suppress']);
   const kL=+String(key).split(',')[0];
   const title=modsName(sel.mods)+' + '+(kL>=0?layerName(kL)+' + ':'')+mcName(sel.canon);
@@ -9947,6 +9976,7 @@ function renderModChordEd(ed){
         <option value="text" ${a&&a[0]==='text'?'selected':''}>Type text…</option>
         ${a&&a[0]==='expansion'?`<option value="expansion" selected>Expansion: ${esc(a[2]||'')}</option>`:''}
       </select><div id="mcargwrap"></div>
+      ${tapsHTML(tsp)}
       <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
         ${searchBoxHTML()}${capBoxHTML()}
@@ -9965,7 +9995,7 @@ function renderModChordEd(ed){
       <input type="checkbox" data-mcmod="${b}" ${m&b?'checked':''}>${n}</label>`).join('');
   const refresh=()=>{
     const k=$('mcact').value,w=$('mcargwrap');
-    const c2=(findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action||['suppress'];
+    const c2=tapsInner((findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action)||['suppress'];
     const outKey=c2[0]==='keymods'||c2[0]==='key'?c2[1]:(ui.pressKey||0x28);
     const outMods=c2[0]==='keymods'?(c2[2]||0):0;
     w.innerHTML=
@@ -9980,7 +10010,7 @@ function renderModChordEd(ed){
     if(!k)return;                            // 29.25.1: nothing chosen yet
     let act;
     if(k==='suppress')act=['suppress'];
-    else if(k==='expansion')act=(findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action||['suppress'];
+    else if(k==='expansion')act=tapsInner((findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action)||['suppress'];
     else if(k==='passthru')act=['passthru'];
     else if(k==='text')act=['text',v==null?'':v];
     else if(k==='macro')act=['macro',+v||1];
@@ -9991,20 +10021,22 @@ function renderModChordEd(ed){
     // move between OS scopes if needed, then write
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
-    mcTable(newOs)[key]=act;
+    mcTable(newOs)[key]=tapsWrap(tapsRead(),act);                // 30.1
     sel.os=newOs;
     toast('shortcut updated — ⬆ Save to device to apply');};
   const bindArgs=()=>ed.querySelectorAll('#mcargwrap select,#mcargwrap input')
     .forEach(x=>{x.onchange=()=>{commit();renderMapTable();};});
   refresh();
-  ed.querySelectorAll('#mcact,#mcos').forEach(x=>x.onchange=()=>{
-    if(x.id==='mcact')refresh();commit();renderMapTable();});
+  ed.querySelectorAll('#mcact,#mcos,#tapsn,#tapsgap,#tapsfirst').forEach(x=>x.onchange=()=>{
+    if(x.id==='mcact')refresh();
+    if(x.id==='tapsn')ed.querySelector('.tapsmore').style.display=+x.value>1?'':'none';
+    commit();renderMapTable();});
   bindNoteField(noteKey('mc',key));
   bindGroupAssign('mc:'+key);
   bindEditorCommon(a2=>{
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
-    mcTable(($('mcos')&&$('mcos').value)||'')[key]=a2;});
+    mcTable(($('mcos')&&$('mcos').value)||'')[key]=tapsWrap(tapsRead(),a2);});
   $('mcdel').onclick=()=>{
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
@@ -10628,6 +10660,7 @@ function _renderEditorBody(){
       ${searchBoxHTML()}${capBoxHTML()}
       <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
     </div>
+    ${isBtn?'':tapsHTML(ui.taps)}
     <label>On press</label><select id="press">
       <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
       ${ui.press==='value'?`<option value="value" selected>${esc(actShort(ui.pressValue))} (from search)</option>`:''}
@@ -10708,6 +10741,7 @@ function _renderEditorBody(){
     // path, and the ONLY place the per-device table should be created.
     const tbl=devScoped?kmapWrite():scopeTable(scope,kind);
     if(!devScoped&&!supersedeApply(kind,key))return;           // 29.11
+    if(!isBtn)a=tapsWrap(tapsRead(),a);                          // 30.1
     if(isBtn){ if(a)tbl[key]=a;else delete tbl[key]; }
     else{ if(!a)delete tbl[key];
       else if(a[0]==='key')tbl[key]=a[1];
@@ -10735,8 +10769,9 @@ function _renderEditorBody(){
   refresh();
   // Bind every select/input in the editor (the number pickers are created
   // by refresh()).
-  ed.querySelectorAll('#press,#release,#pressArg select,#relArg select,#osscope')
+  ed.querySelectorAll('#press,#release,#pressArg select,#relArg select,#osscope,#tapsn,#tapsgap,#tapsfirst')
     .forEach(x=>x.onchange=()=>{
+      if(x.id==='tapsn'){const m=ed.querySelector('.tapsmore');if(m)m.style.display=+x.value>1?'':'none';}
       // Rebuild the sub-dropdown only when the top-level mode
       // (#press/#release) changes.
       if (x.id==='press' || x.id==='release') refresh();
@@ -10891,7 +10926,23 @@ if(p===9)return'btn'+x;if(u===0x00010038)return'wheel';
 if(p===7)return(MODS[x]||KEYS[x]||'0x'+u.toString(16)).toLowerCase();
 if(p===12&&KEYS[u])return mediaToken(KEYS[u]);   // 26.4 / 29.2.1: consumer-page steps
 return'0x'+u.toString(16);}
-function macroToText(s){return s.map(x=>x.length?x.map(usageName).join('+'):'.').join('\n');}
+function macroToText(s){return s.map(x=>macroSpecialText(x)??(x.length?x.map(usageName).join('+'):'.')).join('\n');}
+/* 30.1 (2026-10-13): steps that are not keys. A line that is a JSON string
+   ("☑") types that text; {{macro:N}} plays macro N in place;
+   {{expansion:<set>:<trigger>}} types that expansion's output. Engine:
+   s3_macros._run_special. Typing {{ in a macro box opens a search. */
+function macroSpecialText(x){
+  if(!x||Array.isArray(x)||typeof x!=='object')return null;
+  if('text' in x)return JSON.stringify(String(x.text));
+  if('macro' in x)return '{{macro:'+(+x.macro)+'}}';
+  if('expansion' in x)return '{{expansion:'+x.expansion[0]+':'+x.expansion[1]+'}}';
+  return JSON.stringify(x);}
+function macroSpecialParse(raw){
+  const s=raw.trim();
+  if(s.startsWith('"')){try{const v=JSON.parse(s);return typeof v==='string'?{text:v}:undefined;}catch(_){return undefined;}}
+  let m=/^\{\{\s*macro\s*:\s*(\d+)\s*\}\}$/i.exec(s);if(m)return{macro:+m[1]};
+  m=/^\{\{\s*expansion\s*:([^:]+):([\s\S]+)\}\}$/i.exec(s);if(m)return{expansion:[m[1].trim(),m[2]]};
+  return null;}
 /* 29.2.1: names the parser does not know. They used to be dropped in
    silence -- "ctlr+c" saved as a bare C (CLAUDE.md §2). Every caller now
    checks this first and refuses to save, naming them. */
@@ -10908,7 +10959,11 @@ function macroTextBad(t){textToMacro(t);return textToMacro.bad;}
 function macroBadToast(bad){toast('not saved — unknown step name'+(bad.length>1?'s':'')+': '
   +bad.join(', ')+'. See “How macros are written” for the names.',true);}
 function textToMacro(t){const steps=[],bad=textToMacro.bad=[];
-for(let line of t.split('\n')){line=line.trim().toLowerCase();if(!line)continue;
+for(let line of t.split('\n')){
+const sp=macroSpecialParse(line);                     // 30.1: before lowercasing
+if(sp===undefined){bad.push(line.trim());continue;}
+if(sp){steps.push(sp);continue;}
+line=line.trim().toLowerCase();if(!line)continue;
 if(line==='.'){steps.push([]);continue;}const us=[];
 for(let tok of line.split('+').map(x=>x.trim()).filter(Boolean)){
 let fl=0;
@@ -10929,16 +10984,16 @@ steps.push(us);}return steps;}
 // 23.5: which bindings fire a macro, from asgRows() (every surface:
 // mappings, combos, mod-chords incl. per-OS, packs).
 function macroUsers(){
-  const by={};
+  const by={};window._muRows=[];
   let rows=[];
   try{rows=asgRows();}catch(_){return by;}
   for(const r of rows){
-    const a=r.out;
+    const a=tapsInner(r.out),tsp=tapsSpec(r.out);   // 30.1: a tap rule fires its inner macro
     if(!Array.isArray(a)||a[0]!=='macro')continue;
     const n=String(a[1]);
     const L=[...(r.layers||[])].sort((x,y)=>x-y);
     (by[n]=by[n]||[]).push({
-      label:asgInputLabel(r),
+      label:asgInputLabel(r)+(tsp&&+tsp.n>1?' ×'+tsp.n:''),row:r,
       // A binding on every layer is the normal case and saying so on each row
       // is noise; only a restricted set is worth naming.
       layers:(L.length&&L.length<allLayers().length)
@@ -10957,6 +11012,49 @@ function macroUsers(){
       pack:'',off:false,viaSetting:k});}
   return by;}
 
+/* 30.1 (2026-10-13): typing {{ in a macro box opens a search over macros and
+   expansions; picking one puts its include line ({{macro:N}} or
+   {{expansion:set:trigger}}) where the {{ was, on a line of its own. Josh:
+   "pop up a unified search like we have over on the "Mapping" section". */
+function macroIncludeHits(q){
+  q=(q||'').toLowerCase();const out=[];
+  for(const n of macroSlots()){const nm=(cfg.macro_names||{})[n]||'';
+    if((cfg.macros||{})[n]&&(!q||('m'+n).includes(q)||nm.toLowerCase().includes(q)))
+      out.push({label:macroLabel(n),line:'{{macro:'+n+'}}'});}
+  for(const x of expSearchHits(q||' ').slice(0,30))
+    out.push({label:x.label,title:x.title,line:'{{expansion:'+x.act[1]+':'+x.act[2]+'}}'});
+  return out.slice(0,60);}
+function openMacroInclude(ta){
+  document.querySelectorAll('.asgsearch').forEach(x=>x.remove());
+  const at=ta.selectionStart;
+  const box=document.createElement('div');box.className='asgsearch';
+  box.style.maxHeight='50vh';box.style.overflow='auto';box.style.width='320px';
+  box.innerHTML=`<input type="text" id="mincq" placeholder="macro name or number, expansion trigger or text…" style="width:100%">
+    <div class="muted" style="font-size:.72rem;margin:.2rem 0">Esc: keep the {{ as typed</div><div id="mincres"></div>`;
+  document.body.appendChild(box);
+  const rc=ta.getBoundingClientRect();
+  box.style.left=(rc.left+scrollX)+'px';box.style.top=(rc.bottom+scrollY+3)+'px';
+  const close=()=>{box.remove();ta.focus();};
+  const fill=()=>{const hits=macroIncludeHits($('mincq').value);
+    $('mincres').innerHTML=hits.map((x,i)=>`<div><a class="mlink" data-minc="${i}" title="${esc(x.title||'')}">${esc(x.label)}</a></div>`).join('')
+      ||'<span class="muted">nothing matches'+(expSets?'':' (expansion sets not loaded yet)')+'</span>';
+    $('mincres').querySelectorAll('[data-minc]').forEach(a=>a.onclick=()=>{
+      const line=hits[+a.dataset.minc].line,v=ta.value;
+      const pre=v.slice(0,at-2),post=v.slice(at);
+      const a1=pre&&!pre.endsWith('\n')?'\n':'',a2=post&&!post.startsWith('\n')?'\n':'';
+      ta.value=pre+a1+line+a2+post;
+      ta.dispatchEvent(new Event('change',{bubbles:true}));close();});};
+  fill();$('mincq').oninput=fill;$('mincq').focus();
+  $('mincq').onkeydown=e=>{if(e.key==='Escape')close();};}
+document.addEventListener('input',e=>{
+  const ta=e.target;
+  if(!ta||ta.tagName!=='TEXTAREA'||!(ta.dataset.m!==undefined||ta.id==='im'||ta.dataset.osmacro!==undefined))return;
+  const p=ta.selectionStart;
+  if(e.inputType==='insertText'&&ta.value.slice(p-2,p)==='{{')openMacroInclude(ta);});
+document.addEventListener('click',e=>{
+  const s=e.target.closest&&e.target.closest('[data-murow]');if(!s)return;
+  const r=(window._muRows||[])[+s.dataset.murow];if(!r)return;
+  switchTab('map');asgSelect(r);});
 function macroUsersHTML(list){
   if(!list||!list.length)
     return '<span class="muted" style="font-size:.75rem">not bound to anything</span>';
@@ -10964,7 +11062,9 @@ function macroUsersHTML(list){
     +list.map(u=>{
       const bits=[u.layers?'on '+u.layers:'',u.os?u.os:'',
                   u.pack?'from '+u.pack:''].filter(Boolean).join(' · ');
-      return `<span title="${esc(bits||'fires this macro')}" style="`
+      // 30.1: a binding opens in the mapping editor (where its tap count is set)
+      const ri=u.row?(window._muRows=window._muRows||[]).push(u.row)-1:-1;
+      return `<span ${ri>=0?`data-murow="${ri}" class="mlink"`:''} title="${esc((bits||'fires this macro')+(ri>=0?' — click to edit, incl. how many taps':''))}" style="`
         +'font-size:.72rem;padding:.1rem .4rem;border:1px solid var(--line);'
         +'border-radius:999px;'
         +(u.off?'opacity:.45;text-decoration:line-through;':'')
@@ -11110,6 +11210,21 @@ function _primerKeyNames(){
     const u=NAME2KEY[n];if(u>0xffff||n.length<2||seen.has(u))continue;
     seen.add(u);out.push(n);}
   return out.sort();}
+// 30.1 (2026-10-13): what the obscure names are. Josh: "Explain what is
+// "again" in the keys ... list". Standard HID keyboard keys (page 7) that
+// Windows and macOS mostly ignore; listed so a name never looks like a typo.
+const KEY_MEANING={0x74:'Execute',0x75:'Help',0x76:'Menu (Sun Props/Menu)',0x77:'Select',
+  0x78:'Stop',0x79:'Again: repeat the last action (Sun keyboards)',0x7a:'Undo key',0x7b:'Cut key',
+  0x7c:'Copy key',0x7d:'Paste key',0x7e:'Find key',0x65:'Application: the context-menu key',
+  0x66:'Power',0x9a:'SysReq / Attention',0x9b:'Cancel',0x9c:'Clear',0x9e:'Return (second Enter)',
+  0x9f:'Separator',0xa0:'Out',0xa1:'Oper',0xa3:'CrSel/Props',0xa4:'ExSel'};
+function _primerKeyNamesHTML(){
+  return _primerKeyNames().map(n=>{const u=NAME2KEY[n];
+    const t=(KEYS[u]||n)+' · HID 0x'+u.toString(16)+(KEY_MEANING[u]?' · '+KEY_MEANING[u]:'');
+    return `<code title="${esc(t)}" style="${KEY_MEANING[u]?'text-decoration:underline dotted':''}">${esc(n)}</code>`;}).join(' · ');}
+function _primerObscure(){
+  return _primerKeyNames().filter(n=>KEY_MEANING[NAME2KEY[n]])
+    .map(n=>n+' = '+KEY_MEANING[NAME2KEY[n]]).join('; ')||'—';}
 function _primerMediaNames(){return Object.keys(_mediaByName()).sort();}
 const PRIMERS={
  exp:{title:'Expansion syntax',
@@ -11152,24 +11267,30 @@ const PRIMERS={
    {name:'Order',rows:[
      ['1 → 6','$1 groups → date directives → {YYYY} → {{#…}} → lists, durations → {^}. Keys {{…}} are pressed last, while typing. Escaped characters are left alone by all of them.']]}]},
  mac:{title:'How macros are written',
-  quick:[['one line','= one 12 ms step'],['ctrl+c','keys held together'],['.','empty step (12 ms pause)'],
+  quick:[['one line','= one 12 ms step'],['ctrl+c','keys held together'],['.','empty step (12 ms pause)'],['"☑"','type text'],['{{','include'],
          ['btn1','click'],['btn1_down … btn1_up','hold across steps'],['wheel','one scroll detent']],
   cats:()=>[
    {name:'Steps & timing',rows:[
      ['ctrl+c','Everything on one line is held for that step (12 ms), then released.'],
      ['.','An empty step: a 12 ms pause. Repeat it for longer pauses — ten dots ≈ 120 ms.'],
-     ['(no escape)','Macro steps are key names, not text. To type text, use an expansion or a “Type text” action.'],
+     ['(no escape)','Steps are key names. To type text, put it on its own line in double quotes.'],
      ['Unknown name','The macro is not saved and the toast names the word, so ctlr+c can’t become a bare C.']]},
    {name:'Modifiers',rows:[
      ['ctrl shift alt win cmd','Left-hand keys. meta, gui, lcmd = win; option, opt = alt.'],
      ['rctrl rshift ralt rwin','Right-hand keys. altgr = ralt; rcmd = rwin.']]},
    {name:'Keys',rows:[
-     ['Names',_primerKeyNames().join(' · ')],
+     ['Names',{html:_primerKeyNamesHTML()}],
+     ['Obscure keys',_primerObscure()+'. Standard HID keys most computers ignore; hover any name for what it is.'],
      ['Media',_primerMediaNames().join(' · ')||'—'],
      ['0x70004','Raw HID usage (page in the top bits) for anything without a name.']]},
    {name:'Mouse',rows:[
      ['btn1 … btn5','Left, right, middle, back, forward: pressed for the step.'],
      ['wheel','One detent of scroll up.']]},
+   {name:'Text & includes',rows:[
+     ['"☑"','A line in double quotes types that text (symbols too).'],
+     ['{{macro:12}}','Plays macro 12 here, then carries on.'],
+     ['{{expansion:set:trigger}}','Types that expansion’s output.'],
+     ['{{','Typing {{ opens a search to pick a macro or expansion.']]},
    {name:'Hold & release',rows:[
      ['btn1_down','Press and KEEP holding from this step on.'],
      ['btn1_up','Let go. Works for keys too: shift_down … shift_up.'],
@@ -11183,7 +11304,7 @@ function renderPrimers(){
     el.innerHTML=`<div class="pq"><b>${esc(p.title)}:</b>${p.quick.map(([c,d])=>
         `<span><code>${esc(c)}</code> ${esc(d)}</span>`).join('')}</div>
       <div class="pcats">${cats.map(c=>`<button class="pcat${c===cat?' on':''}" data-pc="${esc(c.name)}">${esc(c.name)}</button>`).join('')}</div>
-      ${cat?`<table>${cat.rows.map(([c,d])=>`<tr><td><code>${esc(c)}</code></td><td>${esc(d)}</td></tr>`).join('')}</table>`:''}`;
+      ${cat?`<table>${cat.rows.map(([c,d])=>`<tr><td><code>${esc(c)}</code></td><td>${d&&d.html?d.html:esc(d)}</td></tr>`).join('')}</table>`:''}`;
     el.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{
       _primerSetOpen(k,b.dataset.pc===open?'':b.dataset.pc);renderPrimers();});});}
 
