@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.28</title>
+<title>HID Config 29.29</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -850,9 +850,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
   <div class="tab" data-t="bt">Bluetooth</div>
   <div class="tab" data-t="tx">Text Transform</div>
   <div class="tab" data-t="log">Changes</div>
-  <div class="tab" data-t="usage">Usage</div>
-  <div class="tab" data-t="perf">Performance</div>
-  <div class="tab" data-t="test">Test</div>
+  <!-- 29.29: Usage, Training, Test and Performance are one tab, with the
+       four as pills below it (#statstabs). Josh, 2026-10-13: "A) But
+       instead of calling it "Stats", call it "Usage/Performance/Training"
+       (and Allow user to edit what this it called in the Preferences
+       section for that tab". The label is PREFS.stats.name. -->
+  <div class="tab" data-t="stats" id="tab-stats">Usage/Performance/Training</div>
   <!-- 29.21: shown only when chosen (Preferences → Layout, or the switch on
        the Macros page) -->
   <div class="tab" data-t="mw" id="tab-mw" style="display:none">✍ Mouse writing</div>
@@ -1246,6 +1249,22 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
          · what YOU changed        (the profile's own changelog)
          · which versions the Pi has kept   (and what a restore would undo)
          · what changed in the APP  (the release history behind the badge) -->
+  <!-- 29.29: what is NEXT, beside what is done. Josh, 2026-10-13: "Where:
+       Changes tab. ii) My order sets the releases." Read on demand from Pi1
+       (s0 `roadmap`); every edit is one small operation (s0 `rmop`), applied
+       to docs/ROADMAP.md at the next push. -->
+  <details class="panel" id="rmsec" data-uikey="log-roadmap">
+    <summary style="cursor:pointer"><h2 style="font-size:1rem;display:inline">🗺 Roadmap — what's next
+      <span class="muted" id="rmcount" style="font-weight:400;font-size:.8rem"></span></h2></summary>
+    <p class="muted" style="font-size:.78rem;margin:.3rem 0">Open items only, newest release first.
+      Drag an item onto another to put it before that one, or onto a release's title to move it there;
+      your order sets the releases. ★ sets priority. Your changes are kept on the Pi and reach
+      the roadmap at the next push.</p>
+    <div class="bar"><button id="rmload">⟳ Load roadmap</button>
+      <span class="muted" id="rmhint" style="font-size:.78rem">needs a connected device</span></div>
+    <div id="rmbody" style="font-size:.8rem;line-height:1.45"></div>
+  </details>
+
   <div class="panel" data-uikey="log-yours">
     <h2 style="font-size:1rem">What you changed <span class="muted" id="logcount" style="font-weight:400;font-size:.8rem"></span></h2>
     <p class="muted" style="font-size:.8rem">Written automatically each time you <b>⬆ Save to device</b>: a plain-English record of what changed, stored inside the profile so it travels with it.</p>
@@ -1274,6 +1293,13 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div id="logappbody" style="font-size:.8rem;line-height:1.6"></div>
   </div>
 </div>
+<div class="tabs" id="statstabs" style="display:none;margin-bottom:.4rem">
+  <div class="tab" data-st="usage">Usage</div>
+  <div class="tab" data-st="train">Training</div>
+  <div class="tab" data-st="test">Test</div>
+  <div class="tab" data-st="perf">Performance</div>
+  <button data-pfa="open-stats" class="txmini" title="Rename this tab (Preferences)" style="align-self:center">⚙</button>
+</div>
 <div id="page-usage" style="display:none">
   <!-- 24.7: APM. Reads the live engine status (fid 3), which since 24.6 is on
        tmpfs — so showing it costs no card writes at all.
@@ -1291,7 +1317,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       Since the engine restarted.</p>
     <div id="perfapmbody"></div>
   </details>
-  <div class="tabs" id="usagetabs" style="margin-bottom:.4rem">
+  <!-- 29.29: driven by #statstabs now; kept for its handler, not shown -->
+  <div class="tabs" id="usagetabs" style="display:none;margin-bottom:.4rem">
     <div class="tab on" data-ut="usage">Usage</div>
     <div class="tab" data-ut="train">Training</div>
   </div>
@@ -1945,6 +1972,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.29',d:'2026-10-13',items:[
+   {t:'Usage, Training, Test and Performance are one tab, "Usage/Performance/Training", with the four as pills; rename it in Preferences',k:'tab-stats'},
+   {t:'Changes → 🗺 Roadmap: every open item, newest release first, with your words folded under each',k:'rmsec'},
+   {t:'Roadmap: drag items to reorder or move them between releases; ★ priority; AUTONOMOUS and URGENT; answer a waiting question; edit wording; add an item -- each sent as one small change, applied at the next push',k:'rmsec'}]},
  {v:'29.28',d:'2026-10-13',items:[
    {t:'Repeated letters: the Feather receiver no longer writes its link figures to the SD card from inside its input loop (Pi1\'s card averages 251 ms a write); they live in RAM',k:'benchstrip'},
    {t:'The receiver records every stall -- when, how long, and how long each step took -- so the next late key names its cause',k:'benchstrip'},
@@ -3160,6 +3191,7 @@ function updateCurProf(){
 function pfResult(text){
   if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
   if(text.startsWith('NOTE ')){qnoteDone(text);return;}                   // 29.2.2
+  if(rmResult(text))return;                                               // 29.29
   if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
   if(text.startsWith('CORPUS')){
     try{ corpusData=JSON.parse(text.slice(text.indexOf('\n')+1));
@@ -3229,6 +3261,9 @@ $('histbtn').onclick=()=>showHistory();
 // 24.3: the same action, from inside the Changes tab, so you do not have to
 // go back up to the profile bar to re-read the list.
 {const hl=$('histload');if(hl)hl.onclick=()=>showHistory();}
+// 29.29: the roadmap loads when its section is first opened while connected
+{const b=$('rmload');if(b)b.onclick=()=>rmLoad();
+ const s=$('rmsec');if(s)s.addEventListener('toggle',()=>rmAuto());}
 $('bklocal').onclick=()=>downloadBundle();
 $('bkrestore').onchange=e=>{
   const f=e.target.files&&e.target.files[0];
@@ -11027,6 +11062,134 @@ function renderChangelog(){
   if(hb&&!_histIndex&&!hb.innerHTML)
     hb.innerHTML='<p class="muted">Not read yet — the list lives on the Pi '
       +'and is fetched on request, because it can be long.</p>';}
+/* ===== 29.29: THE ROADMAP IN THE CHANGES TAB (R1-R3) =====================
+   rmData is the export (tools/roadmap_export.py) as the Pi holds it;
+   rmPending every edit not yet applied to docs/ROADMAP.md. What is shown is
+   rmData with rmPending replayed over it, so his edits survive a reload
+   before the push that applies them. The page only ever SENDS operations,
+   each carrying `base` -- the export it was made against -- so one made
+   against an older roadmap is surfaced at apply time, never merged by
+   guesswork. URGENT is his tag alone, and this is where he sets it. */
+let rmData=null,rmPending=[],rmNewN=0;
+const RM_AREAS=['UI IN GENERAL','MAPPING','EXPANSIONS','MACROS','OS','BLUETOOTH','TEXT TRANSFORM','CHANGES','USAGE','COPY/PASTE','MISC / ENGINE'];
+const RM_KINDS=['BUG','TWEAK','NEW_FEATURE'];
+function rmLoad(){if(!device){toast('connect first',true);return;}
+  $('rmhint').textContent='loading…';pfCmd('roadmap');}
+function rmAuto(){if(device&&!rmData&&$('rmsec')&&$('rmsec').open&&!rmLoad._asked){rmLoad._asked=true;rmLoad();}}
+function rmFind(v,id){for(const r of v.releases){const i=r.items.findIndex(x=>x.id===id);if(i>=0)return[r,i];}return[null,-1];}
+function rmApply(v,op){
+  const [r,i]=op.id?rmFind(v,op.id):[null,-1];const it=r?r.items[i]:null;
+  if(op.op==='add'){const d=v.releases.find(x=>x.rel===op.rel);if(!d)return;
+    d.items.push({id:op._tmp||('new-'+(++rmNewN)),rel:op.rel,area:op.area,kind:op.kind,tags:[],prio:0,
+      date:(op.ts||'').slice(0,10),text:op.text,quote:'',blocked:false,options:[],isNew:true});return;}
+  if(!it)return;
+  if(op.op==='move'){const d=v.releases.find(x=>x.rel===op.rel);if(!d)return;
+    r.items.splice(i,1);it.rel=op.rel;
+    const j=op.before?d.items.findIndex(x=>x.id===op.before):-1;
+    if(j>=0)d.items.splice(j,0,it);else d.items.push(it);}
+  else if(op.op==='prio')it.prio=+op.p||0;
+  else if(op.op==='edit')it.text=op.text;
+  else if(op.op==='tag'){it.tags=(it.tags||[]).filter(t=>t!==op.tag);if(op.on)it.tags.push(op.tag);}
+  else if(op.op==='answer'){it.blocked=false;it.answer=op.pick+(op.note?' — '+op.note:'');}}
+function rmView(){if(!rmData||!rmData.roadmap)return null;
+  const v=JSON.parse(JSON.stringify(rmData.roadmap));rmNewN=0;
+  for(const op of rmPending)rmApply(v,op);return v;}
+function rmSend(op){
+  op.base=rmData&&rmData.roadmap&&rmData.roadmap.base;
+  if(op.op==='add')op._tmp='new-'+Date.now();
+  rmPending.push(op);renderRoadmap();
+  const wire=Object.assign({},op);delete wire._tmp;
+  pfCmd('rmop '+JSON.stringify(wire));}
+function rmResult(text){
+  if(text.startsWith('ROADMAP')){
+    try{rmData=JSON.parse(text.slice(text.indexOf('\n')+1));rmPending=rmData.pending||[];
+      $('rmhint').textContent=rmData.roadmap?'':'not on the Pi yet — it arrives with the next push';
+      renderRoadmap();}
+    catch(e){$('rmhint').textContent='unreadable: '+e.message;}
+    return true;}
+  if(text.startsWith('roadmap read failed')){$('rmhint').textContent=text;return true;}
+  if(text.startsWith('RMOP ')){
+    if(text.startsWith('RMOP saved'))toast('roadmap: '+text.slice(11));
+    else{toast(text,true);rmLoad();}
+    return true;}
+  return false;}
+function renderRoadmap(){
+  const el=$('rmbody');if(!el)return;
+  const v=rmView();
+  if(!v){el.innerHTML='';$('rmcount').textContent='';return;}
+  const n=v.releases.reduce((a,r)=>a+r.items.length,0);
+  $('rmcount').textContent=`· ${n} open in ${v.releases.length}${rmPending.length?` · ${rmPending.length} change${rmPending.length>1?'s':''} waiting for the next push`:''}`;
+  const chip=(t,on,attr,tip)=>`<span class="pill" ${attr} title="${esc(tip||'')}" style="padding:0 .4rem;font-size:.7rem;cursor:pointer;${on?'background:var(--hi);color:#fff;border-color:var(--hi)':''}">${esc(t)}</span>`;
+  const row=it=>{
+    const st='★'.repeat(it.prio||0)+'☆'.repeat(3-(it.prio||0));
+    const other=(it.tags||[]).filter(t=>t!=='AUTONOMOUS'&&t!=='URGENT');
+    const long=it.text.length>260;
+    return `<div class="rmitem" data-rmid="${esc(it.id)}" ${it.isNew?'':'draggable="true"'}
+        style="border:1px solid var(--line);border-radius:6px;padding:.3rem .45rem;margin:.25rem 0;${it.isNew?'border-style:dashed':''}">
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap;align-items:center">
+        ${it.isNew?'<span class="muted" title="added in this page; editable after the next push">new</span>'
+          :`<a class="mlink" data-rmprio="${esc(it.id)}" title="priority: click to change" style="color:var(--warn);letter-spacing:-1px">${st}</a>`}
+        <span title="${it.blocked?'waiting on you':'open'}">${it.blocked?'⛔':'☐'}</span>
+        ${it.area?`<code style="font-size:.7rem">${esc(it.area)}</code>`:''}${it.kind?`<code style="font-size:.7rem">${esc(it.kind)}</code>`:''}
+        ${other.map(t=>`<code style="font-size:.7rem">${esc(t)}</code>`).join('')}
+        <span class="muted" style="font-size:.72rem">${esc(it.date||'')}</span>
+        ${it.isNew?'':chip('AUTONOMOUS',(it.tags||[]).includes('AUTONOMOUS'),`data-rmtag="AUTONOMOUS" data-id="${esc(it.id)}"`,'needs no decision from you')
+          +chip('URGENT',(it.tags||[]).includes('URGENT'),`data-rmtag="URGENT" data-id="${esc(it.id)}"`,'yours alone: ships next, by itself')
+          +`<a class="mlink" data-rmedit="${esc(it.id)}" title="edit the wording">✎</a>`}</div>
+      <div class="rmtext" style="margin-top:.15rem">${esc(long?it.text.slice(0,260)+'…':it.text)}${long?` <a class="mlink" data-rmmore="${esc(it.id)}">more</a>`:''}</div>
+      ${it.answer?`<div style="color:var(--ok)">✓ answered: ${esc(it.answer)}</div>`:''}
+      ${it.quote?`<details><summary class="muted" style="font-size:.72rem;cursor:pointer">your words</summary><div class="muted" style="font-size:.74rem">${esc(it.quote)}</div></details>`:''}
+      ${it.blocked&&!it.isNew?`<div style="margin-top:.2rem;display:flex;gap:.3rem;flex-wrap:wrap;align-items:center">
+        ${(it.options||[]).map(o=>`<label class="inl"><input type="radio" name="rmopt-${esc(it.id)}" value="${esc(o)}"> ${esc(o)}</label>`).join('')}
+        <input type="text" data-rmnote="${esc(it.id)}" placeholder="${(it.options||[]).length?'note (optional)':'your answer'}" style="flex:1;min-width:10rem">
+        <button class="txmini" data-rmans="${esc(it.id)}">Answer</button></div>`:''}
+    </div>`;};
+  el.innerHTML=v.releases.map(r=>`<div class="rmrel" data-rmrel="${esc(r.rel)}" style="margin:.5rem 0">
+      <div class="rmhead" data-rmrel="${esc(r.rel)}" style="font-weight:600;border-bottom:1px solid var(--line);padding:.15rem 0">
+        ${esc(r.version?r.rel+' — '+r.title:r.title)} <span class="muted" style="font-weight:400">· ${r.items.length}</span>
+        <a class="mlink" data-rmadd="${esc(r.rel)}" style="font-weight:400;font-size:.75rem">＋ add</a></div>
+      <div data-rmaddform="${esc(r.rel)}" style="display:none;margin:.3rem 0;gap:.3rem;flex-wrap:wrap">
+        <select data-rmarea>${RM_AREAS.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+        <select data-rmkind>${RM_KINDS.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+        <input type="text" data-rmtext placeholder="what it should do" style="flex:1;min-width:14rem">
+        <button class="txmini" data-rmaddgo="${esc(r.rel)}">Add</button></div>
+      ${r.items.map(row).join('')}</div>`).join('');
+  el.querySelectorAll('[data-rmprio]').forEach(a=>a.onclick=()=>{const [r,i]=rmFind(v,a.dataset.rmprio);
+    rmSend({op:'prio',id:a.dataset.rmprio,p:((r.items[i].prio||0)+1)%4});});
+  el.querySelectorAll('[data-rmtag]').forEach(a=>a.onclick=()=>{const [r,i]=rmFind(v,a.dataset.id);
+    const on=!(r.items[i].tags||[]).includes(a.dataset.rmtag);
+    if(a.dataset.rmtag==='URGENT'&&on&&!confirm('Tag this URGENT? It ships next, on its own.'))return;
+    rmSend({op:'tag',id:a.dataset.id,tag:a.dataset.rmtag,on});});
+  el.querySelectorAll('[data-rmmore]').forEach(a=>a.onclick=()=>{const [r,i]=rmFind(v,a.dataset.rmmore);
+    a.parentElement.textContent=r.items[i].text;});
+  el.querySelectorAll('[data-rmedit]').forEach(a=>a.onclick=()=>{const id=a.dataset.rmedit,[r,i]=rmFind(v,id);
+    const box=a.closest('.rmitem').querySelector('.rmtext');
+    box.innerHTML=`<textarea rows="4" style="width:100%;box-sizing:border-box">${esc(r.items[i].text)}</textarea>
+      <button class="txmini" data-rmsave>Save</button> <button class="txmini" data-rmcancel>Cancel</button>`;
+    box.querySelector('[data-rmcancel]').onclick=()=>renderRoadmap();
+    box.querySelector('[data-rmsave]').onclick=()=>{const t=box.querySelector('textarea').value.trim();
+      if(!t||t===r.items[i].text){renderRoadmap();return;}rmSend({op:'edit',id,text:t});};});
+  el.querySelectorAll('[data-rmans]').forEach(b=>b.onclick=()=>{const id=b.dataset.rmans;
+    const pick=(el.querySelector(`input[name="rmopt-${CSS.escape(id)}"]:checked`)||{}).value||'';
+    const note=el.querySelector(`[data-rmnote="${CSS.escape(id)}"]`).value.trim();
+    if(!pick&&!note){toast('pick an option or write an answer',true);return;}
+    rmSend({op:'answer',id,pick,note});});
+  el.querySelectorAll('[data-rmadd]').forEach(a=>a.onclick=()=>{
+    const f=el.querySelector(`[data-rmaddform="${CSS.escape(a.dataset.rmadd)}"]`);f.style.display=f.style.display==='none'?'flex':'none';});
+  el.querySelectorAll('[data-rmaddgo]').forEach(b=>b.onclick=()=>{const f=b.parentElement;
+    const text=f.querySelector('[data-rmtext]').value.trim();if(!text){toast('write what it should do',true);return;}
+    rmSend({op:'add',rel:b.dataset.rmaddgo,area:f.querySelector('[data-rmarea]').value,kind:f.querySelector('[data-rmkind]').value,text});});
+  // drag: onto an item = before it; onto a release title = last in it
+  el.querySelectorAll('.rmitem[draggable]').forEach(d=>d.ondragstart=e=>{
+    e.dataTransfer.setData('text/rmid',d.dataset.rmid);e.dataTransfer.effectAllowed='move';});
+  el.querySelectorAll('.rmitem,.rmhead').forEach(t=>{
+    t.ondragover=e=>{if([...e.dataTransfer.types].includes('text/rmid')){e.preventDefault();t.style.outline='2px solid var(--hi)';}};
+    t.ondragleave=()=>{t.style.outline='';};
+    t.ondrop=e=>{e.preventDefault();t.style.outline='';const id=e.dataTransfer.getData('text/rmid');if(!id)return;
+      const rel=t.closest('.rmrel').dataset.rmrel,before=t.classList.contains('rmitem')?t.dataset.rmid:null;
+      if(before===id)return;
+      if(before&&String(before).startsWith('new-')){toast('drop onto an item that is already on the roadmap',true);return;}
+      rmSend({op:'move',id,rel,before});};});}
 window.exportChangelog=()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([changelogText()],{type:'text/plain'}));
@@ -16835,6 +16998,7 @@ const PF_DEFAULT_RECIPE =
 let PREFS = {
   // 29.21: hidebt / mwtab -- which top tabs show (Preferences → Layout)
   look: { btnpad: 0.1, headpad: 0.25, hidebt: false, mwtab: false },   // 27.8 / 29.20: Preferences → Layout
+  stats: { name: '' },        // 29.29: the Usage/Performance/Training tab's label ('' = that)
   bench: {
     recipe: PF_DEFAULT_RECIPE,
     show: true,
@@ -16879,7 +17043,10 @@ function pfApplyLook(){
    its own section, shown when chosen. The Mouse writing panel is MOVED, not
    copied, so there is only ever one of it and its handlers stay attached.
    Leaving a tab that has just been hidden goes to Mapping. */
+const STATS_NAME = 'Usage/Performance/Training';
+function statsName(){ return ((PREFS.stats || {}).name || '').trim() || STATS_NAME; }
 function pfApplyTabs(){
+  const stb = $('tab-stats'); if(stb) stb.textContent = statsName();
   const L = PREFS.look || {}, bt = document.querySelector('#toptabs [data-t="bt"]');
   if(bt) bt.style.display = L.hidebt ? 'none' : '';
   const tab = $('tab-mw'), sec = $('mwsec'), page = $('page-mw'), stub = $('mwstub');
@@ -17028,7 +17195,8 @@ const PF_TABS = [
   { id:'exp',    label:'Expansions'     },
   { id:'tx',     label:'Text Transform' },
   { id:'bench',  label:'Benchmark'      },
-  { id:'os',     label:'OS'             }
+  { id:'os',     label:'OS'             },
+  { id:'stats',  label:'Usage/Performance/Training' }
 ];
 
 /* Each item: what it controls, the control itself, and instructions that are
@@ -17047,7 +17215,7 @@ function pfClose(){ $('prefs').style.display = 'none'; }
 function pfRender(){
   const tab = $('prefs').dataset.tab || 'bench';
   $('prefstabs').innerHTML = PF_TABS.map(t =>
-    `<div class="pill${t.id===tab?' on':''}" data-pftab="${t.id}">${esc(t.label)}</div>`).join('');
+    `<div class="pill${t.id===tab?' on':''}" data-pftab="${t.id}">${esc(t.id==='stats'?statsName():t.label)}</div>`).join('');
   const body = $('prefsbody');
   body.innerHTML = (PF_SECTIONS[tab] || (() => '<p class="muted">Nothing configurable here yet.</p>'))();
 }
@@ -17056,6 +17224,17 @@ const pfHelp = (title, html) =>
   `<details class="pfhelp"><summary>${esc(title)}</summary><div>${html}</div></details>`;
 
 const PF_SECTIONS = {
+
+  // 29.29: the combined tab's own name
+  stats: () => `
+    <div class="pfrow">
+      <label for="pf-statsname">Tab name</label>
+      <input type="text" id="pf-statsname" maxlength="40" style="width:16rem"
+        value="${esc((PREFS.stats || {}).name || '')}" placeholder="${esc(STATS_NAME)}">
+      ${pfHelp('What this changes', `
+        <p>What the tab holding Usage, Training, Test and Performance is
+        called. Empty = "${esc(STATS_NAME)}". Kept in this browser only.</p>`)}
+    </div>`,
 
   look: () => {
     const v = +((PREFS.look || {}).btnpad ?? 0.1);
@@ -17222,6 +17401,7 @@ function pfInit(){
     if(t.dataset.pftab){ $('prefs').dataset.tab = t.dataset.pftab; pfRender(); return; }
     switch(t.dataset.pfa){
       case 'open':  pfOpen(); break;
+      case 'open-stats': pfOpen('stats'); break;
       case 'close': pfClose(); break;
       case 'run':   pfRunBenchmark(); break;
       case 'headpad-reset':
@@ -17258,6 +17438,8 @@ function pfInit(){
     else if(id === 'pf-secs')   b.random_seconds = +e.target.value || 20;
     else if(id === 'pf-from')   { b.random_from = e.target.value; pfSchedule(); }
     else if(id === 'pf-to')     { b.random_to = e.target.value; pfSchedule(); }
+    else if(id === 'pf-statsname'){
+      (PREFS.stats = PREFS.stats || {}).name = e.target.value; pfApplyTabs(); }
     else if(id === 'pf-hidebt' || id === 'pf-mwtab'){
       (PREFS.look = PREFS.look || {})[id === 'pf-hidebt' ? 'hidebt' : 'mwtab'] = e.target.checked; pfApplyTabs(); }
     else if(id === 'pf-headpad'){
@@ -18179,13 +18361,24 @@ function renderTestHistory(){
   on('testarena','pointermove',e=>{testMMove(e);testFMove(e);});on('testarena','click',testMClick);
   on('testhistload','click',()=>{if(device)getFile(TESTS_FID);else toast('connect first',true);});
 })();
+// 29.29: the three pages behind the one tab, and the one last shown there
+const STATS_PAGES=['usage','test','perf'];
+let _statsLast='usage';
+function statsPill(){return _statsLast==='usage'&&typeof usageTab!=='undefined'&&usageTab==='train'?'train':_statsLast;}
 function switchTab(t){
-  document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
+  if(t==='stats')t=_statsLast;
+  const inStats=STATS_PAGES.includes(t);
+  if(inStats)_statsLast=t;
+  document.querySelectorAll('#toptabs .tab').forEach(x=>x.classList.toggle('on',
+    x.dataset.t===t||(x.dataset.t==='stats'&&inStats)));
+  const st=$('statstabs');
+  if(st){st.style.display=inStats?'':'none';
+    st.querySelectorAll('[data-st]').forEach(x=>x.classList.toggle('on',x.dataset.st===statsPill()));}
   for(const p of['map','macros','exp','expr','os','bt','log','tx','usage','perf','test','mw'])$('page-'+p).style.display=p===t?'':'none';
   if(t==='test')renderTest();
   if(t==='tx')txInit();
   if(t==='os')renderOsTab();
-  if(t==='log')renderChangelog();
+  if(t==='log'){renderChangelog();rmAuto();}
   // 21.0: Usage fetches on first open, not on connect -- statistics are the
   // least urgent thing on a 9 KB/s channel.
   if(t==='usage'){ if(!usageData&&device)loadUsage(); renderUsage(); renderTrack(); renderTraining(); renderPracticeKbd(); }
@@ -18251,6 +18444,15 @@ $('perfprioreset').onclick=e=>{
   e.preventDefault();
   try{ localStorage.removeItem(PERF_LS); }catch(_){}
   perfPrio=null; renderPerf(); toast('priority order reset');};
+// 29.29: the pills under Usage/Performance/Training. Usage and Training
+// are one page (its own sub-tabs, hidden, still do the switching).
+document.querySelectorAll('#statstabs [data-st]').forEach(p=>p.onclick=()=>{
+  const s=p.dataset.st;
+  if(s==='usage'||s==='train'){
+    const sub=document.querySelector(`#usagetabs [data-ut="${s}"]`);
+    if(sub)sub.click();
+    switchTab('usage');}
+  else switchTab(s);});
 // 21.0: Usage / Training are sub-tabs of one page, so Training can reuse the
 // data Usage already fetched instead of asking the Pi twice.
 document.querySelectorAll('#usagetabs .tab').forEach(t=>t.onclick=()=>{
