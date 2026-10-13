@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 29.27</title>
+<title>HID Config 29.28</title>
 <style>
 /* 20.8.2 BF2 #3/#4: two distinct visual languages, because one blue was doing
    both jobs. --hi (blue) marks a PRIMARY ACTION you can press (Connect, Save
@@ -1945,6 +1945,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // looks like. The whole list is now visible at once in the Changes tab, where
 // a dead key is obvious rather than three clicks down a popover.
 const VERSION_HISTORY=[
+ {v:'29.28',d:'2026-10-13',items:[
+   {t:'Repeated letters: the Feather receiver no longer writes its link figures to the SD card from inside its input loop (Pi1\'s card averages 251 ms a write); they live in RAM',k:'benchstrip'},
+   {t:'The receiver records every stall -- when, how long, and how long each step took -- so the next late key names its cause',k:'benchstrip'},
+   {t:'Benchmark strip: the Feather→Pi1 cell shows ⚠ and the count when the receiver has stalled; its tooltip lists each stall and the leg\'s max',k:'benchstrip'}]},
  {v:'29.27',d:'2026-10-13',items:[
    {t:'Wireframe legend is on top again (it was under the black header bars) and stays pinned with the Wireframes header',k:'legend'},
    {t:'Column headers in Mapping\'s assignment tables stay pinned while you scroll',k:'asgtbl'},
@@ -16934,10 +16938,19 @@ function pfLegsHTML(legs){
         +`${esc(l.label)} <b>≥${v}ms</b></span>`;}
     const bits=[`n=${l.n}`,`sd=${l.sd}`];
     if(l.p95!==undefined)bits.push('p95='+l.p95);
+    if(l.max!==undefined)bits.push('max='+l.max);
+    // 29.28: the Feather receiver's stalls -- each with its time and how
+    // long each step of the loop took -- so a late key-up (a repeated
+    // letter on the host) can be matched to its cause from here.
+    const st=Array.isArray(l.stalls)?l.stalls:[];
+    const stTip=st.length?['','receiver stalls (newest last'+(l.stall_count>st.length?`, ${st.length} of ${l.stall_count}`:'')+'):']
+      .concat(st.map(s=>'• '+new Date(s.t*1000).toLocaleTimeString()+'  '+s.gap_ms+' ms'
+        +Object.entries(s).filter(([k])=>k!=='t'&&k!=='gap_ms').map(([k,v])=>`  ${k} ${v} ms`).join(''))):[];
     return `<span class="leg${l.live?' live':''}" title="${esc(
         (l.live?'measured by this engine, now — ':'from the stored profile — ')
-        +bits.join('  '))}">`
-      +`${esc(l.label)} <b>${l.mean}ms</b></span>`;}).join('');}
+        +bits.join('  ')+(stTip.length?'\n'+stTip.join('\n'):''))}">`
+      +`${esc(l.label)} <b>${l.mean}ms</b>`
+      +(st.length?` <span style="color:var(--warn)">⚠${l.stall_count||st.length}</span>`:'')+`</span>`;}).join('');}
 
 function pfRenderStrip(stats){
   const el = $('benchstrip');
