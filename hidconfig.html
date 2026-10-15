@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.1</title>
+<title>HID Config 30.2</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -348,6 +348,7 @@ label.inl input{margin:0}
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;line-height:1.5;
   padding:.5rem .6rem;border:1px solid var(--line);border-radius:6px;
   background:Canvas;color:CanvasText;tab-size:4}
+#tsprounds td{padding:.05rem .7rem .05rem 0;white-space:nowrap}#tsprounds td:last-child{white-space:normal}   /* 30.2 */
 .txstagebox{height:var(--txh,26rem);min-height:10rem;resize:both}
 /* Find & Replace (24.3): textareas, because an <input> drops pasted newlines. */
 .txfrgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
@@ -1185,6 +1186,31 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       font-family:ui-monospace,monospace;font-size:.9rem;box-sizing:border-box"></textarea>
     <div id="testkstats" style="font-size:.8rem;margin-top:.4rem"></div>
   </div>
+  <!-- 30.2: the Pi types a passage into #tspbox like an expansion, faster
+       each round; the page checks it (s6 _typetest via s0 `typetest`). -->
+  <div class="panel" id="testspeed" data-uikey="test-speed" style="margin-top:.6rem">
+    <h2 style="font-size:1rem;margin:0 0 .3rem">⚡ Expansion speed</h2>
+    <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">The Pi types the
+      passage into the box below the way it types an expansion, and this page checks
+      every character. Clean: twice as fast next round. A mistake: halfway back towards
+      the last clean speed, until the gap is small; then the winner runs twice more.
+      It stops early where going faster no longer arrives faster — that is the link,
+      not the delay. Hands off the keyboard while it runs; <b>Escape</b> or ■ stops it,
+      and so does clicking out of the box.</p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem;font-size:.8rem">
+      <label>passage <input id="tsptext" maxlength="200" style="width:20rem"></label>
+      <label>start at <input id="tspstart" type="number" min="0" max="100" step="0.5" style="width:4.5rem"> ms a key</label>
+      <label title="Keep halving to zero even after the speed stops rising, to see where and how it breaks"><input type="checkbox" id="tsppast"> push past the limit</label>
+      <button id="tspgo" class="txmini">▶ Find the fastest</button>
+      <button id="tspstop" class="txmini" disabled>■ Stop</button>
+      <span id="tspstate" class="muted" style="font-size:.78rem"></span>
+    </div>
+    <textarea id="tspbox" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off"
+      placeholder="the Pi types here" style="width:100%;font-family:ui-monospace,monospace;
+      font-size:.85rem;box-sizing:border-box"></textarea>
+    <div id="tsprounds" style="font-size:.8rem;margin-top:.4rem"></div>
+    <div id="tspresult" style="font-size:.8rem;margin-top:.4rem"></div>
+  </div>
   <div class="panel" id="testmouse" data-uikey="test-mouse" style="margin-top:.6rem">
     <h2 style="font-size:1rem;margin:0 0 .3rem">🖱 Mousing</h2>
     <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Targets appear
@@ -1704,6 +1730,12 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.2',items:[
+   {t:'Escape stops an expansion while it is typing (it never takes back what was typed)',k:'page-exp'},
+   {t:'Expansion speed: the Pi types into a box faster each round until it finds its fastest clean speed, and says where the link is the limit',k:'test-speed'},
+   {t:'One click uses the result as the expansion typing speed',k:'test-speed'},
+   {t:'Speed runs are filed in the test history, with a chart',k:'test-hist'},
+   {t:'Mouse-writing calibration analyses itself again; starting it no longer replaces the profile list',k:'test-mw'}]},
  {v:'30.1',d:'2026-10-13',items:[
    {t:'Shortcuts and keys can fire on a repeated tap: "Fires on 2nd tap (double)" within a time you set; fewer taps either wait and then act as usual, or go through at once',k:'editor'},
    {t:'Macros can type text and symbols (a line in double quotes, "☑") and include another macro or an expansion ({{macro:12}}, {{expansion:set:trigger}}); typing {{ opens a search to pick one',k:'page-macros'},
@@ -2795,6 +2827,9 @@ function updateCurProf(){
   el.textContent=nm?`${nm}${when?' · '+fmtWhen(when):''}`:'working config (unsaved)';
   el.className='status'+(nm?' on':'');}
 function pfResult(text){
+  // 30.2: an ack only. It used to fall through to the profile-list branch
+  // below and replace the profile list with "MWTEST sent".
+  if(/^(MWTEST|TYPETEST) sent$/.test(text))return;
   if(text.startsWith('BACKUPS')){renderBackups(text.split('\n').slice(1));return;}
   if(text.startsWith('NOTE ')){qnoteDone(text);return;}                   // 29.2.2
   if(rmResult(text))return;                                               // 29.29
@@ -12913,6 +12948,9 @@ function liveOut(txt){
     heldPaintReset();renderStage();
     if(typeof renderOptChars==='function'&&$('optsec')&&$('optsec').open)renderOptChars();
     toast('Right Alt (double tap): '+(om[1]==='ON'?'Mac option/alt mode — Left Alt is Option and never reaches Windows; Right Alt is Windows Alt':'Windows option/alt mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
+  if(txt.startsWith('typetest ')){tspLive(txt);return;}               // 30.2
+  if(txt.startsWith('escape')){
+    if(/^escape: typing stopped/.test(txt))toast('⎋ Escape: typing stopped');return;}
   // 29.24: the calibration's own end, or the reason it was refused
   if(txt.startsWith('mwtest ')){
     if(/^mwtest refused/.test(txt)){toast(txt,true);if(testMW&&!testMW.done){testMW.done=true;
@@ -16267,6 +16305,192 @@ function testShowFidget(r){
     ` · sweep median ${r.sweep_ms&&r.sweep_ms.median!=null?r.sweep_ms.median.toFixed(0):'–'}ms`+
     `<br><span class="muted">a short sweep is lost motion; a pause is the pointer at rest mid-sweep. What the Pi was doing at the time arrives with the history row once the run is filed.</span>`;
   $('testmstate').textContent='done';}
+/* ---- 30.2: expansion speed ------------------------------------------------- */
+// The Pi types the passage at a per-key delay (s6 _typetest); #tspbox records
+// what arrived. Search: halve the delay while clean; on a mistake, bisect
+// between the last clean and the first failing delay; confirm the winner
+// twice. A halving that no longer raises the speed that ARRIVES is the
+// link's limit (USB: one report per 1 ms poll, two reports a key), so the
+// search stops there unless "push past the limit" is ticked.
+const TSP_DEF='Quick brown foxes jump over 37 lazy dogs: AAbb ll ee oo, (yes!) 0123456789 ok?';
+const TSP_FLOOR=0.25, TSP_GAIN=1.1, TSP_MAX=24;
+let tsp=null;
+function tspFocused(){const b=$('tspbox');return !!b&&document.hasFocus()&&document.activeElement===b;}
+function tspR2(x){return Math.round(x*100)/100;}
+function tspCur(){return (cfg&&cfg.expand_type_delay!=null)?tspR2(cfg.expand_type_delay*1000):8;}
+// Edit distance with a backtrace: how many characters were dropped, added,
+// wrong only in case (Shift lost), or wrong outright, and where the first is.
+function tspDiff(want,got){
+  const n=want.length,m=got.length,D=[];
+  for(let i=0;i<=n;i++){D.push(new Uint16Array(m+1));D[i][0]=i;}
+  for(let j=0;j<=m;j++)D[0][j]=j;
+  for(let i=1;i<=n;i++)for(let j=1;j<=m;j++)
+    D[i][j]=Math.min(D[i-1][j]+1,D[i][j-1]+1,D[i-1][j-1]+(want[i-1]===got[j-1]?0:1));
+  const k={drop:0,extra:0,caseflip:0,wrong:0,first:null};
+  let p=n,q=m;                                   // walk back from the end
+  while(p>0||q>0){
+    if(p>0&&q>0&&want[p-1]===got[q-1]&&D[p][q]===D[p-1][q-1]){p--;q--;continue;}
+    if(p>0&&q>0&&D[p][q]===D[p-1][q-1]+1){
+      if(want[p-1].toLowerCase()===got[q-1].toLowerCase())k.caseflip++;else k.wrong++;
+      k.first=p-1;p--;q--;continue;}
+    if(p>0&&D[p][q]===D[p-1][q]+1){k.drop++;k.first=p-1;p--;continue;}
+    k.extra++;k.first=p;q--;}
+  return k;}
+function tspWhat(want,got){
+  if(got===want)return '';
+  if(!got)return 'nothing arrived';
+  if(want.startsWith(got))return `only the first ${got.length} of ${want.length} arrived`;
+  const d=tspDiff(want,got.slice(0,1000)),bits=[];
+  if(d.drop)bits.push(d.drop+' dropped');
+  if(d.extra)bits.push(d.extra+' extra (a repeat)');
+  if(d.caseflip)bits.push(d.caseflip+' wrong case (Shift lost)');
+  if(d.wrong)bits.push(d.wrong+' wrong');
+  const a=d.first||0;
+  return bits.join(', ')+` — first at “${esc(want.slice(Math.max(0,a-6),a))}<b>${esc(want.slice(a,a+1)||'∅')}</b>${esc(want.slice(a+1,a+7))}”`;}
+// One round: clear and focus the box, ask the Pi to type, and resolve once
+// the box has gone quiet (sooner when complete), on the Pi's report, or on a
+// timeout. Never sends the request unless the box has focus.
+function tspRound(d){
+  return new Promise(res=>{
+    const box=$('tspbox'),want=tsp.text,r={d,id:'r'+(++tsp.seq),t0:null,t1:null,eng:null,why:null};
+    let quiet=null,hard=null;
+    const fin=why=>{if(r.why)return;r.why=why;clearTimeout(quiet);clearTimeout(hard);
+      box.removeEventListener('input',onIn);r.got=box.value;r.ok=r.got===want;
+      r.cps=(r.t0!==null&&r.t1>r.t0)?(want.length-1)/((r.t1-r.t0)/1000):null;
+      if(tsp.cur===r)tsp.cur=null;res(r);};
+    const wait=()=>{clearTimeout(quiet);
+      quiet=setTimeout(()=>fin('done'),box.value.length>=want.length?150:(r.eng?500:Math.max(800,d*4+400)));};
+    const onIn=()=>{const t=performance.now();if(r.t0===null)r.t0=t;r.t1=t;wait();};
+    r.engDone=rep=>{r.eng=rep;wait();};
+    r.fin=fin;tsp.cur=r;
+    box.value='';box.focus();box.addEventListener('input',onIn);
+    hard=setTimeout(()=>fin('timeout'),Math.max(3000,want.length*2*Math.max(d,1)*4+2000));
+    setTimeout(()=>{
+      if(r.why)return;
+      if(!tspFocused()){fin('focus');return;}
+      pfCmd('typetest '+JSON.stringify({text:want,delay_ms:d,id:r.id})).catch(()=>fin('send'));},150);});}
+function tspLive(txt){
+  const r=tsp&&tsp.cur;
+  if(/^typetest refused/.test(txt)){toast(txt,true);if(r)r.fin('refused');return;}
+  const m=/^typetest done (\{.*\})/.exec(txt);if(!m||!r)return;
+  let rep;try{rep=JSON.parse(m[1]);}catch(_){return;}
+  if(rep.id!==r.id)return;
+  if(rep.stop&&tsp)tsp.stop=tsp.stop||'escape';
+  r.engDone(rep);}
+function tspAbort(why){
+  if(!tsp||!tsp.running)return;
+  tsp.stop=tsp.stop||why;
+  pfCmd('typetest stop').catch(()=>{});
+  if(tsp.cur)tsp.cur.fin(why==='focus'?'focus':'stopped');}
+function tspShow(){
+  const el=$('tsprounds');if(!el||!tsp)return;
+  if(!tsp.rounds.length){el.innerHTML='';return;}
+  el.innerHTML='<table style="border-collapse:collapse"><tr class="muted"><td>#</td><td>ms a key</td>'
+    +'<td title="characters per second as they arrived in the box">arrived /s</td>'
+    +'<td title="characters per second as the Pi sent them">Pi /s</td><td></td><td>what went wrong</td></tr>'
+    +tsp.rounds.map((r,i)=>`<tr><td>${i+1}</td><td>${r.d}</td><td>${r.cps?Math.round(r.cps):'–'}</td>`
+      +`<td>${r.eng&&r.eng.ms>0?Math.round(r.eng.n/(r.eng.ms/1000)):'–'}</td>`
+      +`<td>${r.ok?'✓':'✗'}</td><td>${r.ok?'':(r.why==='focus'?'the box lost focus':r.why==='refused'?'refused by the Pi':tspWhat(tsp.text,r.got))}</td></tr>`).join('')
+    +'</table>';}
+async function tspRun(){
+  if(tsp&&tsp.running)return;
+  const text=$('tsptext').value||TSP_DEF;
+  if(!/^[\x20-\x7e]{1,200}$/.test(text)){toast('plain characters only: no line breaks, tabs or accents',true);return;}
+  if(!device){toast('connect first — the Pi does the typing',true);return;}
+  const sv=$('tspstart').value;
+  const start=sv===''?tspCur():Math.max(0,Math.min(100,+sv||0));
+  tsp={text,start,past:$('tsppast').checked,rounds:[],seq:0,stop:null,running:true,cur:null};
+  $('tspgo').disabled=true;$('tspstop').disabled=false;$('tspresult').innerHTML='';tspShow();
+  const R=async d=>{
+    if(tsp.stop)throw tsp.stop;
+    if(tsp.rounds.length>=TSP_MAX)throw 'max';
+    $('tspstate').textContent=`round ${tsp.rounds.length+1}: ${d} ms a key…`;
+    const r=await tspRound(d);tsp.rounds.push(r);tspShow();
+    if(r.why==='focus'||r.why==='refused'||r.why==='send')throw r.why;
+    if(tsp.stop)throw tsp.stop;
+    return r;};
+  let best=null,plateau=null,why=null;
+  try{
+    let r=await R(start);
+    if(!r.ok)throw 'baseline';
+    let ok=start,okR=r,bad=null;
+    while(ok>0){                                   // twice as fast while clean
+      const next=ok/2<TSP_FLOOR?0:tspR2(ok/2);
+      r=await R(next);
+      if(!r.ok){bad=next;break;}
+      if(!plateau&&r.cps&&okR.cps&&r.cps/okR.cps<TSP_GAIN)plateau={d:ok,cps:okR.cps};
+      ok=next;okR=r;
+      if(plateau&&!tsp.past)break;}
+    while(bad!==null&&ok-bad>Math.max(TSP_FLOOR,ok*0.1)){   // halfway back
+      const mid=tspR2((ok+bad)/2);if(mid<=bad||mid>=ok)break;
+      r=await R(mid);if(r.ok){ok=mid;okR=r;}else bad=mid;}
+    for(let k=0,back=0;k<2;){                       // the winner, twice more
+      r=await R(ok);
+      if(r.ok){k++;continue;}
+      const up=tsp.rounds.filter(x=>x.ok&&x.d>ok).map(x=>x.d).sort((a,b)=>a-b)[0];
+      if(up==null||++back>2){ok=null;break;}
+      ok=up;k=0;}
+    best=ok;
+  }catch(e){why=String(e);}
+  tsp.running=false;
+  if(tsp.cur)tsp.cur.fin('stopped');
+  $('tspgo').disabled=false;$('tspstop').disabled=true;$('tspstate').textContent='';
+  tspConclude(best,plateau,why);}
+function tspConclude(best,plateau,why){
+  const rs=tsp.rounds,el=$('tspresult');
+  const eng=(rs.find(r=>r.eng)||{}).eng||{};
+  const link=eng.ble&&!eng.usb?'Bluetooth':eng.ble?'USB and Bluetooth':'USB';
+  const theory=link==='Bluetooth'
+    ?'Over Bluetooth, reports leave at the connection interval the phone sets (7.5 ms or more), a few per interval at best: a lower ceiling than USB, and the likelier place for keys to drop.'
+    :'Theory: the Pi’s keyboard is a high-speed USB device the host polls once a millisecond, and every key is two reports (press, release) — so about 2 ms a key, ~500 a second, is as fast as keys can arrive. Below that the Pi waits for the host rather than losing keys.';
+  const stopped={focus:'Stopped: the box needs focus, with this window in front — otherwise the Pi’s keys would land wherever focus is. Click into the box and start again.',
+    escape:'Stopped by Escape.',user:'Stopped.',refused:'The Pi refused the request.',
+    send:'Could not reach the Pi.',max:'Ran out of rounds before the search settled.'}[why]
+    ||(why&&why!=='baseline'?'Stopped: '+why:null);
+  let html='',rec=null;
+  if(why==='baseline'){
+    const r=rs[0];
+    html=`<b style="color:var(--err)">Not clean even at the starting ${r.d} ms a key</b> — ${tspWhat(tsp.text,r.got)}.`
+      +` If the characters themselves are different, check the keyboard layout on this computer; if some are missing, start slower.`;}
+  else if(stopped){
+    // an interrupted run is shown, not filed
+    const seen=rs.filter(r=>r.ok).map(r=>r.d);
+    el.innerHTML=esc(stopped)+(seen.length?` Fastest clean so far (not confirmed): ${Math.min(...seen)} ms a key.`:'');
+    return;}
+  else if(best==null){
+    html='<b style="color:var(--err)">No delay stayed clean on all three runs.</b> The link is not reliable here at any speed tried; see the rounds above.';}
+  else{
+    const bR=rs.filter(r=>r.ok&&r.d===best).pop()||{};
+    const cur=tspCur();
+    rec=Math.ceil(Math.max(best*1.5,plateau?plateau.d:0,1)*2)/2;
+    rec=Math.min(rec,Math.max(tsp.start,cur));
+    html=`<b>Fastest clean: ${best} ms a key</b>`+(bR.cps?` (${Math.round(bR.cps)} characters a second arrived)`:'')
+      +`, three times in a row.`
+      +(plateau?` Below ${plateau.d} ms it arrived no faster (${Math.round(plateau.cps)} a second): that is the ${link} link’s limit, not the delay.`:'')
+      +`<br>For expansions: <b>${rec} ms</b> — a margin over the fastest, because Word, remote desktops and the like take keys more slowly than a browser box. Now ${cur} ms.`
+      +(rec!==cur?` <button id="tspuse" class="txmini">Use ${rec} ms</button>`:' Already set.');}
+  tsp.rec=rec;
+  // assigned ONCE, then wired: `innerHTML +=` would re-create the button
+  // without its handler
+  el.innerHTML=html+`<br><span class="muted">${theory}</span>`;
+  const u=$('tspuse');
+  if(u)u.onclick=()=>{
+    if(!cfg){toast('read the device first',true);return;}
+    cfg.expand_type_delay=rec/1000;
+    toast(`expansions now type at ${rec} ms a key · ${cfgSaveNow()}`);
+    u.disabled=true;u.textContent='✓ using '+rec+' ms';};
+  testSend({kind:'typespeed',device:'expansion speed',ui:UI_VERSION,link,text:tsp.text,start_ms:tsp.start,
+    best_ms:best,rec_ms:rec,plateau_ms:plateau?plateau.d:null,baseline_failed:why==='baseline'?1:0,
+    rounds:rs.map(r=>({d:r.d,ok:r.ok?1:0,cps:r.cps?Math.round(r.cps):null}))});}
+(function(){
+  const s=$('tspstart');if(s)s.placeholder='now';
+  const t=$('tsptext');if(t&&!t.value)t.value=TSP_DEF;
+  const g=$('tspgo');if(g)g.onclick=()=>{tspRun();};
+  const st=$('tspstop');
+  if(st){st.onclick=()=>tspAbort('user');
+    st.addEventListener('mousedown',e=>e.preventDefault());}  // keep focus in the box
+  const b=$('tspbox');if(b)b.addEventListener('blur',()=>{if(tsp&&tsp.running)tspAbort('focus');});
+  window.addEventListener('blur',()=>{if(tsp&&tsp.running)tspAbort('focus');});})();
 /* ---- 29.24: mouse writing calibration -------------------------------------- */
 // The Pi draws (mouse_write.run_test via s0 `mwtest`); the page records.
 // Every line is judged against the reference line (the slowest speed /
@@ -16409,6 +16633,7 @@ const TEST_METRICS=[
   {id:'scrl', label:'targets: scroll to bottom', unit:'ms', kind:'mouse', get:r=>r.scroll_ms},
   {id:'mwsp', label:'mouse writing: fastest clean speed', unit:'counts/s', kind:'mwcal', get:r=>r.mode==='speed'?r.best:null},
   {id:'mwsz', label:'mouse writing: smallest clean size', unit:'counts', kind:'mwcal', get:r=>r.mode==='size'?r.best:null},
+  {id:'tysp', label:'expansion speed: fastest clean', unit:'ms a key', kind:'typespeed', get:r=>r.best_ms},
   {id:'pause',label:'fidget: pauses',        unit:'pauses', kind:'fidget', get:r=>(r.pauses||{}).n},
   {id:'plong',label:'fidget: longest pause', unit:'ms', kind:'fidget',get:r=>(r.pauses||{}).longest}];
 // 29.21 (2026-10-08): charts read the engine's time or how you did, by a
@@ -16465,6 +16690,9 @@ function renderTestHistory(){
         const g=r.gap_ms||{};gaps=`median ${fmt(g.median)} · p95 ${fmt(g.p95)} · ${g.stalls_400||0} stalls`;}
       else if(r.kind==='mwcal'){res=`${r.mode==='size'?'smallest clean size':'fastest clean speed'} <b>${r.best!=null?fmt(r.best):'none'}</b>`;
         gaps=(r.lines||[]).map(l=>`${fmt(l.v)}${l.clean?'✓':'✗'}`).join(' ');}
+      else if(r.kind==='typespeed'){res=r.best_ms!=null?`fastest clean <b>${fmt(r.best_ms)} ms</b> a key over ${esc(r.link||'USB')}`
+          :(r.baseline_failed?'not clean at the start':'nothing stayed clean');
+        gaps=(r.rounds||[]).map(x=>`${fmt(x.d)}${x.ok?'✓':'✗'}`).join(' ');}
       else if(r.kind==='fidget'){const a=r.amp_px||{},p=r.pauses||{};res=`${r.sweeps} sweeps · ${a.mean}px ±${a.cv!=null?(a.cv*100).toFixed(0)+'%':'–'} · <b${p.n?' style="color:var(--hi,#d33)"':''}>${p.n} pauses</b>`;
         gaps=`longest pause ${fmt(p.longest)}ms · sweep ${fmt(r.sweep_ms&&r.sweep_ms.median)}ms`;}
       else{const c=r.click_ms||{};res=`${fmt(c.median)}ms median · ${r.misses} misses · eff ${r.efficiency&&r.efficiency.mean!=null?(r.efficiency.mean*100).toFixed(0)+'%':'–'}`;
