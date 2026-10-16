@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.2</title>
+<title>HID Config 30.4</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -1128,9 +1128,6 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div class="tab" data-ut="train">Training</div>
   </div>
   <div class="panel" id="usagepane">
-    <!-- 29.0 (2026-09-28): the practice keyboard: chosen-to-practise
-         shortcuts, follows held keys like the wireframes. -->
-    <div id="practicekbd" style="float:right;margin:0 0 .5rem .8rem;max-width:100%"></div>
     <h2 style="font-size:1rem">What you actually reach for</h2>
     <p class="muted" style="font-size:.8rem">Recorded on the Pi, one counter
       per key-down, written to disk on a timer. Two ledgers, because shortcuts
@@ -1148,6 +1145,10 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div id="trackbody"></div>
   </details>
   <div class="panel" id="trainpane" style="display:none">
+    <!-- 29.0 (2026-09-28): the practice keyboard: chosen-to-practise
+         shortcuts, follows held keys like the wireframes. Training only
+         since 30.6. -->
+    <div id="practicekbd" style="float:right;margin:0 0 .5rem .8rem;max-width:100%"></div>
     <h2 style="font-size:1rem">Training</h2>
     <div id="trainbody"></div>
   </div>
@@ -1156,8 +1157,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
      service time read before and after. Browser and Pi clocks are never
      subtracted. -->
 <div id="page-test" style="display:none">
-  <div class="panel" id="testtyping" data-uikey="test-typing">
-    <h2 style="font-size:1rem;margin:0 0 .3rem">⌨ Typing</h2>
+  <details class="panel" open id="testtyping" data-uikey="test-typing">
+    <summary style="cursor:pointer;font-weight:600;font-size:1rem;margin:0 0 .3rem">⌨ Typing</summary>
     <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Type the
       passage into the box exactly as shown, expansions included. The box
       counts every key it receives and times the gaps between them; at the end
@@ -1185,11 +1186,11 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       placeholder="click here, then type the passage above" style="width:100%;margin-top:.4rem;
       font-family:ui-monospace,monospace;font-size:.9rem;box-sizing:border-box"></textarea>
     <div id="testkstats" style="font-size:.8rem;margin-top:.4rem"></div>
-  </div>
+  </details>
   <!-- 30.2: the Pi types a passage into #tspbox like an expansion, faster
        each round; the page checks it (s6 _typetest via s0 `typetest`). -->
-  <div class="panel" id="testspeed" data-uikey="test-speed" style="margin-top:.6rem">
-    <h2 style="font-size:1rem;margin:0 0 .3rem">⚡ Expansion speed</h2>
+  <details class="panel" open id="testspeed" data-uikey="test-speed" style="margin-top:.6rem">
+    <summary style="cursor:pointer;font-weight:600;font-size:1rem;margin:0 0 .3rem">⚡ Expansion speed</summary>
     <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">The Pi types the
       passage into the box below the way it types an expansion, and this page checks
       every character. Clean: twice as fast next round. A mistake: halfway back towards
@@ -1205,14 +1206,20 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <button id="tspstop" class="txmini" disabled>■ Stop</button>
       <span id="tspstate" class="muted" style="font-size:.78rem"></span>
     </div>
+    <!-- 30.6: the setting itself, always here; the result below offers a value -->
+    <div id="tsprate" style="font-size:.8rem;margin:0 0 .4rem">
+      <label title="How long the Pi waits between the keys of an expansion. Saved to the Pi when changed.">Expansions type at
+        <input id="tsprateval" type="number" min="0" max="100" step="0.5" style="width:4.5rem"> ms a key</label>
+      <span id="tspratenote" class="muted" style="font-size:.75rem;margin-left:.4rem"></span>
+    </div>
     <textarea id="tspbox" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off"
       placeholder="the Pi types here" style="width:100%;font-family:ui-monospace,monospace;
       font-size:.85rem;box-sizing:border-box"></textarea>
     <div id="tsprounds" style="font-size:.8rem;margin-top:.4rem"></div>
     <div id="tspresult" style="font-size:.8rem;margin-top:.4rem"></div>
-  </div>
-  <div class="panel" id="testmouse" data-uikey="test-mouse" style="margin-top:.6rem">
-    <h2 style="font-size:1rem;margin:0 0 .3rem">🖱 Mousing</h2>
+  </details>
+  <details class="panel" open id="testmouse" data-uikey="test-mouse" style="margin-top:.6rem">
+    <summary style="cursor:pointer;font-weight:600;font-size:1rem;margin:0 0 .3rem">🖱 Mousing</summary>
     <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Targets appear
       one at a time; click each. Time to reach it, how far from centre you
       landed, clicks that missed, and how much further than a straight line the
@@ -1232,20 +1239,21 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <div id="testscroll" style="height:90px;overflow-y:auto;border:1px solid var(--line,#ccc);border-radius:6px;padding:.3rem .5rem;font-size:.8rem"></div>
     </div>
     <div id="testmstats" style="font-size:.8rem;margin-top:.4rem"></div>
-  </div>
-  <div class="panel" id="testhist" data-uikey="test-hist" style="margin-top:.6rem">
-    <h2 style="font-size:1rem;margin:0 0 .3rem">History, per device
-      <button id="testhistload" class="txmini" style="margin-left:.5rem">↻ load</button>
+  </details>
+  <details class="panel" open id="testhist" data-uikey="test-hist" style="margin-top:.6rem">
+    <summary style="cursor:pointer;font-weight:600;font-size:1rem;margin:0 0 .3rem">History, per device</summary>
+    <div style="font-size:.8rem;margin:0 0 .3rem">
+      <button id="testhistload" class="txmini">↻ load</button>
       <label style="font-size:.78rem;font-weight:400;margin-left:.8rem"
         title="What the little chart beside each device plots, oldest run on the left">chart
         <button id="testmetricmode" class="ftog" title="Switch the charts between the engine's own time and how you did">engine ms</button>
-        <select id="testmetric" style="width:auto;font-size:.78rem"></select></label></h2>
+        <select id="testmetric" style="width:auto;font-size:.78rem"></select></label></div>
     <p class="muted" style="font-size:.78rem;margin:.2rem 0 .5rem">Every run is
       a line in <code>usage/tests.jsonl</code> on the Pi, written by the engine
       with its own numbers attached. Over time this is where “floaty” becomes a
       trend rather than a feeling.</p>
     <div id="testhistbody" class="muted" style="font-size:.8rem">not loaded</div>
-  </div>
+  </details>
 </div>
 <!-- 24.5: Performance is static content from engine/audit/DISK_WRITES.md; it
      asks the Pi for nothing. -->
@@ -1263,7 +1271,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     </div>
     <div class="panel">
       <h2 style="font-size:1rem;margin:0">Features, and what they cost</h2>
-      <p class="muted" style="font-size:.78rem">Measured on Pi1, 2026-09-05.
+      <p class="muted" style="font-size:.78rem">Measured on Pi1, 2026-09-05;
+        <b>Measured now</b> is live, from the engine while it is connected.
         <b>Write</b> ranks pressure on the microSD — how much is written and,
         more importantly, how bunched it is. Full working:
         <code>engine/audit/DISK_WRITES.md</code>.</p>
@@ -1274,6 +1283,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
             <th style="width:30%">What it gives you</th>
             <th>Impact on disk, bandwidth and the typing path</th>
             <th style="width:5rem">Write</th>
+            <th style="width:12rem" title="From the engine's own status: its per-keypress time, and the last 40 housekeeping jobs it timed">Measured now</th>
           </tr></thead>
           <tbody id="perftblbody"></tbody>
         </table>
@@ -1412,6 +1422,8 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
           </select></label>
         <label style="margin:0" title="The + means the start time is not on screen. Off writes bare durations everywhere.">
           <input type="checkbox" id="dursign"> Show <code>+</code> when the start is off-screen</label>
+        <label style="margin:0" title="Type a time range and a space -- 849a-1030a then space -- and its duration follows, with no trigger">
+          <input type="checkbox" id="durauto"> A range and a space give its duration</label>
         <label style="margin:0" title="A stored start older than this is treated as 'I last used this weeks ago', not a measurement: it re-stamps and claims no duration.">
           Ignore gaps longer than
           <input type="text" id="durmax" style="width:5rem" placeholder="7d"></label>
@@ -1730,6 +1742,16 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.4',items:[
+   {t:'Double and triple tap on the same keys run different macros; the highest count fires at once',k:'page-macros'},
+   {t:'A time range and a space give its duration (849a-1030a then space), with a switch to turn it off',k:'page-exp'},
+   {t:'tdt then " (" gives the time since the last tdt',k:'page-exp'},
+   {t:'CapsLock no longer throws you out of a macro you are typing',k:'page-macros'},
+   {t:'Every group Add button works, wherever the group block appears',k:'page-map'}]},
+ {v:'30.3',items:[
+   {t:'Engine: a dropped batch of events no longer leaves a layer stuck on (the left click that ran macro 11)',k:'page-map'},
+   {t:'Engine: the mouse no longer stalls every 10 s while this page is open',k:'page-map'},
+   {t:'Engine: the Feather→Pi1 leg measures latency, not clock drift',k:'page-map'}]},
  {v:'30.2',items:[
    {t:'Escape stops an expansion while it is typing (it never takes back what was typed)',k:'page-exp'},
    {t:'Expansion speed: the Pi types into a box faster each round until it finds its fastest clean speed, and says where the link is the limit',k:'test-speed'},
@@ -2502,7 +2524,7 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓
         // its tab is actually on screen -- rebuilding two tables every ten
         // seconds behind a hidden panel is work nobody asked for.
         if($('page-perf')&&$('page-perf').style.display!=='none'){
-          renderApm(); renderStages();}
+          renderApm(); renderStages(); renderPerfLive();}
         // 20.8.2: the engine version comes from engine_status (fid 3),
         // never fid 0, the config file served verbatim.
         try{
@@ -3733,7 +3755,9 @@ function setIdent(dev,ref,n){
 function macroLabel(n){const nm=(cfg.macro_names||{})[n];return nm?nm:('M'+n);}
 function actShort(a){if(!a)return'';const k=a[0];
 // 30.1: a tap rule reads as its count, then what it does
-if(k==='taps')return(+((a[1]||{}).n)||2)+'× → '+(asgActLabel(a[2])||'?');
+if(k==='taps'){const sp=a[1]||{},mo=sp.more||{};
+  return [(+sp.n||2)+'× → '+(asgActLabel(a[2])||'?')].concat(Object.keys(mo).sort((x,y)=>x-y)
+    .map(c=>c+'× → '+(asgActLabel(mo[c])||'?'))).join(' · ');}
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
 // 29.19: a key with modifiers -- was printed as the bare word "keymods"
 if(k==='keymods')return [[1,'Ctrl'],[8,'Win'],[4,'Alt'],[2,'Shift']].filter(([b])=>(+a[2]||0)&b)
@@ -9455,16 +9479,49 @@ function tapsInner(a){return Array.isArray(a)&&a[0]==='taps'?(a[2]??null):a;}
 function tapsSpec(a){return Array.isArray(a)&&a[0]==='taps'?(a[1]||{}):null;}
 function tapsWrap(spec,inner){return spec&&(+spec.n||1)>1&&inner!=null?['taps',spec,inner]:inner;}
 function tapsRead(){const n=$('tapsn');if(!n||+n.value<=1)return null;
-  return{n:+n.value,gap_ms:Math.max(50,+($('tapsgap')||{}).value||TAPS_GAP_DEFAULT),
-    first:(($('tapsfirst')||{}).value)||'wait'};}
+  const o={n:+n.value,gap_ms:Math.max(50,+($('tapsgap')||{}).value||TAPS_GAP_DEFAULT),
+    first:(($('tapsfirst')||{}).value)||'wait'};
+  // 30.4: more counts on the same keys, each its own action
+  const more={};
+  document.querySelectorAll('.tapsx').forEach(r=>{const k=+r.dataset.n;if(!(k>1)||k===o.n)return;
+    const s=r.querySelector('.tapsxmac'),raw=r.querySelector('.tapsxraw');
+    if(s)more[k]=['macro',+s.value];
+    else if(raw){try{more[k]=JSON.parse(raw.dataset.raw);}catch(_){}}});
+  if(Object.keys(more).length){o.more=more;o.first='wait';}
+  return o;}
+function tapsOrd(i){i=+i;return i+(i===2?'nd':i===3?'rd':'th')+' tap';}
+// one extra count: a macro picker, or -- for any other action -- the action
+// shown and kept as it is, never replaced by a default
+function tapsMoreRow(k,act){
+  const isMac=Array.isArray(act)&&act[0]==='macro';
+  return `<span class="tapsx" data-n="${+k}">· on the ${tapsOrd(k)}: `+(isMac
+    ?`<select class="tapsxmac" style="width:auto">${macOpts(+act[1]||1)}</select>`
+    :`<span class="tapsxraw" data-raw="${esc(JSON.stringify(act))}">${esc(actShort(act))}</span>`)
+    +` <a class="mlink tapsxdel" title="remove this count">✕</a></span>`;}
 function tapsHTML(spec){const n=spec?+spec.n||1:1,g=spec?+spec.gap_ms||TAPS_GAP_DEFAULT:TAPS_GAP_DEFAULT;
   return `<div style="font-size:.78rem;margin:.25rem 0;display:flex;gap:.3rem;flex-wrap:wrap;align-items:center"
       title="Fire only on a repeated tap, each within the time of the last">
-    Fires on <select id="tapsn" style="width:auto">${[1,2,3,4].map(i=>`<option value="${i}" ${i===n?'selected':''}>${i===1?'every tap':i===2?'2nd tap (double)':i+'th tap'}</option>`).join('')}</select>
+    Fires on <select id="tapsn" style="width:auto">${[1,2,3,4].map(i=>`<option value="${i}" ${i===n?'selected':''}>${i===1?'every tap':i===2?'2nd tap (double)':i===3?'3rd tap (triple)':i+'th tap'}</option>`).join('')}</select>
     <span ${n>1?'':'style="display:none"'} class="tapsmore">within <input id="tapsgap" type="number" min="50" step="25" value="${g}" style="width:4.5rem"> ms;
       fewer taps: <select id="tapsfirst" style="width:auto">
         <option value="wait" ${(spec&&spec.first)!=='pass'?'selected':''}>wait, then send as usual</option>
-        <option value="pass" ${(spec&&spec.first)==='pass'?'selected':''}>send at once</option></select></span></div>`;}
+        <option value="pass" ${(spec&&spec.first)==='pass'?'selected':''}>send at once</option></select>
+      <span class="tapsxwrap">${Object.keys((spec&&spec.more)||{}).sort((a,b)=>a-b).map(k=>tapsMoreRow(k,spec.more[k])).join('')}</span>
+      <a class="mlink tapsxadd" title="Another tap count on the same keys, with its own action. The highest count fires as soon as it is reached; a lower one when the taps stop.">＋ another tap count</a></span></div>`;}
+// 30.4: the extra-count controls, for whichever editor is open. A change is
+// passed on as a change of #tapsn, which both editors already save from.
+(function(){
+  const save=()=>{const n=$('tapsn');if(n)n.dispatchEvent(new Event('change',{bubbles:true}));};
+  document.addEventListener('click',e=>{
+    const t=e.target;if(!t||!t.classList)return;
+    if(t.classList.contains('tapsxadd')){
+      const n=$('tapsn'),w=t.parentElement&&t.parentElement.querySelector('.tapsxwrap');if(!n||!w)return;
+      const used=[+n.value,...[...w.querySelectorAll('.tapsx')].map(r=>+r.dataset.n)];
+      const k=Math.max(...used)+1;if(k>9){toast('nine taps is the most',true);return;}
+      w.insertAdjacentHTML('beforeend',tapsMoreRow(k,['macro',1]));save();}
+    else if(t.classList.contains('tapsxdel')){const r=t.closest('.tapsx');if(r){r.remove();save();}}});
+  document.addEventListener('change',e=>{
+    if(e.target&&e.target.classList&&e.target.classList.contains('tapsxmac'))save();});})();
 function actionToUI(a){if(!a)return{press:'pass',release:'none'};
 if(a[0]==='taps')return Object.assign(actionToUI(tapsInner(a)),{taps:tapsSpec(a)});   // 30.1
 const k=a[0];
@@ -9954,19 +10011,25 @@ function groupAssignHTML(member){
   return `<hr style="border:none;border-top:1px solid var(--line);margin:.5rem 0">
   <label>Groups <span class="muted">(dotted subgroups: nav.arrows)</span></label>
   ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}
-  <div style="display:flex;gap:.4rem">
-    <input id="groupinput" list="grouplist" placeholder="nav.arrows" style="flex:1" maxlength="60">
-    <button id="groupaddbtn">Add</button></div>
+  <div class="grpadd" data-member="${esc(member)}" style="display:flex;gap:.4rem">
+    <input class="groupinput" list="grouplist" placeholder="nav.arrows" style="flex:1" maxlength="60">
+    <button class="groupaddbtn">Add</button></div>
   <datalist id="grouplist">${groupNamesSorted().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;}
 window.groupRemove=(n,member)=>{
   const g=cfg.mapping_groups[n];if(!g)return;
   g.members=(g.members||[]).filter(m=>m!==member);
   if(!g.members.length&&confirm('Group "'+n+'" is now empty — delete it?'))delete cfg.mapping_groups[n];
   render();};
-function bindGroupAssign(member){
-  const b=$('groupaddbtn');if(!b)return;
-  b.onclick=()=>addToGroup($('groupinput').value,member);
-  $('groupinput').onkeydown=e=>{if(e.key==='Enter')addToGroup($('groupinput').value,member);};}
+// 30.4: every copy wired, each with its own member. This was one fixed id
+// shared by up to four copies (macro editor, two mapping editors, a hidden
+// tab's leftover), and $() wired only the first -- an Add that did nothing.
+function bindGroupAssign(){
+  document.querySelectorAll('.grpadd').forEach(w=>{
+    if(w.dataset.bound)return;w.dataset.bound='1';
+    const inp=w.querySelector('.groupinput'),b=w.querySelector('.groupaddbtn');
+    const add=()=>addToGroup(inp.value,w.dataset.member);
+    b.onclick=add;
+    inp.onkeydown=e=>{if(e.key==='Enter')add();};});}
 function comboIdFor(keys){return 'combo-'+keys.slice().sort((a,b)=>a-b).join('-');}
 function comboScopeDev(id,c){
   if(c.dev)return c.dev;                    // already device-scoped
@@ -12031,12 +12094,13 @@ function fmtGap(secs){
   return secs+'s';}
 function renderDurSettings(){
   const s=durSettings();
-  const u=$('durunits'),w=$('durwrap'),g=$('dursign'),m=$('durmax');
+  const u=$('durunits'),w=$('durwrap'),g=$('dursign'),m=$('durmax'),au=$('durauto');
   if(!u)return;
   u.value=String(s.units===1?1:2);
   w.value=(typeof s.wrap==='string'&&[ '()','[]','{}','' ].includes(s.wrap))
     ?s.wrap:'()';
   g.checked=!!s.sign;
+  if(au)au.checked=s.auto_range!==false;     // 30.4: on unless turned off
   m.value=fmtGap(s.max_gap_s);
   // 29.24.2: the forms and separators, and the tester
   const fa=$('durforms'),fs=$('durseps'),ft=$('durtry');
@@ -12058,6 +12122,7 @@ function renderDurSettings(){
                sign:g.checked,
                wrap:w.value,
                max_gap_s:DUR_DEFAULTS.max_gap_s};
+    if(au&&!au.checked)out.auto_range=false;   // stored only when off
     // 29.24.2: the forms travel with the rest -- this object REPLACES
     // duration_settings, so leaving them out would delete them
     const rf=readForms();
@@ -12076,7 +12141,7 @@ function renderDurSettings(){
     cfg.duration_settings=out;
     renderDurSettings();
     toast('duration settings changed — press ⬆ Save to device to apply');};
-  [u,w,g].forEach(el=>el.onchange=write);
+  [u,w,g,au].forEach(el=>{if(el)el.onchange=write;});
   m.onchange=write;
   if(fa){fa.onchange=write;fs.onchange=write;fa.oninput=tryIt;fs.oninput=tryIt;ft.oninput=tryIt;
     $('durformsreset').onclick=()=>{fa.value=DUR_DEFAULTS.time_forms.join('\n');
@@ -12927,6 +12992,12 @@ function liveState(txt){
   const m=/^layer (\d+)/.exec(txt);if(!m)return;
   const L=+m[1];
   if(sel&&sel.edit){if(L===0)_stFrom=null;return;}
+  // 30.4: nor under typing. CapsLock is a layer key, so pressing it in the
+  // macro definition box re-rendered the macro list and threw him out of it.
+  const ae=document.activeElement;
+  if(ae&&(ae.isContentEditable||/^(TEXTAREA|SELECT)$/.test(ae.tagName)
+     ||(ae.tagName==='INPUT'&&!/^(button|checkbox|radio|range|submit|reset)$/i.test(ae.type||'')))){
+    if(L===0)_stFrom=null;return;}
   if(L>0){if(_stFrom===null)_stFrom=layer;layer=L;}
   else if(_stFrom!==null){layer=_stFrom;_stFrom=null;}
   else return;
@@ -16044,13 +16115,51 @@ function renderPerf(){
   renderApm(); renderStages();
   if(perfPrio === null) perfLoadPrio();
   perfRenderPrio();
-  if(perfBuilt) return;                 // the table is static; build it once
+  if(perfBuilt){ renderPerfLive(); return; }   // the rows are static
   perfBuilt = true;
   const W = {hi:'high', md:'watch', lo:'low', na:'none'};
-  $('perftblbody').innerHTML = PERF_FEATURES.map(r =>
+  $('perftblbody').innerHTML = PERF_FEATURES.map((r, i) =>
     '<tr><td><b>' + r.f + '</b></td><td class="muted">' + r.d + '</td><td>' + r.i
-  + '</td><td><span class="perfw ' + r.w + '">' + W[r.w] + '</span></td></tr>').join('');
+  + '</td><td><span class="perfw ' + r.w + '">' + W[r.w] + '</span></td>'
+  + '<td class="perflive" data-pfi="' + i + '" style="font-size:.78rem"></td></tr>').join('');
   $('perfreport').innerHTML = PERF_REPORT;
+  renderPerfLive();
+}
+// 30.6: the "Measured now" column, from the engine status (lastEng): its
+// per-keypress service time and its housekeeping ring (the last 40 jobs it
+// timed). Rows the engine does not time say so.
+const PERF_LIVE = {'Typing &amp; mousing':'svc', 'Text expansions':'typing',
+  'Usage recording':'usage_flush', 'Engine status':'status'};
+function perfHkStats(what){
+  const hk = (lastEng && lastEng.housekeeping) || [];
+  const ms = hk.filter(e => e.what === what).map(e => +e.ms || 0);
+  if(!ms.length) return null;
+  return {n: ms.length, mean: ms.reduce((a, b) => a + b, 0) / ms.length,
+          max: Math.max(...ms)};
+}
+function renderPerfLive(){
+  const cells = document.querySelectorAll('#perftblbody .perflive');
+  if(!cells.length) return;
+  const f1 = x => (Math.round(x * 10) / 10).toString();
+  cells.forEach(td => {
+    const r = PERF_FEATURES[+td.dataset.pfi], k = r && PERF_LIVE[r.f];
+    if(!k){ td.innerHTML = '<span class="muted">not timed live</span>'; return; }
+    if(!lastEng){ td.innerHTML = '<span class="muted">' + (device ? 'waiting for the engine' : 'not connected') + '</span>'; return; }
+    if(k === 'svc'){
+      const s = lastEng.service_ms, hk = lastEng.housekeeping || [];
+      const late = hk.filter(e => String(e.what).startsWith('late:')).length;
+      const drop = hk.filter(e => String(e.what).startsWith('dropped:')).length;
+      td.innerHTML = (s && s.n ? 'per key: mean ' + f1(s.mean) + ' ms, max ' + f1(s.max)
+          + ' ms <span class="muted">(n=' + s.n + ')</span>' : '<span class="muted">no keys timed yet</span>')
+        + (late || drop ? '<br><b style="color:var(--warn)">' + (late ? late + ' late release' + (late > 1 ? 's' : '') : '')
+          + (late && drop ? ', ' : '') + (drop ? drop + ' dropped batch' + (drop > 1 ? 'es' : '') : '') + '</b>'
+          + ' <span class="muted">recently</span>' : '');
+      return; }
+    const st = perfHkStats(k);
+    td.innerHTML = st ? f1(st.mean) + ' ms mean, ' + f1(st.max) + ' ms max'
+        + ' <span class="muted">(last ' + st.n + ')</span>'
+      : '<span class="muted">none recently</span>';
+  });
 }
 
 /* ============ tabs ============ */
@@ -16117,7 +16226,8 @@ function testFillSuites(){
     sel.onchange=()=>{testSuite=sel.value;try{localStorage.setItem('test.suite',testSuite);}catch(_){}
       if(testK&&!testK.done)testKReset();$('testpassageref').innerHTML=testShown();$('testpassage').innerHTML=testShown();};}}
 function renderTest(){
-  testFillDevs();testFillSuites();
+  testFillDevs();testFillSuites();tspRateShow();
+  uiRestoreOpen($('page-test'));
   if($('testpassageref')&&!$('testpassageref').innerHTML)$('testpassageref').innerHTML=testShown();
   if($('testpassage')&&!$('testpassage').innerHTML)$('testpassage').innerHTML=testShown();
   if(!testRuns.length&&device&&!window._testHistAsked){window._testHistAsked=true;getFile(TESTS_FID);}
@@ -16317,6 +16427,20 @@ const TSP_FLOOR=0.25, TSP_GAIN=1.1, TSP_MAX=24;
 let tsp=null;
 function tspFocused(){const b=$('tspbox');return !!b&&document.hasFocus()&&document.activeElement===b;}
 function tspR2(x){return Math.round(x*100)/100;}
+// 30.6: the expansion typing rate, editable whether or not a run offered one
+function tspRateShow(){
+  const v=$('tsprateval'),n=$('tspratenote');if(!v)return;
+  if(document.activeElement!==v)v.value=cfg?tspCur():'';
+  v.disabled=!cfg;
+  if(n)n.textContent=!cfg?'read the device first':
+    (cfg.expand_type_delay==null?'(the engine default)':'');}
+function tspRateSet(ms){
+  if(!cfg){toast('read the device first',true);return false;}
+  ms=Math.max(0,Math.min(100,tspR2(+ms)));
+  if(!isFinite(ms))return false;
+  cfg.expand_type_delay=ms/1000;
+  toast(`expansions now type at ${ms} ms a key · ${cfgSaveNow()}`);
+  tspRateShow();return true;}
 function tspCur(){return (cfg&&cfg.expand_type_delay!=null)?tspR2(cfg.expand_type_delay*1000):8;}
 // Edit distance with a backtrace: how many characters were dropped, added,
 // wrong only in case (Shift lost), or wrong outright, and where the first is.
@@ -16475,9 +16599,7 @@ function tspConclude(best,plateau,why){
   el.innerHTML=html+`<br><span class="muted">${theory}</span>`;
   const u=$('tspuse');
   if(u)u.onclick=()=>{
-    if(!cfg){toast('read the device first',true);return;}
-    cfg.expand_type_delay=rec/1000;
-    toast(`expansions now type at ${rec} ms a key · ${cfgSaveNow()}`);
+    if(!tspRateSet(rec))return;
     u.disabled=true;u.textContent='✓ using '+rec+' ms';};
   testSend({kind:'typespeed',device:'expansion speed',ui:UI_VERSION,link,text:tsp.text,start_ms:tsp.start,
     best_ms:best,rec_ms:rec,plateau_ms:plateau?plateau.d:null,baseline_failed:why==='baseline'?1:0,
@@ -16486,6 +16608,10 @@ function tspConclude(best,plateau,why){
   const s=$('tspstart');if(s)s.placeholder='now';
   const t=$('tsptext');if(t&&!t.value)t.value=TSP_DEF;
   const g=$('tspgo');if(g)g.onclick=()=>{tspRun();};
+  const rv=$('tsprateval');
+  if(rv)rv.addEventListener('change',()=>{
+    if(rv.value===''){tspRateShow();return;}
+    tspRateSet(rv.value);});
   const st=$('tspstop');
   if(st){st.onclick=()=>tspAbort('user');
     st.addEventListener('mousedown',e=>e.preventDefault());}  // keep focus in the box
@@ -16821,8 +16947,11 @@ document.querySelectorAll('#usagetabs .tab').forEach(t=>t.onclick=()=>{
   // 29.24.1: the practice keyboard goes with you. Josh, 2026-10-09 08:59:
   // "Keyboard should still show up when I switch over to the "Training"
   // tab". Moved, not copied: one keyboard, its handlers intact.
-  const pk=$('practicekbd'),dest=$(usageTab==='train'?'trainpane':'usagepane');
+  // 30.6: the practice keyboard on Training only; Actions per minute on
+  // Usage only.
+  const pk=$('practicekbd'),dest=$('trainpane');
   if(pk&&dest&&pk.parentElement!==dest)dest.insertBefore(pk,dest.firstElementChild);
+  const apm=$('perfapm');if(apm)apm.style.display=usageTab==='train'?'none':'';
   if(usageTab==='train')renderTraining();});
 window.addEventListener('resize',()=>requestAnimationFrame(drawChords));
 // 29.21 (2026-10-08): a click on wireframe background (nothing between
