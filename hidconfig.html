@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.4</title>
+<title>HID Config 30.7</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -604,7 +604,28 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 .primer .pcat.on{background:var(--hi);color:var(--bg)}
 .primer table{border-collapse:collapse;margin-top:.3rem;width:100%}
 .primer td{padding:.1rem .4rem;border-top:1px solid var(--line);vertical-align:top}
+/* 30.7: the page map. Theme tokens only (follows light and dark). */
+#pagemap{position:fixed;left:0;top:5.5rem;z-index:40;max-height:calc(100vh - 7rem);
+  display:flex;flex-direction:column;align-items:flex-start;font-size:.78rem}
+#pagemaptg{border:1px solid var(--line);border-left:0;border-radius:0 6px 6px 0;
+  background:var(--panel);color:var(--fg);padding:.25rem .45rem;cursor:pointer}
+#pagemaplist{display:none;overflow-y:auto;width:12rem;margin-top:.25rem;
+  background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:0;
+  border-radius:0 6px 6px 0;padding:.3rem 0}
+#pagemap.open #pagemaplist{display:block}
+#pagemaplist a{display:block;padding:.18rem .6rem;color:var(--fg);text-decoration:none;
+  border-left:3px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pagemaplist a:hover{background:var(--panel2)}
+#pagemaplist a.on{border-left-color:var(--hi);font-weight:600}
+#pagemaplist .pmempty{padding:.2rem .6rem;color:var(--mut)}
+@media (min-width:1100px){body.pagemap-open{padding-left:12.5rem}}
 </style></head><body>
+<!-- 30.7 (2026-10-20): the page map -- the current page's sections at the
+     left edge, the one in view highlighted; collapsible to a strip. -->
+<nav id="pagemap" aria-label="On this page">
+  <button id="pagemaptg" type="button" title="On this page: show or hide the list of sections">☰</button>
+  <div id="pagemaplist"></div>
+</nav>
 
 <div class="bar topbar" id="topbar">
   <h1 style="margin:0;line-height:1.05">🔌 HID Config<br>
@@ -1206,7 +1227,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <button id="tspstop" class="txmini" disabled>■ Stop</button>
       <span id="tspstate" class="muted" style="font-size:.78rem"></span>
     </div>
-    <!-- 30.6: the setting itself, always here; the result below offers a value -->
+    <!-- 30.7: the setting itself, always here; the result below offers a value -->
     <div id="tsprate" style="font-size:.8rem;margin:0 0 .4rem">
       <label title="How long the Pi waits between the keys of an expansion. Saved to the Pi when changed.">Expansions type at
         <input id="tsprateval" type="number" min="0" max="100" step="0.5" style="width:4.5rem"> ms a key</label>
@@ -1279,6 +1300,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       <div class="perfwrap">
         <table class="perftbl">
           <thead><tr>
+            <th style="width:3.2rem" title="Switch a feature off on the Pi. Saved to the Pi at once.">On</th>
             <th style="width:11rem">Feature</th>
             <th style="width:30%">What it gives you</th>
             <th>Impact on disk, bandwidth and the typing path</th>
@@ -1742,6 +1764,14 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.7',items:[
+   {t:'Performance: an On switch for every feature -- the Pi stops doing what you switch off (Typing & mousing and Config save stay on)',k:'perftblbody'},
+   {t:'Performance: "Measured now" -- each feature\'s live cost from the engine',k:'perftblbody'},
+   {t:'A contents panel (☰, left edge): the sections of the page you are on, the one in view highlighted',k:'pagemap'},
+   {t:'Test: "Expansions type at __ ms a key" is always there to change',k:'tsprate'},
+   {t:'Test: every panel folds away; Usage drops the practice keyboard (Training has it); Training drops Actions per minute',k:'testspeed'}]},
+ {v:'30.6',items:[
+   {t:'Engine (30.5-30.6.9): no dropped input in use since -- the usage write, garbage collection and lock waits moved off the input path; held keys survive a restart; a mouse-click expansion pressed twice comes out the Office way',k:'perftblbody'}]},
  {v:'30.4',items:[
    {t:'Double and triple tap on the same keys run different macros; the highest count fires at once',k:'page-macros'},
    {t:'A time range and a space give its duration (849a-1030a then space), with a switch to turn it off',k:'page-exp'},
@@ -2510,7 +2540,7 @@ function onReport(e){
       // (a pre-21.4 CFG_END) = no hash.
       if(digest&&digest.length===8&&digest.some(b=>b!==0))cfgHash[curFile]=digest;
       if(curFile===0){cfg=obj;
-normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();toast('✓ config read');
+normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();featureApplyPage();toast('✓ config read');
         $('svcwarn').style.display='none';}
       else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(curFile===8){testRuns=(obj&&obj.runs)||[];testHistMeta=obj||{};renderTestHistory();}
@@ -3026,7 +3056,9 @@ function startStatusPoll(){clearInterval(statTimer);
     // 20.3: skip the poll while a read is in flight or queued. It is a
     // background refresh, and adding it to a busy 9 KB/s pipe every 10 s is
     // how a slow read becomes a stalled one.
-    if(!editDev&&!_reading&&!_readQ.length)getFile(3);
+    // 30.7: the Performance tab's Engine status switch -- each read makes
+    // the engine build its status (~85 ms of Pi1's core).
+    if(!editDev&&!_reading&&!_readQ.length&&featureOn('engine_status'))getFile(3);
   },10000);}
 let lastEng=null;
 document.addEventListener('visibilitychange',()=>{
@@ -16115,17 +16147,61 @@ function renderPerf(){
   renderApm(); renderStages();
   if(perfPrio === null) perfLoadPrio();
   perfRenderPrio();
-  if(perfBuilt){ renderPerfLive(); return; }   // the rows are static
+  if(perfBuilt){ renderPerfLive(); renderFeatSwitches(); return; }
   perfBuilt = true;
   const W = {hi:'high', md:'watch', lo:'low', na:'none'};
   $('perftblbody').innerHTML = PERF_FEATURES.map((r, i) =>
-    '<tr><td><b>' + r.f + '</b></td><td class="muted">' + r.d + '</td><td>' + r.i
+    '<tr><td class="featsw" data-pfi="' + i + '"></td>'
+  + '<td><b>' + r.f + '</b></td><td class="muted">' + r.d + '</td><td>' + r.i
   + '</td><td><span class="perfw ' + r.w + '">' + W[r.w] + '</span></td>'
   + '<td class="perflive" data-pfi="' + i + '" style="font-size:.78rem"></td></tr>').join('');
   $('perfreport').innerHTML = PERF_REPORT;
   renderPerfLive();
+  renderFeatSwitches();
 }
-// 30.6: the "Measured now" column, from the engine status (lastEng): its
+// 30.7: a switch per feature row. `cfg.features` holds only what is OFF
+// ({macros:false}); absent means on, so an older engine runs everything.
+// Typing & mousing and Config save have no off: one is the keyboard, the
+// other is how a switch is turned back on. Text transform and Engine status
+// are honoured here in the page (the tab hidden; no 10 s status reads); the
+// rest by the Pi.
+const FEATURE_KEY = {'Typing &amp; mousing':null, 'Macros':'macros',
+  'Text expansions':'expansions', 'Inline calculations':'calc',
+  'Usage recording':'usage', 'Changes &amp; history':'history',
+  'Backups':'backups', 'Config save':null, 'OS switching':'os_switching',
+  'Bluetooth':'bluetooth', 'Text transform':'text_transform',
+  'Engine status':'engine_status', 'Benchmarking':'benchmarking'};
+const FEATURE_LOCKED = {'Typing &amp; mousing':'the keyboard and mouse themselves',
+  'Config save':'how a switch is turned back on'};
+function featureOn(k){
+  return !(cfg && cfg.features && cfg.features[k] === false);}
+function renderFeatSwitches(){
+  document.querySelectorAll('#perftblbody td.featsw').forEach(td => {
+    const r = PERF_FEATURES[+td.dataset.pfi], k = r && FEATURE_KEY[r.f];
+    if(!k){
+      td.innerHTML = '<span class="muted" style="font-size:.72rem" title="Always on: '
+        + esc(FEATURE_LOCKED[r && r.f] || '') + '">always</span>';
+      return; }
+    td.innerHTML = '<input type="checkbox" data-fk="' + k + '"'
+      + (featureOn(k) ? ' checked' : '') + (cfg ? '' : ' disabled')
+      + ' title="' + (cfg ? 'Untick to switch this off on the Pi' : 'read the device first') + '">';
+    td.firstChild.onchange = e => featureSet(k, e.target.checked);
+  });}
+function featureSet(k, on){
+  if(!cfg){ toast('read the device first', true); return; }
+  if(on){
+    if(cfg.features){ delete cfg.features[k];
+      if(!Object.keys(cfg.features).length) delete cfg.features; }
+  } else {
+    cfg.features = cfg.features || {};
+    cfg.features[k] = false; }
+  featureApplyPage();
+  toast((on ? 'switched on: ' : 'switched off: ') + k + ' · ' + cfgSaveNow());}
+// The two the page itself honours.
+function featureApplyPage(){
+  const tx = document.querySelector('#toptabs [data-t="tx"]');
+  if(tx) tx.style.display = featureOn('text_transform') ? '' : 'none';}
+// 30.7: the "Measured now" column, from the engine status (lastEng): its
 // per-keypress service time and its housekeeping ring (the last 40 jobs it
 // timed). Rows the engine does not time say so.
 const PERF_LIVE = {'Typing &amp; mousing':'svc', 'Text expansions':'typing',
@@ -16427,7 +16503,7 @@ const TSP_FLOOR=0.25, TSP_GAIN=1.1, TSP_MAX=24;
 let tsp=null;
 function tspFocused(){const b=$('tspbox');return !!b&&document.hasFocus()&&document.activeElement===b;}
 function tspR2(x){return Math.round(x*100)/100;}
-// 30.6: the expansion typing rate, editable whether or not a run offered one
+// 30.7: the expansion typing rate, editable whether or not a run offered one
 function tspRateShow(){
   const v=$('tsprateval'),n=$('tspratenote');if(!v)return;
   if(document.activeElement!==v)v.value=cfg?tspCur():'';
@@ -16871,7 +16947,80 @@ function switchTab(t){
   if(t==='perf')renderPerf();
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
-  if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}}
+  if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}
+  setTimeout(pageMapBuild,60);}
+/* 30.7: the page map. Rebuilt on every tab change (and when a section folds
+   or unfolds), from the visible page's own headings -- a panel's <h2> or its
+   <summary> -- so it never needs a list kept by hand. */
+let _pmItems=[];
+function pageMapPage(){
+  return [...document.querySelectorAll('[id^="page-"]')].find(p=>p.style.display!=='none'&&p.offsetParent!==null);}
+function pageMapLabel(el){
+  let t='';
+  for(const n of el.childNodes) if(n.nodeType===3||(n.nodeType===1&&!/^(BUTTON|INPUT|SELECT|LABEL)$/.test(n.tagName))) t+=n.textContent;
+  return t.replace(/\s+/g,' ').trim().slice(0,60);}
+function pageMapBuild(){
+  const list=$('pagemaplist');if(!list)return;
+  const page=pageMapPage();
+  _pmItems=[];
+  if(page){
+    // Top-level sections only: a <details> (its <summary>) or a .panel's
+    // <h2>, not nested inside another section -- the Mapping page's
+    // Advanced and Palm rejection live inside Devices.
+    page.querySelectorAll('details > summary, .panel > h2').forEach(el=>{
+      const box=el.parentElement;
+      const outer=box.parentElement&&box.parentElement.closest('details, .panel');
+      if(outer&&page.contains(outer))return;
+      if(el.offsetParent===null&&el.tagName!=='SUMMARY')return;
+      if(box.offsetParent===null&&box.style.display==='none')return;
+      const label=pageMapLabel(el);
+      // the SECTION, not its title: titles are sticky (29.27), and a stuck
+      // title reports a pinned position and scrolls to the wrong place
+      if(label&&!_pmItems.some(x=>x.el===el))_pmItems.push({el,box,label});});}
+  list.innerHTML=_pmItems.length
+    ? _pmItems.map((x,i)=>`<a href="#" data-pmi="${i}" title="${esc(x.label)}">${esc(x.label)}</a>`).join('')
+    : '<div class="pmempty">no sections on this page</div>';
+  list.querySelectorAll('a[data-pmi]').forEach(a=>a.onclick=e=>{
+    e.preventDefault();
+    const it=_pmItems[+a.dataset.pmi];if(!it)return;
+    const d=it.el.closest('details');if(d&&!d.open)d.open=true;
+    // Instant, not smooth: a smooth scroll is driven by animation frames,
+    // which a hidden or backgrounded page never gets.
+    it.box.scrollIntoView({block:'start'});
+    // The one clicked is the one shown, until the next real scroll: near a
+    // page's end several short sections cannot all reach the top.
+    _pmPinned={i:+a.dataset.pmi,y:window.scrollY};
+    pageMapSpy();});
+  pageMapSpy();}
+let _pmPinned=null;
+function pageMapSpy(){
+  if(_pmPinned&&Math.abs(window.scrollY-_pmPinned.y)<4){
+    const p=_pmPinned.i;
+    document.querySelectorAll('#pagemaplist a[data-pmi]').forEach(a=>a.classList.toggle('on',+a.dataset.pmi===p));
+    return;}
+  _pmPinned=null;
+  // The section whose heading is in the top 40% of the window -- a fixed
+  // pixel line fails at a page's end, which cannot scroll its last
+  // sections up that far.
+  let on=-1;const lim=Math.max(120,window.innerHeight*0.4);
+  _pmItems.forEach((x,i)=>{if(x.box.getBoundingClientRect().top<=lim)on=i;});
+  if(on<0&&_pmItems.length)on=0;
+  document.querySelectorAll('#pagemaplist a[data-pmi]').forEach(a=>a.classList.toggle('on',+a.dataset.pmi===on));}
+function pageMapSetOpen(open){
+  const nav=$('pagemap');if(!nav)return;
+  nav.classList.toggle('open',open);
+  document.body.classList.toggle('pagemap-open',open);
+  try{localStorage.setItem('hc.pagemap',open?'1':'0');}catch(_){}}
+(function(){
+  const tg=$('pagemaptg');if(!tg)return;
+  let open=window.innerWidth>=1100;
+  try{const v=localStorage.getItem('hc.pagemap');if(v!==null)open=v==='1';}catch(_){}
+  pageMapSetOpen(open);
+  tg.onclick=()=>pageMapSetOpen(!$('pagemap').classList.contains('open'));
+  let t=null;
+  window.addEventListener('scroll',()=>{if(t)return;t=setTimeout(()=>{t=null;pageMapSpy();},120);},{passive:true});
+  document.addEventListener('toggle',()=>setTimeout(pageMapSpy,30),true);
+})();
 pfInit();
 // 27.8: the Copy/Paste "about" caret. Remembered in this browser only (a
 // look preference, not profile config), and closed unless you opened it.
@@ -16947,7 +17096,7 @@ document.querySelectorAll('#usagetabs .tab').forEach(t=>t.onclick=()=>{
   // 29.24.1: the practice keyboard goes with you. Josh, 2026-10-09 08:59:
   // "Keyboard should still show up when I switch over to the "Training"
   // tab". Moved, not copied: one keyboard, its handlers intact.
-  // 30.6: the practice keyboard on Training only; Actions per minute on
+  // 30.7: the practice keyboard on Training only; Actions per minute on
   // Usage only.
   const pk=$('practicekbd'),dest=$('trainpane');
   if(pk&&dest&&pk.parentElement!==dest)dest.insertBefore(pk,dest.firstElementChild);
