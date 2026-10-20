@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.7</title>
+<title>HID Config 30.8</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -1764,6 +1764,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.8',items:[
+   {t:'Expansions: ✎ on Estimated time saved takes a breakdown -- one line per part ("0.75s find it"), totalled as you type',k:'exptable'},
+   {t:'Expansions: the clock beside ⏸ / ⏹ shows the running time while you write',k:'exptable'},
+   {t:'Expansion Sets: "Expands to" is timed too, with its own Estimated time saved column',k:'settable'}]},
  {v:'30.7',items:[
    {t:'Performance: an On switch for every feature -- the Pi stops doing what you switch off (Typing & mousing and Config save stay on)',k:'perftblbody'},
    {t:'Performance: "Measured now" -- each feature\'s live cost from the engine',k:'perftblbody'},
@@ -12581,39 +12585,13 @@ function addExpRow(k,v){
     value="${(((cfg&&cfg.exp_groups)||{})[k]||'').replace(/"/g,'&quot;')}"
     placeholder="—" title="Optional. Groups rows in this table; not an expansion set."></td>`;
   t.appendChild(tr);
-  // 29.13 (2026-10-07): timing is in "Expands to": the first keystroke
-  // starts the clock, ⏸/▶ pause and resume, ⏹ End records. Time away from
-  // the page counts. State lives in expRuns (rows are rebuilt on
-  // switchTab('exp')).
-  const inp=tr.querySelector('.eval'),bp=tr.querySelector('.etpause'),
-        be=tr.querySelector('.etend'),clk=tr.querySelector('.etclock');
-  const rk='row:'+(k||('new'+(++_expNewRow)));
-  const show=()=>{const r=expRuns[rk];const on=!!(r&&r.t0!==null);
-    bp.style.display=be.style.display=on?'':'none';
-    bp.textContent=r&&r.pauseAt!=null?'▶':'⏸';
-    clk.textContent=on?(r.pauseAt!=null?'paused':'timing'):'';};
-  inp.addEventListener('input',()=>{
-    const r=expRun(rk),now=expNow();
-    if(r.pauseAt!=null)return;                 // paused: not counted
-    if(r.t0===null)r.t0=now;
-    r.t1=now;show();});
-  bp.onclick=()=>{const r=expRun(rk),now=expNow();
-    if(r.pauseAt==null)r.pauseAt=now;
-    else{r.paused=(r.paused||0)+(now-r.pauseAt);r.pauseAt=null;r.t1=now;}
-    show();};
-  be.onclick=()=>{
-    const r=expRuns[rk];
-    const trig=(tr.querySelector('.etrig').value||'').trim();
-    if(!trig){toast('give it a trigger first, then ⏹',true);return;}
-    if(!r||r.t0===null||r.t1<=r.t0){toast('nothing timed — type the expansion in its box',true);return;}
-    // Ended while paused: the clock stopped at the pause (t1 no longer
-    // moves while paused), so there is nothing more to subtract.
-    r.pauseAt=null;
-    expAwayEnd(r);
-    const away=r.away||0,sample=Math.max(0,(r.t1-r.t0)-(r.paused||0))+away;
-    expAddSample(trig,sample,away?` (including ${fmtMs(away)} away from the page)`:'');
-    delete expRuns[rk];show();};
-  show();
+  // 29.13: "Expands to" is timed; 30.8: by the shared expTimeAttach, which
+  // the Expansion Sets editor uses too.
+  expTimeAttach(tr.querySelector('.eval'),tr.querySelector('.etpause'),
+    tr.querySelector('.etend'),tr.querySelector('.etclock'),
+    'row:'+(k||('new'+(++_expNewRow))),
+    ()=>(tr.querySelector('.etrig').value||'').trim(),
+    ()=>tr.querySelector('.eval').value.replace(/\\n/g,'\n'));
   renderExpSavedCell(tr.querySelector('.esaved'),k);
   renderExpUsedCell(tr.querySelector('.eused'),k);}
 
@@ -12650,6 +12628,51 @@ let _expNewRow = 0;        // 29.13: a key for rows with no trigger yet
 function expNow(){
   return (window.performance&&performance.now)?performance.now():Date.now();}
 
+/* 29.13 / 30.8: timing for an "Expands to" box -- the first keystroke starts
+   the clock, ⏸/▶ pause and resume, ⏹ records. Time away from the page
+   counts. State lives in expRuns under `rk`, so a rebuilt row picks its run
+   up again. The clock beside the buttons shows the running total (30.8). */
+function expRunElapsed(r){
+  if(!r||r.t0===null)return 0;
+  const end=r.pauseAt!=null?r.pauseAt:expNow();
+  return Math.max(0,(end-r.t0)-(r.paused||0))+(r.away||0);}
+function expTimeAttach(inp,bp,be,clk,rk,getTrig,getText){
+  if(!inp||!bp||!be||!clk)return;
+  clk.dataset.rk=rk;
+  const show=()=>{const r=expRuns[rk];const on=!!(r&&r.t0!==null);
+    bp.style.display=be.style.display=on?'':'none';
+    bp.textContent=r&&r.pauseAt!=null?'▶':'⏸';
+    clk.textContent=on?((r.pauseAt!=null?'paused ':'')+fmtMs(expRunElapsed(r))):'';};
+  inp.addEventListener('input',()=>{
+    const r=expRun(rk),now=expNow();
+    if(r.pauseAt!=null)return;                 // paused: not counted
+    if(r.t0===null)r.t0=now;
+    r.t1=now;show();});
+  bp.onclick=()=>{const r=expRun(rk),now=expNow();
+    if(r.pauseAt==null)r.pauseAt=now;
+    else{r.paused=(r.paused||0)+(now-r.pauseAt);r.pauseAt=null;r.t1=now;}
+    show();};
+  be.onclick=()=>{
+    const r=expRuns[rk];
+    const trig=getTrig();
+    if(!trig){toast('give it a trigger first, then ⏹',true);return;}
+    if(!r||r.t0===null||r.t1<=r.t0){toast('nothing timed — type the expansion in its box',true);return;}
+    // Ended while paused: the clock stopped at the pause (t1 no longer
+    // moves while paused), so there is nothing more to subtract.
+    r.pauseAt=null;
+    expAwayEnd(r);
+    const away=r.away||0,sample=Math.max(0,(r.t1-r.t0)-(r.paused||0))+away;
+    expAddSample(trig,sample,away?` (including ${fmtMs(away)} away from the page)`:'',
+                 getText?getText():undefined);
+    delete expRuns[rk];show();};
+  show();}
+// 30.8: the running totals tick while anything is being timed.
+setInterval(()=>{
+  document.querySelectorAll('.etclock[data-rk]').forEach(c=>{
+    const r=expRuns[c.dataset.rk];
+    if(r&&r.t0!==null)c.textContent=(r.pauseAt!=null?'paused ':'')+fmtMs(expRunElapsed(r));});
+},500);
+
 function expRun(trig){
   return expRuns[trig] || (expRuns[trig] =
     {t0:null,t1:null,away:0,awayAt:null,text:''});}
@@ -12679,10 +12702,13 @@ if(typeof document!=='undefined'&&document.addEventListener){
 /* One place where a sample becomes an average (timed and "+" paths alike);
    savedMs deducts typing the trigger at his rate. 24.3: written to the Pi at
    once. */
-function expAddSample(trig,sampleMs,note){
-  const text=(exps||{})[trig]||'';
+function expAddSample(trig,sampleMs,note,textArg){
+  // 30.8: a set item passes its own text; the Expansions table's is in exps
+  const text=textArg!==undefined?textArg:((exps||{})[trig]||'');
   const saved=savedMs(sampleMs,trig,text);
   cfg.exp_typing=cfg.exp_typing||{};
+  // accAdd builds a fresh record, so a breakdown (30.8) does not survive a
+  // new sample: the estimate is an average again, not the lines' total.
   cfg.exp_typing[trig]=accAdd(cfg.exp_typing[trig]||{},saved);
   renderExpSaved();
   // ONE toast, carrying the saving AND where it went. Two toasts would mean
@@ -12795,6 +12821,11 @@ function renderExpSavedCell(td,trig){
   const set=`<a class="mlink eset" data-trig="${esc(trig)}"
      title="Set the estimate by hand (replaces the samples)">✎</a>`;
   if(!a||!a.n){td.innerHTML='<span class="muted">—</span>'+plus+set;}
+  else if(a.parts&&a.parts.length){
+    // 30.8: a breakdown -- the total of its lines, each shown on hover
+    td.innerHTML=esc(fmtMs(a.mean))+plus+set;
+    td.title='breakdown (✎ to edit):\n'
+      +a.parts.map(x=>fmtMs(x.ms)+'  '+(x.note||'')).join('\n');}
   else{
     const sd=accSd(a);
     td.innerHTML=esc(fmtMs(a.mean))+plus+set;
@@ -12806,7 +12837,60 @@ function renderExpSavedCell(td,trig){
   const p=td.querySelector('.eplus');
   if(p)p.onclick=()=>expAskDuration(td,trig);
   const setEl=td.querySelector('.eset');
-  if(setEl)setEl.onclick=()=>expAskDuration(td,trig,true);}
+  if(setEl)setEl.onclick=()=>expEditBreakdown(td,trig);}
+
+/* 30.8: ✎ edits the estimate as a breakdown -- one line per part, a
+   duration then what it is ("0.75s find the address"), totalled live. Saved,
+   the total IS the estimate (no deduction for the trigger: this is the
+   column's own value being set), and the lines are kept to edit again. */
+const BREAK_UNIT={ms:1,s:1000,sec:1000,secs:1000,second:1000,seconds:1000,
+  m:60000,min:60000,mins:60000,minute:60000,minutes:60000,
+  h:3600000,hr:3600000,hrs:3600000,hour:3600000,hours:3600000};
+function parseBreakdown(text){
+  const parts=[],bad=[];
+  String(text||'').split('\n').forEach((line,i)=>{
+    if(!line.trim())return;
+    // "number unit" pairs from the start ("1m 20s", "0.75s", "300 ms"),
+    // stopping at the first word that is not a unit: that is the note.
+    let rest=line,ms=0,used=0,g;
+    while((g=rest.match(/^\s*(\d+(?:\.\d+)?)\s*([a-z]+)\b/i))
+          &&BREAK_UNIT[g[2].toLowerCase()]){
+      ms+=parseFloat(g[1])*BREAK_UNIT[g[2].toLowerCase()];
+      used++;rest=rest.slice(g[0].length);}
+    if(used)parts.push({ms:Math.round(ms),note:rest.trim()});
+    else bad.push(i+1);});
+  return {parts,bad,total:parts.reduce((s,x)=>s+x.ms,0)};}
+function expEditBreakdown(td,trig){
+  if(!td||td.querySelector('.ebrk'))return;
+  if(!cfg){toast('read the device first',true);return;}
+  const a=((cfg.exp_typing)||{})[trig];
+  const pre=a&&a.parts&&a.parts.length
+    ? a.parts.map(x=>(x.ms/1000)+'s '+(x.note||'')).join('\n')
+    : (a&&a.n ? (Math.round(a.mean/10)/100)+'s current estimate' : '');
+  td.innerHTML=`<textarea class="ebrk" rows="4" style="width:15rem;font-size:.78rem"
+      placeholder="0.75s find the address&#10;1.4s type it out"
+      title="One part per line: a duration (0.75s, 1m 20s, 300ms) then what it is"></textarea>
+    <div style="font-size:.74rem;margin-top:.15rem"><b class="ebrktot"></b>
+    <button class="ebrkok" style="font-size:.72rem;margin-left:.3rem">✓</button>
+    <button class="ebrkno" style="font-size:.72rem">✕</button></div>`;
+  const ta=td.querySelector('.ebrk'),tot=td.querySelector('.ebrktot');
+  ta.value=pre;
+  const upd=()=>{const r=parseBreakdown(ta.value);
+    tot.textContent='total '+fmtMs(r.total)
+      +(r.bad.length?' · line '+r.bad.join(', ')+' needs a duration first':'');
+    tot.style.color=r.bad.length?'var(--warn)':'';
+    return r;};
+  ta.addEventListener('input',upd);upd();ta.focus();
+  const done=()=>{renderExpSaved();};
+  td.querySelector('.ebrkno').onclick=done;
+  td.querySelector('.ebrkok').onclick=()=>{
+    const r=upd();
+    if(r.bad.length){toast('line '+r.bad.join(', ')+': start with a duration, like 0.75s',true);ta.focus();return;}
+    cfg.exp_typing=cfg.exp_typing||{};
+    if(!r.parts.length){delete cfg.exp_typing[trig];}
+    else cfg.exp_typing[trig]={n:1,mean:r.total,m2:0,min:r.total,max:r.total,parts:r.parts};
+    done();
+    toast('estimated time saved: '+(r.parts.length?fmtMs(r.total):'cleared')+' · '+cfgSaveNow());};}
 
 /* The "+" turns the cell into a one-field form. In place rather than a
    prompt(): a prompt cannot show what it accepts, and "any of the forms we
@@ -12840,7 +12924,7 @@ function expAskDuration(td,trig,replace){
   inp.focus();}
 
 function renderExpSaved(){
-  document.querySelectorAll('#exptable .esaved').forEach(td=>
+  document.querySelectorAll('#exptable .esaved, #settable .esaved').forEach(td=>
     renderExpSavedCell(td,td.dataset.trig));}
 // 23.9: average time saved per expansion, Welford (n, mean, M2) -- never
 // averaged SDs (CLAUDE.md §3). Header shows n; tooltip SD, min, max.
@@ -13137,7 +13221,9 @@ function renderSetTable(){
     dbox.value=st.description||'';
     dbox.oninput=()=>{st.description=dbox.value;markSetsDirty();};
   }
-  let h=`<tr><td><b>On</b></td><td><b>Trigger</b></td><td><b>Expands to</b></td>
+  let h=`<tr><td><b>On</b></td><td><b>Trigger</b></td>
+    <td title="Typing here is timed: ⏸ pause, ▶ resume, ⏹ record."><b>Expands to</b> <span class="muted" style="font-weight:400;font-size:.72rem">(timed)</span></td>
+    <td title="Estimated time saved per use. ＋ adds a timing, ✎ sets it as a breakdown."><b>Estimated time saved</b></td>
     <td><b>Regex</b></td><td><b>Case</b></td>
     <td><b title="Keep the trigger on screen and add the value after it, instead of replacing it">Keep</b></td>
     <td><b title="How non-ASCII characters in this expansion are typed. Blank = use the OS-wide setting.">Unicode</b></td>
@@ -13146,7 +13232,8 @@ function renderSetTable(){
     h+=`<tr${it.off?' class="addoff"':''}>
       <td><input type="checkbox" data-si="${i}" data-f="off" ${it.off?'':'checked'} title="enable / disable this expansion"></td>
       <td><input type="text" data-si="${i}" data-f="trigger" value="${esc(it.trigger||'')}" style="font-family:ui-monospace,monospace"></td>
-      <td><input type="text" data-si="${i}" data-f="value" value="${esc(String(it.value||'').replace(/\n/g,'\\n'))}" style="font-family:ui-monospace,monospace"></td>
+      <td style="white-space:nowrap"><input type="text" data-si="${i}" data-f="value" value="${esc(String(it.value||'').replace(/\n/g,'\\n'))}" style="font-family:ui-monospace,monospace"><button class="etpause" style="font-size:.72rem;margin-left:.2rem;display:none" title="Pause the timing (▶ resumes)">⏸</button><button class="etend" style="font-size:.72rem;display:none" title="End: record how long writing this took">⏹</button><span class="etclock muted" style="font-size:.7rem;margin-left:.2rem"></span></td>
+      <td class="esaved" data-trig="${esc(it.trigger||'')}"></td>
       <td><input type="checkbox" data-si="${i}" data-f="regex" ${it.regex?'checked':''}></td>
       <td><select data-si="${i}" data-f="case">
         <option value="ignore" ${it.case!=='match'?'selected':''}>ignore</option>
@@ -13162,6 +13249,17 @@ function renderSetTable(){
       <td><button data-scopy="${i}" title="Duplicate this expansion so you can edit the copy">⧉</button>
           <button data-sdel="${i}">✕</button></td></tr>`;});
   t.innerHTML=h;
+  // 30.8: timing and the saved estimate, as in the Expansions table. Keyed
+  // by trigger in cfg.exp_typing, the same place, so Usage counts both.
+  (st.items||[]).forEach((it,i)=>{
+    const valIn=t.querySelector(`input[data-si="${i}"][data-f="value"]`);
+    if(!valIn)return;
+    const td=valIn.parentElement,tr=td.parentElement;
+    expTimeAttach(valIn,td.querySelector('.etpause'),td.querySelector('.etend'),
+      td.querySelector('.etclock'),'set:'+curSet+':'+i,
+      ()=>String(it.trigger||'').trim(),
+      ()=>valIn.value.replace(/\\n/g,'\n'));
+    renderExpSavedCell(tr.querySelector('.esaved'),String(it.trigger||''));});
   t.querySelectorAll('[data-si]').forEach(el=>el.onchange=()=>{
     const it=st.items[+el.dataset.si];if(!it)return;
     const f=el.dataset.f;
@@ -13173,7 +13271,10 @@ function renderSetTable(){
     else if(f==='value')it.value=el.value.replace(/\\n/g,'\n');
     else if(f==='os'){if(el.value)it.os=[el.value];else delete it.os;}   // 19.2R #3
     else it[f]=el.value;
-    if(f==='trigger'&&it.regex){try{new RegExp(it.trigger)}catch(e){toast('regex error: '+e.message,true);}}});
+    if(f==='trigger'&&it.regex){try{new RegExp(it.trigger)}catch(e){toast('regex error: '+e.message,true);}}
+    if(f==='trigger'){                       // 30.8: its estimate follows
+      const cell=el.closest('tr').querySelector('.esaved');
+      if(cell){cell.dataset.trig=it.trigger;renderExpSavedCell(cell,it.trigger);}}});
   t.querySelectorAll('[data-sdel]').forEach(b=>b.onclick=()=>{
     st.items.splice(+b.dataset.sdel,1);renderSets();});
   // 20.8.1: duplicate an expansion with everything it carries, inserted
