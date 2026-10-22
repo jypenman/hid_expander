@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.8</title>
+<title>HID Config 30.9</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -1764,6 +1764,10 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.9',items:[
+   {t:'Tap counts: every count listed (1st tap; 2nd tap (double); ...), each with edit into the action picker -- the 1st tap can have its own action',k:'editorbody'},
+   {t:'Expansions: tdt then ( gives the time since the last tdt (it needed a second space before)',k:'exptable'},
+   {t:'Text fields grow to fit their text, and shrink back',k:'exptable'}]},
  {v:'30.8',items:[
    {t:'Expansions: ✎ on Estimated time saved takes a breakdown -- one line per part ("0.75s find it"), totalled as you type',k:'exptable'},
    {t:'Expansions: the clock beside ⏸ / ⏹ shows the running time while you write',k:'exptable'},
@@ -3791,9 +3795,12 @@ function setIdent(dev,ref,n){
 function macroLabel(n){const nm=(cfg.macro_names||{})[n];return nm?nm:('M'+n);}
 function actShort(a){if(!a)return'';const k=a[0];
 // 30.1: a tap rule reads as its count, then what it does
-if(k==='taps'){const sp=a[1]||{},mo=sp.more||{};
-  return [(+sp.n||2)+'× → '+(asgActLabel(a[2])||'?')].concat(Object.keys(mo).sort((x,y)=>x-y)
-    .map(c=>c+'× → '+(asgActLabel(mo[c])||'?'))).join(' · ');}
+if(k==='taps'){const sp=a[1]||{},mo=Object.assign({},sp.more||{});
+  // 30.9: every count in order, the main one among them; an empty count
+  // ("as usual") is not listed
+  if(a[2]!=null)mo[+sp.n||2]=a[2];
+  return Object.keys(mo).map(Number).sort((x,y)=>x-y).filter(c=>mo[c]!=null)
+    .map(c=>c+'× → '+(asgActLabel(mo[c])||'?')).join(' · ');}
 if(k==='key')return KEYS[a[1]]||'?';if(k==='btn')return'btn'+a[1];
 // 29.19: a key with modifiers -- was printed as the bare word "keymods"
 if(k==='keymods')return [[1,'Ctrl'],[8,'Win'],[4,'Alt'],[2,'Shift']].filter(([b])=>(+a[2]||0)&b)
@@ -9513,51 +9520,80 @@ $('pluspill').ondragstart=e=>{window._plusDrag=true;e.dataTransfer.setData('plus
 const TAPS_GAP_DEFAULT=350;
 function tapsInner(a){return Array.isArray(a)&&a[0]==='taps'?(a[2]??null):a;}
 function tapsSpec(a){return Array.isArray(a)&&a[0]==='taps'?(a[1]||{}):null;}
-function tapsWrap(spec,inner){return spec&&(+spec.n||1)>1&&inner!=null?['taps',spec,inner]:inner;}
-function tapsRead(){const n=$('tapsn');if(!n||+n.value<=1)return null;
+function tapsWrap(spec,inner){
+  if(!spec)return inner;
+  // 30.9: "edit" on another count makes it the one the picker shows: the
+  // action just edited goes back under its own count, the chosen one comes
+  // out to be edited. Every count is equal to the engine (MAPPING_MODEL §1).
+  if(spec.rotate!=null){
+    const k=+spec.rotate, old=+spec.n||1, more=Object.assign({},spec.more||{});
+    delete spec.rotate;
+    if(k!==old){
+      if(inner!=null)more[old]=inner;else delete more[old];
+      inner=more[k]??null;delete more[k];spec.n=k;}
+    if(Object.keys(more).length)spec.more=more;else delete spec.more;}
+  const hasMore=spec.more&&Object.keys(spec.more).length;
+  if((+spec.n||1)>1&&inner!=null||hasMore)return['taps',spec,inner??null];
+  return inner;}
+function tapsRead(){const n=$('tapsn');if(!n)return null;
+  const rows=document.querySelectorAll('.tapsx');
+  if(+n.value<=1&&!rows.length)return null;
   const o={n:+n.value,gap_ms:Math.max(50,+($('tapsgap')||{}).value||TAPS_GAP_DEFAULT),
     first:(($('tapsfirst')||{}).value)||'wait'};
-  // 30.4: more counts on the same keys, each its own action
+  // 30.4: more counts on the same keys, each its own action (30.9: from 1)
   const more={};
-  document.querySelectorAll('.tapsx').forEach(r=>{const k=+r.dataset.n;if(!(k>1)||k===o.n)return;
-    const s=r.querySelector('.tapsxmac'),raw=r.querySelector('.tapsxraw');
-    if(s)more[k]=['macro',+s.value];
-    else if(raw){try{more[k]=JSON.parse(raw.dataset.raw);}catch(_){}}});
+  rows.forEach(r=>{const k=+r.dataset.n;if(!(k>=1)||k===o.n)return;
+    try{more[k]=JSON.parse(r.dataset.raw);}catch(_){more[k]=null;}});
   if(Object.keys(more).length){o.more=more;o.first='wait';}
+  if(window._tapsRotateTo!=null){o.rotate=window._tapsRotateTo;window._tapsRotateTo=null;}
   return o;}
-function tapsOrd(i){i=+i;return i+(i===2?'nd':i===3?'rd':'th')+' tap';}
-// one extra count: a macro picker, or -- for any other action -- the action
-// shown and kept as it is, never replaced by a default
+function tapsOrd(i){i=+i;return i+(i===1?'st':i===2?'nd':i===3?'rd':'th')+' tap'
+  +(i===2?' (double)':i===3?' (triple)':'');}
+// 30.9: one row per count -- the one the picker below is editing, and every
+// other with its action and an edit that brings it into the picker.
 function tapsMoreRow(k,act){
-  const isMac=Array.isArray(act)&&act[0]==='macro';
-  return `<span class="tapsx" data-n="${+k}">· on the ${tapsOrd(k)}: `+(isMac
-    ?`<select class="tapsxmac" style="width:auto">${macOpts(+act[1]||1)}</select>`
-    :`<span class="tapsxraw" data-raw="${esc(JSON.stringify(act))}">${esc(actShort(act))}</span>`)
-    +` <a class="mlink tapsxdel" title="remove this count">✕</a></span>`;}
+  return `<div class="tapsx" data-n="${+k}" data-raw="${esc(JSON.stringify(act??null))}" style="margin:.1rem 0">`
+    +`${tapsOrd(k)}: <b>${act==null?(+k===1?'the key itself (as usual)':'nothing yet'):esc(actShort(act))}</b>`
+    +` <a class="mlink tapsxedit" title="Edit this count's action in the picker below">edit</a>`
+    +(+k===1&&act==null?'':` <a class="mlink tapsxdel" title="remove this count">✕</a>`)+`</div>`;}
 function tapsHTML(spec){const n=spec?+spec.n||1:1,g=spec?+spec.gap_ms||TAPS_GAP_DEFAULT:TAPS_GAP_DEFAULT;
-  return `<div style="font-size:.78rem;margin:.25rem 0;display:flex;gap:.3rem;flex-wrap:wrap;align-items:center"
+  const more=(spec&&spec.more)||{};
+  const multi=n>1||Object.keys(more).length>0;
+  const ks=[...new Set([1,n,...Object.keys(more).map(Number)])].sort((a,b)=>a-b);
+  const rows=ks.map(k=>k===n
+      ?`<div style="margin:.1rem 0">▸ ${tapsOrd(k)}: <b>editing below ↓</b></div>`
+      :tapsMoreRow(k,more[k])).join('');
+  return `<div style="font-size:.78rem;margin:.25rem 0"
       title="Fire only on a repeated tap, each within the time of the last">
-    Fires on <select id="tapsn" style="width:auto">${[1,2,3,4].map(i=>`<option value="${i}" ${i===n?'selected':''}>${i===1?'every tap':i===2?'2nd tap (double)':i===3?'3rd tap (triple)':i+'th tap'}</option>`).join('')}</select>
-    <span ${n>1?'':'style="display:none"'} class="tapsmore">within <input id="tapsgap" type="number" min="50" step="25" value="${g}" style="width:4.5rem"> ms;
-      fewer taps: <select id="tapsfirst" style="width:auto">
+    <div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center">
+    Fires on <select id="tapsn" style="width:auto">${Array.from({length:Math.max(4,...ks)},(_,j)=>j+1).map(i=>`<option value="${i}" ${i===n?'selected':''}>${i===1?(multi?'1st tap':'every tap'):i===2?'2nd tap (double)':i===3?'3rd tap (triple)':i+'th tap'}</option>`).join('')}</select>
+    <span ${multi?'':'style="display:none"'} class="tapsmore">within <input id="tapsgap" type="number" min="50" step="25" value="${g}" style="width:4.5rem"> ms
+      <span ${Object.keys(more).length?'style="display:none"':''}>; fewer taps: <select id="tapsfirst" style="width:auto">
         <option value="wait" ${(spec&&spec.first)!=='pass'?'selected':''}>wait, then send as usual</option>
-        <option value="pass" ${(spec&&spec.first)==='pass'?'selected':''}>send at once</option></select>
-      <span class="tapsxwrap">${Object.keys((spec&&spec.more)||{}).sort((a,b)=>a-b).map(k=>tapsMoreRow(k,spec.more[k])).join('')}</span>
-      <a class="mlink tapsxadd" title="Another tap count on the same keys, with its own action. The highest count fires as soon as it is reached; a lower one when the taps stop.">＋ another tap count</a></span></div>`;}
-// 30.4: the extra-count controls, for whichever editor is open. A change is
-// passed on as a change of #tapsn, which both editors already save from.
+        <option value="pass" ${(spec&&spec.first)==='pass'?'selected':''}>send at once</option></select></span></span></div>
+    <div class="tapsxwrap" ${multi?'':'style="display:none"'}>${rows}
+      <a class="mlink tapsxadd" title="Another tap count on the same keys, with its own action. The highest count fires as soon as it is reached; a lower one when the taps stop.">＋ another tap count</a></div></div>`;}
+// 30.4 / 30.9: the count controls, for whichever editor is open. A change is
+// passed on as a change of #tapsn, which both editors already save from;
+// "edit" marks the count to bring into the picker, and the save rotates it
+// there (tapsWrap), then the editor is drawn again to show it.
 (function(){
   const save=()=>{const n=$('tapsn');if(n)n.dispatchEvent(new Event('change',{bubbles:true}));};
+  const redraw=()=>{if(typeof renderEditor==='function')renderEditor();};
+  // choosing a count from "Fires on" shows the list at once
+  document.addEventListener('change',e=>{
+    if(e.target&&e.target.id==='tapsn'&&!window._tapsRotateTo)setTimeout(redraw,0);});
   document.addEventListener('click',e=>{
     const t=e.target;if(!t||!t.classList)return;
     if(t.classList.contains('tapsxadd')){
-      const n=$('tapsn'),w=t.parentElement&&t.parentElement.querySelector('.tapsxwrap');if(!n||!w)return;
+      const n=$('tapsn'),w=t.closest('.tapsxwrap');if(!n||!w)return;
       const used=[+n.value,...[...w.querySelectorAll('.tapsx')].map(r=>+r.dataset.n)];
       const k=Math.max(...used)+1;if(k>9){toast('nine taps is the most',true);return;}
-      w.insertAdjacentHTML('beforeend',tapsMoreRow(k,['macro',1]));save();}
-    else if(t.classList.contains('tapsxdel')){const r=t.closest('.tapsx');if(r){r.remove();save();}}});
-  document.addEventListener('change',e=>{
-    if(e.target&&e.target.classList&&e.target.classList.contains('tapsxmac'))save();});})();
+      t.insertAdjacentHTML('beforebegin',tapsMoreRow(k,null));
+      window._tapsRotateTo=k;save();redraw();}
+    else if(t.classList.contains('tapsxedit')){const r=t.closest('.tapsx');if(!r)return;
+      window._tapsRotateTo=+r.dataset.n;save();redraw();}
+    else if(t.classList.contains('tapsxdel')){const r=t.closest('.tapsx');if(r){r.remove();save();}}});})();
 function actionToUI(a){if(!a)return{press:'pass',release:'none'};
 if(a[0]==='taps')return Object.assign(actionToUI(tapsInner(a)),{taps:tapsSpec(a)});   // 30.1
 const k=a[0];
@@ -17049,7 +17085,36 @@ function switchTab(t){
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}
-  setTimeout(pageMapBuild,60);}
+  setTimeout(pageMapBuild,60);
+  setTimeout(()=>{const pg=pageMapPage();if(pg)fitFieldsIn(pg);},120);}   // 30.9
+/* 30.9: text fields grow to fit their text. A text input widens to its
+   content and returns to its own width
+   when the text is short again (capped at 520 px, inside its panel); a
+   textarea grows to its lines, capped at 480 px. On typing, on focus, and over the visible page at each tab change
+   (so a long saved value shows whole). Opt out with data-nofit. */
+const FIT_TA_MAX=480, FIT_IN_MAX=520;
+function fitField(el){
+  if(!el||el.dataset.nofit!==undefined||el.offsetParent===null)return;
+  if(el.tagName==='TEXTAREA'){
+    if(el.dataset.fith===undefined)el.dataset.fith=el.style.height||'';
+    el.style.height=el.dataset.fith;
+    if(el.scrollHeight>el.clientHeight+2)el.style.height=Math.min(el.scrollHeight+2,FIT_TA_MAX)+'px';
+    return;}
+  if(el.tagName!=='INPUT'||!/^(text|search|url|email|)$/i.test(el.getAttribute('type')||''))return;
+  if(el.dataset.fitw===undefined)el.dataset.fitw=el.style.width||'';
+  // Measured at its own width first, so it shrinks back as well as grows.
+  // The cap is FIT_IN_MAX, kept inside the panel: a table cell sizes to its
+  // content, so the cell's own width would stop it growing at once.
+  el.style.width=el.dataset.fitw;
+  if(el.scrollWidth>el.clientWidth+1){
+    const box=el.closest('.panel,details,[id^="page-"]')||el.parentElement;
+    const cap=Math.max(el.offsetWidth,Math.min(FIT_IN_MAX,((box&&box.clientWidth)||FIT_IN_MAX)-40));
+    el.style.width=Math.min(el.scrollWidth+14,cap)+'px';}}
+function fitFieldsIn(root){
+  (root||document).querySelectorAll('input:not([type]),input[type="text"],input[type="search"],input[type="url"],textarea')
+    .forEach(fitField);}
+document.addEventListener('input',e=>{const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'))fitField(t);},true);
+document.addEventListener('focusin',e=>{const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'))fitField(t);});
 /* 30.7: the page map. Rebuilt on every tab change (and when a section folds
    or unfolds), from the visible page's own headings -- a panel's <h2> or its
    <summary> -- so it never needs a list kept by hand. */
