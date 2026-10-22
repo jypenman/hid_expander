@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.9</title>
+<title>HID Config 30.14</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -340,7 +340,7 @@ label.inl input{margin:0}
    colour pair -- that is what produced white-on-white in 20.5. */
 .txstripwrap{overflow-x:auto;overflow-y:visible;padding-bottom:.4rem}
 .txstrip{display:flex;gap:.7rem;align-items:stretch;min-width:min-content;margin-top:.5rem}
-.txstage{flex:0 0 auto;width:var(--txw,32rem);max-width:92vw}
+.txstage{flex:0 0 auto;width:var(--txw,32rem);max-width:92vw;min-width:14rem}
 .txpane{display:flex;flex-direction:column;min-width:0}
 .txeditgrid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
 .txmanagegrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.4rem}
@@ -357,6 +357,20 @@ label.inl input{margin:0}
 .txfrhint code{font-size:.76rem;padding:.05rem .25rem;border-radius:4px;
   background:var(--panel);border:1px solid var(--line)}
 @media(max-width:720px){.txfrgrid{grid-template-columns:1fr}}
+/* 30.10: the compact Find & Replace (frHTML) */
+.panel.folded>:not(.foldh),.card.folded>:not(.foldh){display:none!important}   /* 30.14 */
+.foldh{cursor:pointer}.foldh::before{content:'▾ ';opacity:.6;font-weight:400}
+.folded>.foldh::before{content:'▸ '}
+.foldt{cursor:pointer}
+.frbar{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;font-size:.8rem}
+.frbar textarea{flex:1 1 9rem;min-width:7rem;height:1.9rem;min-height:1.9rem;resize:vertical;
+  font-family:ui-monospace,monospace;font-size:.8rem;padding:.25rem .4rem;box-sizing:border-box}
+.frbar label{margin:0;display:inline}
+.frbar [data-fr="stat"]{flex-basis:100%;font-size:.76rem}
+.frbar [data-fr="prev"]{flex-basis:100%;margin:0;font-size:.74rem;white-space:pre-wrap;display:none;
+  max-height:8rem;overflow:auto;border:1px solid var(--line);border-radius:4px;padding:.25rem .4rem}
+#frpop{position:fixed;z-index:55;display:none;width:min(34rem,94vw);background:var(--bg);color:var(--fg);
+  border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:.4rem}
 .txresize{resize:both;min-height:6rem;height:14rem}
 .txbox:focus{outline:2px solid var(--hi);outline-offset:-1px}
 .txcode{font-size:.78rem}
@@ -604,6 +618,22 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 .primer .pcat.on{background:var(--hi);color:var(--bg)}
 .primer table{border-collapse:collapse;margin-top:.3rem;width:100%}
 .primer td{padding:.1rem .4rem;border-top:1px solid var(--line);vertical-align:top}
+#macprimerfloat{position:fixed;z-index:65;width:360px;max-height:calc(100vh - 16px);overflow:auto;
+  box-shadow:0 4px 18px rgba(0,0,0,.25);display:none}
+/* 30.10: taps on the left, the assignment pane flowing out of the count
+   being assigned. Theme tokens only. */
+.tapsblock{font-size:.8rem;margin:.25rem 0 .45rem}
+.tapsx{padding:.12rem .4rem;border-radius:5px;margin:.05rem 0}
+.tapsx.on{background:var(--panel2);font-weight:600}
+.tapsxarrow{color:var(--hi);font-size:.72rem}
+#tapspanel{position:fixed;z-index:60;width:250px;max-height:calc(100vh - 2rem);overflow:auto;
+  border:1px solid var(--line);border-radius:8px;padding:.45rem .55rem;
+  background:var(--panel);color:var(--fg);box-shadow:0 4px 18px rgba(0,0,0,.25)}
+#editor.assigning{border-left:3px solid var(--hi)}
+#editor.assigning::before{content:"";position:absolute;left:-15px;top:var(--arrow-y,1.2rem);
+  border:6px solid transparent;border-right-color:var(--hi)}
+#editor.assigning.assignleft{border-left-width:1px;border-right:3px solid var(--hi)}
+#editor.assigning.assignleft::before{left:auto;right:-15px;border-right-color:transparent;border-left-color:var(--hi)}
 /* 30.7: the page map. Theme tokens only (follows light and dark). */
 #pagemap{position:fixed;left:0;top:5.5rem;z-index:40;max-height:calc(100vh - 7rem);
   display:flex;flex-direction:column;align-items:flex-start;font-size:.78rem}
@@ -619,6 +649,12 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 #pagemaplist a.on{border-left-color:var(--hi);font-weight:600}
 #pagemaplist .pmempty{padding:.2rem .6rem;color:var(--mut)}
 @media (min-width:1100px){body.pagemap-open{padding-left:12.5rem}}
+#acbox{position:fixed;z-index:60;display:none;min-width:12rem;max-width:22rem;
+  background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;
+  box-shadow:0 4px 14px rgba(0,0,0,.25);font:12px ui-monospace,monospace;padding:2px 0}
+#acbox>div{padding:2px 8px;cursor:pointer;white-space:nowrap}
+#acbox>div.on{background:var(--hi);color:#fff}
+#acbox>div.on .mut{color:inherit;opacity:.8}
 </style></head><body>
 <!-- 30.7 (2026-10-20): the page map -- the current page's sections at the
      left edge, the one in view highlighted; collapsible to a strip. -->
@@ -1105,6 +1141,16 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       padding:.6rem;margin-top:.5rem;max-height:60vh;overflow:auto"></div>
   </div>
 
+  <!-- 30.13: the last saves' changes, each undoable on its own (s0 histrecent) -->
+  <div class="panel" id="recentpanel" data-uikey="log-recent">
+    <h2 style="font-size:1rem">↶ Recent changes</h2>
+    <p class="muted" style="font-size:.8rem">The values your last saves changed, newest first. <b>↶ Undo</b> puts
+      one back and leaves everything else as it is; then ⬆ Save to device.</p>
+    <div class="bar"><button id="recentload">⟳ Read recent changes from the Pi</button>
+      <span class="muted" id="recenthint">needs a connected device</span></div>
+    <div id="recentbody" style="margin-top:.4rem;font-size:.8rem"></div>
+  </div>
+
   <div class="panel" id="histpanel" data-uikey="log-versions">
     <h2 style="font-size:1rem">↺ Versions kept on the Pi</h2>
     <p class="muted" style="font-size:.8rem">One is written on every
@@ -1362,6 +1408,41 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     <div id="testmwstats" style="font-size:.8rem;margin-top:.4rem"></div>
   </div>
   </details>
+  <!-- 30.10: record a macro, play it back at a speed into a tester -->
+  <details class="panel" id="mrecsec" data-uikey="macro-record">
+    <summary style="cursor:pointer"><h3 style="font-size:.95rem;margin:.2rem 0;display:inline">● Record, play back and test a macro</h3></summary>
+    <p class="muted" style="font-size:.78rem;margin:.3rem 0">Click the pad, press ● Record, then
+      press keys there -- what this computer receives, so a key the Pi remaps records as its new
+      meaning. Presses, how long each is held and the gaps between them are kept.</p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;font-size:.8rem;margin-bottom:.4rem">
+      <button id="mrecgo" class="txmini">● Record</button>
+      <label title="Clicks inside the pad"><input type="checkbox" id="mrecclicks"> record clicks</label>
+      <label title="Pointer movement inside the pad, in screen pixels -- the host's pointer speed scales it on playback, so it is approximate"><input type="checkbox" id="mrecmove"> record mouse movement</label>
+      <span id="mrecstate" class="muted"></span>
+    </div>
+    <div id="mrecpad" tabindex="0" style="height:5rem;border:1px dashed var(--line);border-radius:6px;
+      display:flex;align-items:center;justify-content:center;user-select:none;background:var(--panel2);
+      font-size:.8rem" class="muted">click here, then ● Record</div>
+    <label style="margin-top:.5rem">Steps <span class="muted">(edit freely -- this is what plays and what is saved)</span>
+      <button class="txmini" style="font-size:.7rem" onclick="event.preventDefault();frPop($('mrectext'))" title="Find and replace in these steps">🔍</button></label>
+    <textarea id="mrectext" class="macrobox" rows="5" style="width:100%;box-sizing:border-box;font-family:ui-monospace,monospace"></textarea>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;font-size:.8rem;margin:.4rem 0">
+      <label title="Waits divide by this: 2 plays twice as fast">Speed <input id="mrecspeed" type="number" min="0.1" max="10" step="0.1" value="1" style="width:4rem">×</label>
+      <button id="mrecplay" class="txmini">▶ Play in the tester</button>
+      <button id="mrecstop" class="txmini">■ Stop</button>
+      <span class="muted">Escape stops it too</span>
+    </div>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;font-size:.8rem;margin:.4rem 0">
+      <select id="mrecslot"></select>
+      <button id="mrecload" class="txmini" title="Put that macro's steps above, to test it">⤒ Load</button>
+      <button id="mrecsave" class="txmini" title="Write the steps above into that macro, at the speed set (waits scaled)">⤓ Save at this speed</button>
+    </div>
+    <div id="mtester" style="border-top:1px solid var(--line);padding-top:.4rem">
+      <label>Tester <select id="mtestkind"></select></label>
+      <div id="mtestarea"></div>
+    </div>
+  </details>
+  <div class="panel" id="macfr" style="display:none"></div>
   <div class="panel" id="macrolist"></div>
 </div>
  <div class="panel primer" id="macprimer" data-primer="mac" style="flex:0 1 24rem;position:sticky;top:.5rem;max-height:92vh;overflow:auto"></div>
@@ -1764,6 +1845,28 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.14',items:[
+   {t:'Expansion syntax and How macros are written fold away: ▾ on their title',k:'expprimer1'},
+   {t:'Every panel with a heading folds: click the heading (▾ / ▸); remembered in this browser',k:'page-exp'},
+   {t:'The macro list folds too, and stays folded as it redraws',k:'macrolist'}]},
+ {v:'30.13.1',items:[
+   {t:'Changes: Recent changes says "…and N more" past what fits, so the list stays quick to read from the Pi',k:'recentpanel'}]},
+ {v:'30.13',items:[
+   {t:'Changes: ↶ Recent changes -- what your last saves changed, newest first, with an Undo for each one',k:'recentpanel'},
+   {t:'Text Transform: the panes keep their size when you leave the tab and come back (they shrank each time until they could not be grabbed)',k:'txstrip'}]},
+ {v:'30.12',items:[
+   {t:'Macros: pauses read as "wait 300ms", each noting the steps either side ("· ↓ → enter"), so Find & Replace can pick them out',k:'macrolist'},
+   {t:'Macros: named timings -- $gap = 300ms, then wait $gap; change it once and every use follows',k:'macrolist'},
+   {t:'Macros: a Timings list beside the macro you are editing -- each named timing editable, the other waits grouped with "name it"',k:'macprimer'},
+   {t:'Additions can bring their own macros; "Paste from clipboard history" (engine/addition-paste-from-history.json): Ctrl+V n times pastes the last n',k:'asgtbl'},
+   {t:'A macro starts with nothing held on the host, and keys you let go while it plays wait until it ends',k:'macrolist'}]},
+ {v:'30.10',items:[
+   {t:'Macros: ● Record a macro -- presses, how long each is held and the gaps; clicks and mouse movement if ticked',k:'mrecsec'},
+   {t:'Macros: ▶ play it back at a speed into a tester box (Stop or Escape ends it); ⤓ save it at that speed, ⤒ load any macro to test',k:'mrecsec'},
+   {t:'Macros: autocomplete for step names as you type (Tab takes one); new steps wait 250ms and move dx,dy',k:'macrolist'},
+   {t:'Macros: 🔍 Find & Replace across every macro or one, and a small one beside any macro box',k:'macrolist'},
+   {t:'Macros: "How macros are written" floats beside whichever macro box you are editing',k:'macprimer'},
+   {t:'Tap counts: the counts in their own panel beside the editor, one assigned at a time (1st by default); edit works in the modifier-shortcut editor',k:'editorbody'}]},
  {v:'30.9',items:[
    {t:'Tap counts: every count listed (1st tap; 2nd tap (double); ...), each with edit into the action picker -- the 1st tap can have its own action',k:'editorbody'},
    {t:'Expansions: tdt then ( gives the time since the last tdt (it needed a second space before)',k:'exptable'},
@@ -2894,6 +2997,10 @@ function pfResult(text){
   if(text.startsWith('NOTE ')){qnoteDone(text);return;}                   // 29.2.2
   if(rmResult(text))return;                                               // 29.29
   if(text.startsWith('HISTORY')){renderHistory(text.split('\n').slice(1));return;}
+  if(text.startsWith('HISTRECENT')){                                     // 30.13
+    try{renderRecent(JSON.parse(text.slice(text.indexOf('\n')+1)));}
+    catch(e){toast('recent changes unreadable: '+e.message,true);}
+    return;}
   if(text.startsWith('CORPUS')){
     try{ corpusData=JSON.parse(text.slice(text.indexOf('\n')+1));
          renderTrack(); renderTraining();
@@ -2974,6 +3081,10 @@ $('histbtn').onclick=()=>showHistory();
 // 24.3: the same action, from inside the Changes tab, so you do not have to
 // go back up to the profile bar to re-read the list.
 {const hl=$('histload');if(hl)hl.onclick=()=>showHistory();}
+// 30.13: recent changes, on request (they come from the Pi)
+{const b=$('recentload');if(b)b.onclick=()=>{
+  if(!device){toast('connect to read recent changes from the Pi',true);return;}
+  pfCmd('histrecent');toast('reading recent changes from the Pi…');};}
 // 29.29: the roadmap loads when its section is first opened while connected
 {const b=$('rmload');if(b)b.onclick=()=>rmLoad();
  const s=$('rmsec');if(s)s.addEventListener('toggle',()=>rmAuto());}
@@ -5770,6 +5881,33 @@ function asgMember(r){          // the id NEW group assignments are written to
   const pfx=r.type==='key'?'kbd:':'mouse:';
   const L=r.layers.size?[...r.layers][0]:layer;
   return `${pfx}${L},${r.id}`;}
+/* 30.12: a pack may bring its own macros: "macros": {"@paste2": {name,
+   steps}}, referenced as ["macro","@paste2"] anywhere in an entry's action
+   (a tap count included) or in another of its macros' {"macro"} steps.
+   Staging picks free slots above every slot in use (macroMax) and rewrites
+   the references to them, so the stored pack -- which the engine applies
+   as it stands -- names real slots. "Add this" writes the macros. */
+function packMacros(obj){
+  const src=obj.macros&&typeof obj.macros==='object'?obj.macros:{};
+  const keys=Object.keys(src);
+  if(!keys.length)return{entries:obj.entries,macros:{}};
+  const slot={},out={};let n=macroMax();
+  for(const k of keys){slot[k]=++n;}
+  const fix=x=>{
+    if(Array.isArray(x)){
+      if(x[0]==='macro'&&typeof x[1]==='string'&&slot[x[1]]!=null)return['macro',slot[x[1]],...x.slice(2)];
+      return x.map(fix);}
+    if(x&&typeof x==='object'){
+      if(typeof x.macro==='string'&&slot[x.macro]!=null)return{...x,macro:slot[x.macro]};
+      const o={};for(const[k,v]of Object.entries(x))o[k]=fix(v);return o;}
+    return x;};
+  for(const k of keys){const m=src[k]||{};
+    if(!Array.isArray(m.steps))throw new Error('pack macro '+k+' has no steps');
+    out[slot[k]]={name:m.name||'',steps:fix(m.steps)};}
+  const entries=fix(obj.entries);
+  const left=JSON.stringify([entries,out]).match(/"macro"[,:]"(@[^"]*)"/);
+  if(left)throw new Error('the pack refers to a macro it does not include: '+left[1]);
+  return{entries,macros:out};}
 /* 19.4: an imported pack is staged, every line classified against the
    profile, and written only on "Add this". Packs live in
    additions/<name>.json on the Pi (fid 5). */
@@ -5819,8 +5957,9 @@ window.stageAddition=obj=>{
   if(!obj||obj.kind!==ADDITION_KIND||!Array.isArray(obj.entries))
     throw new Error('not a HID Expander addition file');
   if(obj.entries.length>500)throw new Error('addition too large (>500 entries)');
+  const pm=packMacros(obj);
   _stage={name:(obj.name||'imported').slice(0,60),desc:obj.description||'',
-    entries:obj.entries,
+    entries:pm.entries,macros:pm.macros,
     // default ON for new lines; OFF for anything that touches your profile
     // or carries a risk flag -- you opt in deliberately.
     state:obj.entries.map(e=>{const c=classifyEntry(e);
@@ -5909,6 +6048,10 @@ function applyStagedAddition(){
       removeProfileRule(e);                    // dup -> just remove; clash -> parked above
     }
     entries.push(out);});
+  // 30.12: the pack's own macros, into the slots chosen when it was staged
+  for(const[n,m]of Object.entries(_stage.macros||{})){
+    cfg.macros=cfg.macros||{};cfg.macros[n]=m.steps;
+    if(m.name){cfg.macro_names=cfg.macro_names||{};cfg.macro_names[n]=m.name;}}
   cfg.addition_refs=cfg.addition_refs||{};
   cfg.addition_refs[name]={active:true,added:new Date().toISOString(),
     disabled:entries.map((x,i)=>x.off?i:-1).filter(i=>i>=0)};
@@ -6498,6 +6641,61 @@ function histDangling(c){
   for(const t of Object.values(c.mouse_mappings_by_device || {}))
     scan(t, 'a device button mapping');
   return [...new Set(out)];   // twenty identical complaints help nobody
+}
+
+/* 30.13: recent changes with an Undo each. The rows come from the Pi
+   (history.recent): path, from, to, and from_absent / to_absent where the
+   value did not exist. Undo puts "from" back through histRevertRow; when
+   the value has changed again since that save it asks first, naming what
+   is there now. A row the Pi sent without values ("big", past its byte
+   budget) is listed, not undoable -- open its version below instead. */
+let _recent = null;
+function histAt(c, path){
+  let n = c;
+  for(const k of path){ if(!n || typeof n !== 'object' || !(k in n)) return undefined; n = n[k]; }
+  return n;
+}
+function recentVal(r, v, absent){
+  if(absent) return '(absent)';
+  if(r.path[0] === 'macros' && Array.isArray(v))
+    return macroLines(v).filter(l => l.kind === 'step').slice(0,4).map(l => l.text).join(' · ') || '(empty)';
+  return histValLabel(v);
+}
+function renderRecent(saves){
+  _recent = saves || [];
+  const el = $('recentbody'); if(!el) return;
+  const hint = $('recenthint'); if(hint) hint.textContent = '';
+  if(!_recent.length){ el.innerHTML = '<p class="muted">No saves recorded on the Pi yet.</p>'; return; }
+  el.innerHTML = _recent.map((s, si) => `<div style="margin:.45rem 0">
+      <b>${esc(new Date(s.ts*1000).toLocaleString())}</b> <span class="muted">${esc(s.note||'')}</span>
+      ${s.rows.length ? '' : '<div class="muted" style="margin-left:1.2rem">(nothing changed)</div>'}
+      ${s.rows.map((r, ri) => `<div style="margin-left:1.2rem;display:flex;gap:.5rem;align-items:baseline">
+        <span style="flex:1">${esc(histPathLabel(r.path))}:
+          <span class="muted">${r.big ? '(too large to list)' : esc(recentVal(r, r.from, r.from_absent))}</span>
+          → ${r.big ? '' : esc(recentVal(r, r.to, r.to_absent))}</span>
+        ${r.undone ? '<span class="muted">undone</span>'
+          : r.big ? '<span class="muted" title="Open that version under Versions kept on the Pi to put it back">—</span>'
+          : `<button class="txmini" data-rundo="${si},${ri}" title="Put the value from before this save back">↶ Undo</button>`}
+      </div>`).join('')}
+      ${s.more ? `<div class="muted" style="margin-left:1.2rem">…and ${s.more} more — open this version under Versions kept on the Pi</div>` : ''}</div>`).join('');
+  el.querySelectorAll('[data-rundo]').forEach(b => b.onclick = () => {
+    const [si, ri] = b.dataset.rundo.split(',').map(Number);
+    const r = _recent[si].rows[ri];
+    const now = histAt(cfg, r.path);
+    const expect = r.to_absent ? undefined : r.to;
+    if(JSON.stringify(now) !== JSON.stringify(expect)
+       && !confirm(histPathLabel(r.path) + ' has changed again since that save.\n\nNow: '
+         + (now === undefined ? '(absent)' : histValLabel(now))
+         + '\nUndo puts back: ' + (r.from_absent ? '(absent)' : histValLabel(r.from)) + '\n\nPut it back anyway?'))
+      return;
+    histRevertRow({path: r.path, from: r.from_absent ? undefined : r.from});
+    r.undone = true;
+    const bad = histDangling(cfg);
+    render(); renderRecent(_recent);
+    toast(bad.length
+      ? `undone — but this leaves ${bad.length} dangling reference(s): ` + bad.slice(0,3).join('; ')
+      : 'undone — ⬆ Save to device to apply', bad.length > 0);
+  });
 }
 
 /* ---- panel ------------------------------------------------------------- */
@@ -9520,82 +9718,124 @@ $('pluspill').ondragstart=e=>{window._plusDrag=true;e.dataTransfer.setData('plus
 const TAPS_GAP_DEFAULT=350;
 function tapsInner(a){return Array.isArray(a)&&a[0]==='taps'?(a[2]??null):a;}
 function tapsSpec(a){return Array.isArray(a)&&a[0]==='taps'?(a[1]||{}):null;}
-function tapsWrap(spec,inner){
-  if(!spec)return inner;
-  // 30.9: "edit" on another count makes it the one the picker shows: the
-  // action just edited goes back under its own count, the chosen one comes
-  // out to be edited. Every count is equal to the engine (MAPPING_MODEL §1).
-  if(spec.rotate!=null){
-    const k=+spec.rotate, old=+spec.n||1, more=Object.assign({},spec.more||{});
-    delete spec.rotate;
-    if(k!==old){
-      if(inner!=null)more[old]=inner;else delete more[old];
-      inner=more[k]??null;delete more[k];spec.n=k;}
-    if(Object.keys(more).length)spec.more=more;else delete spec.more;}
-  const hasMore=spec.more&&Object.keys(spec.more).length;
-  if((+spec.n||1)>1&&inner!=null||hasMore)return['taps',spec,inner??null];
-  return inner;}
+/* 30.10: TAP COUNTS, two-stage. Every count of a key is listed -- 1st
+   tap, 2nd tap (double), ... -- and ONE is being edited (the 1st by
+   default): the editor's own action picker shows that count, and a save
+   writes into that count's slot. Choosing a count is a view change only;
+   nothing is written until the picker itself is used (a render never
+   writes cfg). Stored as ever: ['taps', {n, gap_ms, first, more}, inner],
+   n the highest defined count -- every count is equal to the engine
+   (MAPPING_MODEL §1). Only a 1st-tap action, alone, stays a plain mapping. */
+let _tapsEditK=1, _tapsEditSel=null, _tapsDrop=false;
+function tapsEditK(){
+  if(_tapsEditSel!==sel){_tapsEditSel=sel;_tapsEditK=1;}
+  return _tapsEditK;}
+function tapsCounts(a){
+  if(Array.isArray(a)&&a[0]==='taps'){
+    const sp=a[1]||{},c=Object.assign({},sp.more||{});c[+sp.n||2]=a[2]??null;
+    const out={};Object.keys(c).forEach(k=>{out[+k]=c[k]??null;});return out;}
+  return a!=null?{1:a}:{};}
+function tapsWrap(spec,edited){
+  if(!spec)return edited;
+  const counts=Object.assign({},spec.counts||{});
+  if(_tapsDrop)_tapsDrop=false;else counts[spec.edit]=edited??null;
+  const ks=Object.keys(counts).map(Number).filter(k=>k>=1);
+  const defined=ks.filter(k=>counts[k]!=null);
+  if(!defined.length)return null;
+  if(ks.every(k=>k===1))return counts[1];          // a plain mapping
+  const n=Math.max(...defined),more={};
+  ks.forEach(k=>{if(k!==n&&!(k===1&&counts[1]==null))more[k]=counts[k];});
+  const out={n,gap_ms:spec.gap_ms,first:spec.first};
+  if(Object.keys(more).length){out.more=more;out.first='wait';}
+  return['taps',out,counts[n]];}
 function tapsRead(){const n=$('tapsn');if(!n)return null;
-  const rows=document.querySelectorAll('.tapsx');
-  if(+n.value<=1&&!rows.length)return null;
-  const o={n:+n.value,gap_ms:Math.max(50,+($('tapsgap')||{}).value||TAPS_GAP_DEFAULT),
-    first:(($('tapsfirst')||{}).value)||'wait'};
-  // 30.4: more counts on the same keys, each its own action (30.9: from 1)
-  const more={};
-  rows.forEach(r=>{const k=+r.dataset.n;if(!(k>=1)||k===o.n)return;
-    try{more[k]=JSON.parse(r.dataset.raw);}catch(_){more[k]=null;}});
-  if(Object.keys(more).length){o.more=more;o.first='wait';}
-  if(window._tapsRotateTo!=null){o.rotate=window._tapsRotateTo;window._tapsRotateTo=null;}
-  return o;}
+  const counts={};
+  document.querySelectorAll('.tapsx').forEach(r=>{
+    try{counts[+r.dataset.n]=JSON.parse(r.dataset.raw);}catch(_){counts[+r.dataset.n]=null;}});
+  return {edit:+n.value||1,counts,
+    gap_ms:Math.max(50,+($('tapsgap')||{}).value||TAPS_GAP_DEFAULT),
+    first:(($('tapsfirst')||{}).value)||'wait'};}
 function tapsOrd(i){i=+i;return i+(i===1?'st':i===2?'nd':i===3?'rd':'th')+' tap'
   +(i===2?' (double)':i===3?' (triple)':'');}
-// 30.9: one row per count -- the one the picker below is editing, and every
-// other with its action and an edit that brings it into the picker.
-function tapsMoreRow(k,act){
-  return `<div class="tapsx" data-n="${+k}" data-raw="${esc(JSON.stringify(act??null))}" style="margin:.1rem 0">`
-    +`${tapsOrd(k)}: <b>${act==null?(+k===1?'the key itself (as usual)':'nothing yet'):esc(actShort(act))}</b>`
-    +` <a class="mlink tapsxedit" title="Edit this count's action in the picker below">edit</a>`
-    +(+k===1&&act==null?'':` <a class="mlink tapsxdel" title="remove this count">✕</a>`)+`</div>`;}
-function tapsHTML(spec){const n=spec?+spec.n||1:1,g=spec?+spec.gap_ms||TAPS_GAP_DEFAULT:TAPS_GAP_DEFAULT;
-  const more=(spec&&spec.more)||{};
-  const multi=n>1||Object.keys(more).length>0;
-  const ks=[...new Set([1,n,...Object.keys(more).map(Number)])].sort((a,b)=>a-b);
-  const rows=ks.map(k=>k===n
-      ?`<div style="margin:.1rem 0">▸ ${tapsOrd(k)}: <b>editing below ↓</b></div>`
-      :tapsMoreRow(k,more[k])).join('');
-  return `<div style="font-size:.78rem;margin:.25rem 0"
-      title="Fire only on a repeated tap, each within the time of the last">
-    <div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center">
-    Fires on <select id="tapsn" style="width:auto">${Array.from({length:Math.max(4,...ks)},(_,j)=>j+1).map(i=>`<option value="${i}" ${i===n?'selected':''}>${i===1?(multi?'1st tap':'every tap'):i===2?'2nd tap (double)':i===3?'3rd tap (triple)':i+'th tap'}</option>`).join('')}</select>
-    <span ${multi?'':'style="display:none"'} class="tapsmore">within <input id="tapsgap" type="number" min="50" step="25" value="${g}" style="width:4.5rem"> ms
-      <span ${Object.keys(more).length?'style="display:none"':''}>; fewer taps: <select id="tapsfirst" style="width:auto">
+function tapsHTML(spec,full){
+  const g=spec?+spec.gap_ms||TAPS_GAP_DEFAULT:TAPS_GAP_DEFAULT;
+  const counts=tapsCounts(full);if(!(1 in counts))counts[1]=null;
+  const k=tapsEditK();if(!(k in counts))counts[k]=null;
+  const ks=Object.keys(counts).map(Number).sort((x,y)=>x-y);
+  const multi=ks.length>1;
+  const rows=ks.map(c=>{const act=counts[c],on=c===k;
+    const what=act==null?(c===1?'the key itself (as usual)':'nothing yet'):actShort(act);
+    return `<div class="tapsx${on?' on':''}" data-n="${c}" data-raw="${esc(JSON.stringify(act??null))}">`
+      +`<span class="tapsxlbl">${tapsOrd(c)}</span>: <b>${esc(what)}</b>`
+      +(on?` <span class="tapsxarrow" title="being assigned in the pane">▶ assigning</span>`
+          :` <a class="mlink tapsxedit" title="Assign this count">edit</a>`)
+      +(c>1?` <a class="mlink tapsxdel" title="remove this count">✕</a>`:'')+`</div>`;}).join('');
+  return `<div class="tapsblock" title="What these keys do on each tap, each within the time of the last">
+    <input type="hidden" id="tapsn" value="${k}">
+    <div class="muted" style="font-size:.72rem;margin-bottom:.15rem">Taps</div>
+    <div class="tapsxwrap">${rows}</div>
+    <a class="mlink tapsxadd" title="A different action on another tap count. The highest count fires as soon as it is reached; a lower one when the taps stop.">＋ add a tap count</a>
+    <span class="tapsmore" ${multi?'':'style="display:none"'}><br>each within <input id="tapsgap" type="number" min="50" step="25" value="${g}" style="width:4.5rem"> ms
+      <span ${counts[1]==null&&ks.filter(c=>counts[c]!=null).length===1?'':'style="display:none"'}>; fewer taps: <select id="tapsfirst" style="width:auto">
         <option value="wait" ${(spec&&spec.first)!=='pass'?'selected':''}>wait, then send as usual</option>
-        <option value="pass" ${(spec&&spec.first)==='pass'?'selected':''}>send at once</option></select></span></span></div>
-    <div class="tapsxwrap" ${multi?'':'style="display:none"'}>${rows}
-      <a class="mlink tapsxadd" title="Another tap count on the same keys, with its own action. The highest count fires as soon as it is reached; a lower one when the taps stop.">＋ another tap count</a></div></div>`;}
-// 30.4 / 30.9: the count controls, for whichever editor is open. A change is
-// passed on as a change of #tapsn, which both editors already save from;
-// "edit" marks the count to bring into the picker, and the save rotates it
-// there (tapsWrap), then the editor is drawn again to show it.
+        <option value="pass" ${(spec&&spec.first)==='pass'?'selected':''}>send at once</option></select></span></span></div>`;}
+// The count controls, for whichever editor is open. "edit" only changes what
+// is shown; ＋ and ✕ are edits, saved through #tapsn, which both editors
+// save from.
 (function(){
   const save=()=>{const n=$('tapsn');if(n)n.dispatchEvent(new Event('change',{bubbles:true}));};
   const redraw=()=>{if(typeof renderEditor==='function')renderEditor();};
-  // choosing a count from "Fires on" shows the list at once
-  document.addEventListener('change',e=>{
-    if(e.target&&e.target.id==='tapsn'&&!window._tapsRotateTo)setTimeout(redraw,0);});
   document.addEventListener('click',e=>{
     const t=e.target;if(!t||!t.classList)return;
-    if(t.classList.contains('tapsxadd')){
-      const n=$('tapsn'),w=t.closest('.tapsxwrap');if(!n||!w)return;
-      const used=[+n.value,...[...w.querySelectorAll('.tapsx')].map(r=>+r.dataset.n)];
-      const k=Math.max(...used)+1;if(k>9){toast('nine taps is the most',true);return;}
-      t.insertAdjacentHTML('beforebegin',tapsMoreRow(k,null));
-      window._tapsRotateTo=k;save();redraw();}
-    else if(t.classList.contains('tapsxedit')){const r=t.closest('.tapsx');if(!r)return;
-      window._tapsRotateTo=+r.dataset.n;save();redraw();}
-    else if(t.classList.contains('tapsxdel')){const r=t.closest('.tapsx');if(r){r.remove();save();}}});})();
+    if(t.classList.contains('tapsxedit')){const r=t.closest('.tapsx');if(!r)return;
+      tapsEditK();_tapsEditK=+r.dataset.n;redraw();}
+    else if(t.classList.contains('tapsxadd')){
+      const w=t.parentElement&&t.parentElement.querySelector('.tapsxwrap');if(!w)return;
+      const used=[...w.querySelectorAll('.tapsx')].map(r=>+r.dataset.n);
+      const k=Math.max(1,...used)+1;if(k>9){toast('nine taps is the most',true);return;}
+      w.insertAdjacentHTML('beforeend',`<div class="tapsx" data-n="${k}" data-raw="null"></div>`);
+      save();tapsEditK();_tapsEditK=k;redraw();}
+    else if(t.classList.contains('tapsxdel')){const r=t.closest('.tapsx');if(!r)return;
+      const k=+r.dataset.n;r.remove();
+      if(k===_tapsEditK){_tapsDrop=true;save();_tapsEditK=1;}else save();
+      redraw();}});})();
+/* 30.10: two stages -- the taps in their own panel, and the editor beside
+   it as the assignment pane ("Assigning: 2nd tap"), the arrow pointing from
+   the count being assigned into it. Only the taps block moves: every
+   control the editors look up inside themselves stays where they expect
+   it. The panel sits left of the editor, or right when the left has no
+   room; with neither, the list stays inside the editor. */
+const TAPSPANEL_W=250;
+function tapsLayout(){
+  const ed=$('editorbody'),box=$('editor');let tp=$('tapspanel');
+  const blk=ed&&ed.querySelector('.tapsblock');
+  const hide=()=>{if(tp){tp.style.display='none';tp.innerHTML='';}
+    if(box)box.classList.remove('assigning','assignleft');
+    const hd=$('assignhead');if(hd)hd.remove();};
+  // getClientRects, not offsetParent: the editor is position:fixed, whose
+  // offsetParent is always null
+  if(!ed||!box||!blk||box.style.display==='none'||!box.getClientRects().length){hide();return;}
+  const r=box.getBoundingClientRect();
+  const left=r.left-10-TAPSPANEL_W>=8, right=r.right+10+TAPSPANEL_W<=window.innerWidth-8;
+  if(!left&&!right){hide();return;}
+  if(!tp){tp=document.createElement('div');tp.id='tapspanel';document.body.appendChild(tp);
+    new MutationObserver(()=>{if(box.style.display==='none')hide();})
+      .observe(box,{attributes:true,attributeFilter:['style']});}
+  tp.innerHTML='';blk.remove();tp.appendChild(blk);
+  tp.classList.toggle('onright',!left);
+  tp.style.display='block';tp.style.top=r.top+'px';
+  tp.style.left=(left?r.left-10-TAPSPANEL_W:r.right+10)+'px';
+  const on=blk.querySelector('.tapsx.on');
+  const title=ed.querySelector(':scope > h2');
+  const hd=document.createElement('div');hd.id='assignhead';hd.className='assignhead';
+  hd.innerHTML=`Assigning: <b>${esc(on?on.querySelector('.tapsxlbl').textContent:'1st tap')}</b>`;
+  if(title)title.after(hd);else ed.prepend(hd);
+  box.classList.add('assigning');box.classList.toggle('assignleft',!left);
+  if(on){const y=on.getBoundingClientRect().top-r.top;
+    box.style.setProperty('--arrow-y',Math.max(8,y+4)+'px');}}
+window.addEventListener('resize',()=>{try{tapsLayout();}catch(_){}});
 function actionToUI(a){if(!a)return{press:'pass',release:'none'};
-if(a[0]==='taps')return Object.assign(actionToUI(tapsInner(a)),{taps:tapsSpec(a)});   // 30.1
+if(a[0]==='taps')return Object.assign(actionToUI(tapsCounts(a)[tapsEditK()]??null),{taps:tapsSpec(a),tapsFull:a});   // 30.1 / 30.10
 const k=a[0];
 if(k==='btn')return{press:'btn',pressBtn:a[1],release:'none'};
 if(k==='key')return{press:'key',pressKey:a[1],release:'none'};
@@ -10116,8 +10356,11 @@ function renderModChordEd(ed){
   const cur=findModChord(sel.mods,sel.canon,sel.mcKey);
   const os=cur?cur.os:(sel.os||'');
   const key=cur?cur.key:mcKey(sel.mods,sel.canon,-1);
-  const a=tapsInner(cur&&cur.action)||sel.initial||null;    // 29.25.1: null = none yet
   const tsp=tapsSpec(cur&&cur.action);                         // 30.1
+  // 30.10: a taps rule shows the count being assigned; an empty count is
+  // "as usual", never the original action (that made "edit" look dead)
+  const a=tsp?(tapsCounts(cur.action)[tapsEditK()]??null)
+             :(tapsInner(cur&&cur.action)||sel.initial||null);  // 29.25.1: null = none yet
   const ui=actionToUI(a||['suppress']);
   const kL=+String(key).split(',')[0];
   const title=modsName(sel.mods)+' + '+(kL>=0?layerName(kL)+' + ':'')+mcName(sel.canon);
@@ -10137,7 +10380,8 @@ function renderModChordEd(ed){
           <option value="R" ${modSide(sel.mods,b)==='R'?'selected':''}>right only</option></select></label>`).join('')}</div>
     <div class="row"><div>
       <label>On press${a?'':' <span class="muted" style="font-weight:400">(not a rule yet)</span>'}</label><select id="mcact">
-        ${a?'':'<option value="" selected disabled>— choose what it does —</option>'}
+        ${a?'':(tsp?'<option value="asusual" selected>As usual (the keys themselves)</option>'
+                   :'<option value="" selected disabled>— choose what it does —</option>')}
         <option value="suppress" ${a&&a[0]==='suppress'?'selected':''}>Nothing (swallow)</option>
         <option value="passthru" ${a&&a[0]==='passthru'?'selected':''}>Pass through unchanged</option>
         <option value="keymods" ${a&&a[0]==='keymods'?'selected':''}>Key with modifiers…</option>
@@ -10146,7 +10390,7 @@ function renderModChordEd(ed){
         <option value="text" ${a&&a[0]==='text'?'selected':''}>Type text…</option>
         ${a&&a[0]==='expansion'?`<option value="expansion" selected>Expansion: ${esc(a[2]||'')}</option>`:''}
       </select><div id="mcargwrap"></div>
-      ${tapsHTML(tsp)}
+      ${tapsHTML(tsp,cur&&cur.action)}
       <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
         <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
         ${searchBoxHTML()}${capBoxHTML()}
@@ -10165,7 +10409,8 @@ function renderModChordEd(ed){
       <input type="checkbox" data-mcmod="${b}" ${m&b?'checked':''}>${n}</label>`).join('');
   const refresh=()=>{
     const k=$('mcact').value,w=$('mcargwrap');
-    const c2=tapsInner((findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action)||['suppress'];
+    // 30.10: the count being assigned, not the rule's main slot
+    const c2=tapsCounts((findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action)[tapsEditK()]||['suppress'];
     const outKey=c2[0]==='keymods'||c2[0]==='key'?c2[1]:(ui.pressKey||0x28);
     const outMods=c2[0]==='keymods'?(c2[2]||0):0;
     w.innerHTML=
@@ -10179,8 +10424,9 @@ function renderModChordEd(ed){
     const k=$('mcact').value,el=$('mcarg'),v=el?el.value:null;
     if(!k)return;                            // 29.25.1: nothing chosen yet
     let act;
-    if(k==='suppress')act=['suppress'];
-    else if(k==='expansion')act=tapsInner((findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action)||['suppress'];
+    if(k==='asusual')act=null;                                // 30.10
+    else if(k==='suppress')act=['suppress'];
+    else if(k==='expansion')act=tapsCounts((findModChord(sel.mods,sel.canon,sel.mcKey)||{}).action)[tapsEditK()]||['suppress'];
     else if(k==='passthru')act=['passthru'];
     else if(k==='text')act=['text',v==null?'':v];
     else if(k==='macro')act=['macro',+v||1];
@@ -10191,7 +10437,7 @@ function renderModChordEd(ed){
     // move between OS scopes if needed, then write
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
-    mcTable(newOs)[key]=tapsWrap(tapsRead(),act);                // 30.1
+    {const w=tapsWrap(tapsRead(),act);if(w!=null)mcTable(newOs)[key]=w;}   // 30.1 / 30.10
     sel.os=newOs;
     toast('shortcut updated — ⬆ Save to device to apply');};
   const bindArgs=()=>ed.querySelectorAll('#mcargwrap select,#mcargwrap input')
@@ -10199,14 +10445,14 @@ function renderModChordEd(ed){
   refresh();
   ed.querySelectorAll('#mcact,#mcos,#tapsn,#tapsgap,#tapsfirst').forEach(x=>x.onchange=()=>{
     if(x.id==='mcact')refresh();
-    if(x.id==='tapsn')ed.querySelector('.tapsmore').style.display=+x.value>1?'':'none';
+
     commit();renderMapTable();});
   bindNoteField(noteKey('mc',key));
   bindGroupAssign('mc:'+key);
   bindEditorCommon(a2=>{
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
-    mcTable(($('mcos')&&$('mcos').value)||'')[key]=tapsWrap(tapsRead(),a2);});
+    {const w=tapsWrap(tapsRead(),a2);if(w!=null)mcTable(($('mcos')&&$('mcos').value)||'')[key]=w;}});
   $('mcdel').onclick=()=>{
     for(const t of [cfg.mod_chords||{},...Object.values(cfg.os_profiles||{}).map(p=>p&&p.mod_chords).filter(Boolean)])
       delete t[key];
@@ -10512,6 +10758,7 @@ function keyFeaturesHTML(dev,u){
     ${f.length?`<table style="width:100%">${f.map(row).join('')}</table>`:'<div class="muted">nothing but itself</div>'}</details>`;}
 function renderEditor(){
   _renderEditorBody();
+  try{tapsLayout();}catch(e){console.warn('tapsLayout',e);}       // 30.10
   // 29.24.4: what the clicked key IS -- its code, usage and meaning
   if(sel&&sel.type==='key'&&sel.id!=null){const ed=$('editorbody');
     if(ed)ed.insertAdjacentHTML('afterbegin',`<div class="muted" id="edkeyid" style="font-size:.74rem;margin-bottom:.3rem">This key: ${esc(keyIdentity(sel.id))}</div>`
@@ -10830,7 +11077,7 @@ function _renderEditorBody(){
       ${searchBoxHTML()}${capBoxHTML()}
       <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
     </div>
-    ${isBtn?'':tapsHTML(ui.taps)}
+    ${isBtn?'':tapsHTML(ui.taps,cur)}
     <label>On press</label><select id="press">
       <option value="pass" ${ui.press==='pass'?'selected':''}>Pass through</option>
       ${ui.press==='value'?`<option value="value" selected>${esc(actShort(ui.pressValue))} (from search)</option>`:''}
@@ -10941,8 +11188,7 @@ function _renderEditorBody(){
   // by refresh()).
   ed.querySelectorAll('#press,#release,#pressArg select,#relArg select,#osscope,#tapsn,#tapsgap,#tapsfirst')
     .forEach(x=>x.onchange=()=>{
-      if(x.id==='tapsn'){const m=ed.querySelector('.tapsmore');if(m)m.style.display=+x.value>1?'':'none';}
-      // Rebuild the sub-dropdown only when the top-level mode
+            // Rebuild the sub-dropdown only when the top-level mode
       // (#press/#release) changes.
       if (x.id==='press' || x.id==='release') refresh();
       const p=$('press').value;
@@ -11096,7 +11342,35 @@ if(p===9)return'btn'+x;if(u===0x00010038)return'wheel';
 if(p===7)return(MODS[x]||KEYS[x]||'0x'+u.toString(16)).toLowerCase();
 if(p===12&&KEYS[u])return mediaToken(KEYS[u]);   // 26.4 / 29.2.1: consumer-page steps
 return'0x'+u.toString(16);}
-function macroToText(s){return s.map(x=>macroSpecialText(x)??(x.length?x.map(usageName).join('+'):'.')).join('\n');}
+/* 30.12: how a macro reads. A run of "." (12 ms empty steps) reads as one
+   "wait Nms"; a wait between two steps carries a note naming them
+   ("wait 100ms  · ↓ → enter") so Find & Replace can pick out every wait
+   between the same two keys. The note is worked out here and never stored;
+   the parser drops it. Named timings ("$panel = 350ms", used as
+   "wait $panel") are stored on the wait steps as {wait, var} and listed
+   first. textToMacro reads all of it back. */
+const MACRO_NOTE='  · ';
+function macroStepText(x){return macroSpecialText(x)??(x.length?x.map(usageName).join('+'):'.');}
+function macroLines(s){
+  const out=[];                          // {kind:'wait'|'step', text, ms, var}
+  for(let i=0;i<s.length;i++){const x=s[i];
+    if(Array.isArray(x)&&!x.length){let k=0;while(i<s.length&&Array.isArray(s[i])&&!s[i].length){k++;i++;}i--;
+      out.push({kind:'wait',ms:k*12,dots:k});continue;}
+    if(x&&!Array.isArray(x)&&typeof x==='object'&&'wait' in x){
+      out.push({kind:'wait',ms:+x.wait,var:x.var||''});continue;}
+    out.push({kind:'step',text:macroStepText(x)});}
+  for(let i=0;i<out.length;i++){const l=out[i];if(l.kind!=='wait')continue;
+    const p=out.slice(0,i).reverse().find(o=>o.kind==='step'),q=out.slice(i+1).find(o=>o.kind==='step');
+    l.note=p&&q?p.text.slice(0,24)+' → '+q.text.slice(0,24):'';}
+  return out;}
+function macroVars(s){const v={};
+  for(const x of s||[])if(x&&!Array.isArray(x)&&typeof x==='object'&&x.var&&!(x.var in v))v[x.var]=+x.wait;
+  return v;}
+function macroToText(s){
+  const vars=macroVars(s);
+  const head=Object.entries(vars).map(([k,ms])=>'$'+k+' = '+ms+'ms');
+  return head.concat(macroLines(s).map(l=>l.kind==='step'?l.text
+    :(l.var?'wait $'+l.var:'wait '+l.ms+'ms')+(l.note?MACRO_NOTE+l.note:''))).join('\n');}
 /* 30.1 (2026-10-13): steps that are not keys. A line that is a JSON string
    ("☑") types that text; {{macro:N}} plays macro N in place;
    {{expansion:<set>:<trigger>}} types that expansion's output. Engine:
@@ -11106,12 +11380,18 @@ function macroSpecialText(x){
   if('text' in x)return JSON.stringify(String(x.text));
   if('macro' in x)return '{{macro:'+(+x.macro)+'}}';
   if('expansion' in x)return '{{expansion:'+x.expansion[0]+':'+x.expansion[1]+'}}';
+  if('wait' in x)return 'wait '+(+x.wait)+'ms';                      // 30.10
+  if('move' in x)return 'move '+(+x.move[0])+','+(+x.move[1]);       // 30.10
   return JSON.stringify(x);}
 function macroSpecialParse(raw){
   const s=raw.trim();
   if(s.startsWith('"')){try{const v=JSON.parse(s);return typeof v==='string'?{text:v}:undefined;}catch(_){return undefined;}}
   let m=/^\{\{\s*macro\s*:\s*(\d+)\s*\}\}$/i.exec(s);if(m)return{macro:+m[1]};
   m=/^\{\{\s*expansion\s*:([^:]+):([\s\S]+)\}\}$/i.exec(s);if(m)return{expansion:[m[1].trim(),m[2]]};
+  // 30.10: what the recorder writes -- a pause, and a pointer move
+  m=/^wait\s+(\d+(?:\.\d+)?)\s*(ms|s)?$/i.exec(s);
+  if(m)return{wait:Math.round(+m[1]*((m[2]||'').toLowerCase()==='s'?1000:1))};
+  m=/^move\s+(-?\d+)\s*,\s*(-?\d+)$/i.exec(s);if(m)return{move:[+m[1],+m[2]]};
   return null;}
 /* 29.2.1: names the parser does not know. They used to be dropped in
    silence -- "ctlr+c" saved as a bare C (CLAUDE.md §2). Every caller now
@@ -11125,11 +11405,23 @@ function _mediaByName(){
   if(!_mediaNames){_mediaNames={};
     for(const[u,n]of Object.entries(KEYS))if(+u>0xffff)_mediaNames[mediaToken(n)]=+u;}
   return _mediaNames;}
+const MACRO_DEF_RX=/^\$([a-z_]\w*)\s*=\s*(\d+(?:\.\d+)?)\s*(ms|s)?$/i;
 function macroTextBad(t){textToMacro(t);return textToMacro.bad;}
 function macroBadToast(bad){toast('not saved — unknown step name'+(bad.length>1?'s':'')+': '
   +bad.join(', ')+'. See “How macros are written” for the names.',true);}
 function textToMacro(t){const steps=[],bad=textToMacro.bad=[];
+// 30.12: named timings first -- "$name = 350ms" defines, "wait $name" uses
+const defs={};
+for(const line of t.split('\n')){const m=MACRO_DEF_RX.exec(line.trim());
+  if(m)defs[m[1].toLowerCase()]=Math.round(+m[2]*((m[3]||'').toLowerCase()==='s'?1000:1));}
 for(let line of t.split('\n')){
+if(MACRO_DEF_RX.test(line.trim()))continue;
+line=line.replace(/\s+·\s.*$/,'');                    // 30.12: the note
+const wv=/^\s*wait\s+\$([a-z_]\w*)\s*$/i.exec(line);
+if(wv){const k=wv[1].toLowerCase();
+  if(defs[k]===undefined)bad.push('$'+wv[1]+' (no "$'+wv[1]+' = …ms" line)');
+  else steps.push({wait:defs[k],var:k});
+  continue;}
 const sp=macroSpecialParse(line);                     // 30.1: before lowercasing
 if(sp===undefined){bad.push(line.trim());continue;}
 if(sp){steps.push(sp);continue;}
@@ -11158,19 +11450,23 @@ function macroUsers(){
   let rows=[];
   try{rows=asgRows();}catch(_){return by;}
   for(const r of rows){
-    const a=tapsInner(r.out),tsp=tapsSpec(r.out);   // 30.1: a tap rule fires its inner macro
+    // 30.10: a tap rule fires a macro on ANY of its counts, each listed
+    const tsp=tapsSpec(r.out);
+    const counts=tsp?tapsCounts(r.out):{1:r.out};
+    for(const c of Object.keys(counts)){
+    const a=counts[c];
     if(!Array.isArray(a)||a[0]!=='macro')continue;
     const n=String(a[1]);
     const L=[...(r.layers||[])].sort((x,y)=>x-y);
     (by[n]=by[n]||[]).push({
-      label:asgInputLabel(r)+(tsp&&+tsp.n>1?' ×'+tsp.n:''),row:r,
+      label:asgInputLabel(r)+(tsp?' ×'+c:''),row:r,
       // A binding on every layer is the normal case and saying so on each row
       // is noise; only a restricted set is worth naming.
       layers:(L.length&&L.length<allLayers().length)
         ?L.map(i=>layerName(i)).join(', '):'',
       os:r.os||'',
       pack:r.fromAdd||'',
-      off:!!r.addOff});}
+      off:!!r.addOff});}}
   // Window mode reaches its macros through config keys, not through a
   // mapping, so asgRows cannot see them. Without these two a macro would
   // read "not bound to anything" while window mode was firing it.
@@ -11437,12 +11733,15 @@ const PRIMERS={
    {name:'Order',rows:[
      ['1 → 6','$1 groups → date directives → {YYYY} → {{#…}} → lists, durations → {^}. Keys {{…}} are pressed last, while typing. Escaped characters are left alone by all of them.']]}]},
  mac:{title:'How macros are written',
-  quick:[['one line','= one 12 ms step'],['ctrl+c','keys held together'],['.','empty step (12 ms pause)'],['"☑"','type text'],['{{','include'],
+  quick:[['one line','= one 12 ms step'],['ctrl+c','keys held together'],['wait 250ms','a pause'],['$gap = 300ms','a named timing: wait $gap'],['"☑"','type text'],['{{','include'],
          ['btn1','click'],['btn1_down … btn1_up','hold across steps'],['wheel','one scroll detent']],
   cats:()=>[
    {name:'Steps & timing',rows:[
      ['ctrl+c','Everything on one line is held for that step (12 ms), then released.'],
-     ['.','An empty step: a 12 ms pause. Repeat it for longer pauses — ten dots ≈ 120 ms.'],
+     ['wait 250ms','A pause (also wait 1.5s). Keys held with _down stay held through it; everything else is let go. The text after “·” names the steps either side and is only a note — Find & Replace can use it.'],
+     ['$gap = 300ms','A named timing, defined on its own line; wait $gap uses it. Change it once (here or under Timings beside the box) and every use changes.'],
+     ['move 10,-4','Moves the pointer (HID counts).'],
+     ['.','An empty 12 ms step. A run of them reads back as one wait.'],
      ['(no escape)','Steps are key names. To type text, put it on its own line in double quotes.'],
      ['Unknown name','The macro is not saved and the toast names the word, so ctlr+c can’t become a bare C.']]},
    {name:'Modifiers',rows:[
@@ -11471,12 +11770,39 @@ function renderPrimers(){
   document.querySelectorAll('[data-primer]').forEach(el=>{
     const k=el.dataset.primer,p=PRIMERS[k];if(!p)return;
     const cats=p.cats(),open=_primerOpen(k),cat=cats.find(c=>c.name===open);
-    el.innerHTML=`<div class="pq"><b>${esc(p.title)}:</b>${p.quick.map(([c,d])=>
+    // 30.14: the title folds the whole guide away (remembered here)
+    const folded=foldGet('primer-'+k);
+    if(folded){el.innerHTML=`<div class="pq"><b class="foldt" data-pfold="${esc(k)}" title="Show">▸ ${esc(p.title)}</b></div>`;
+      el.querySelector('[data-pfold]').onclick=()=>{foldSet('primer-'+k,false);renderPrimers();};return;}
+    el.innerHTML=`<div class="pq"><b class="foldt" data-pfold="${esc(k)}" title="Fold away">▾ ${esc(p.title)}:</b>${p.quick.map(([c,d])=>
         `<span><code>${esc(c)}</code> ${esc(d)}</span>`).join('')}</div>
       <div class="pcats">${cats.map(c=>`<button class="pcat${c===cat?' on':''}" data-pc="${esc(c.name)}">${esc(c.name)}</button>`).join('')}</div>
       ${cat?`<table>${cat.rows.map(([c,d])=>`<tr><td><code>${esc(c)}</code></td><td>${d&&d.html?d.html:esc(d)}</td></tr>`).join('')}</table>`:''}`;
     el.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{
-      _primerSetOpen(k,b.dataset.pc===open?'':b.dataset.pc);renderPrimers();});});}
+      _primerSetOpen(k,b.dataset.pc===open?'':b.dataset.pc);renderPrimers();});
+    el.querySelector('[data-pfold]').onclick=()=>{foldSet('primer-'+k,true);renderPrimers();};});}
+/* 30.14: anything you might want out of the way folds. A panel whose first
+   child is a heading gets a ▾ on it; a click on the heading (not on a button
+   or field inside it) folds everything else in the panel. Applied on each
+   tab change and after the lists that redraw their own heading. Remembered
+   in this browser only -- it is how you like the page, not the profile. */
+function foldGet(k){try{return localStorage.getItem('hc.fold.'+k)==='1';}catch(_){return false;}}
+function foldSet(k,on){try{if(on)localStorage.setItem('hc.fold.'+k,'1');else localStorage.removeItem('hc.fold.'+k);}catch(_){}}
+function foldKey(p){const hd=p.firstElementChild;
+  return p.id||p.dataset.uikey||('h:'+(hd?hd.textContent:'').replace(/\s+/g,' ').trim().slice(0,40));}
+function foldEnhance(root){
+  (root||document).querySelectorAll('.panel,.card').forEach(p=>{
+    if(p.tagName==='DETAILS'||p.dataset.primer!==undefined)return;
+    const hd=p.firstElementChild;
+    if(!hd||!/^H[1-4]$/.test(hd.tagName))return;
+    hd.classList.add('foldh');
+    p.classList.toggle('folded',foldGet(foldKey(p)));
+    if(hd._fold)return;hd._fold=1;
+    hd.addEventListener('click',e=>{
+      if(e.target.closest('button,input,select,textarea,a,label'))return;
+      const on=!p.classList.contains('folded');
+      p.classList.toggle('folded',on);foldSet(foldKey(p),on);
+      setTimeout(pageMapBuild,30);});});}
 
 /* 29.2.2 (2026-10-01): quick note: Cmd/Ctrl+Enter sends it to the Pi (s0
    `note`: the same locked, fsynced append as ;;n;;). The box clears only when
@@ -11519,18 +11845,19 @@ function qnoteDone(text){
   else toast('✗ '+text.replace(/^NOTE /,'')+' — the note is still in the box',true);}
 
 function renderMacros(){
-  const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)</h2>';
+  const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (12 ms/step, "." = pause)'
+    +' <button id="macfrbtn" class="txmini" style="font-size:.75rem" title="Find and replace across your macros">🔍 Find &amp; Replace</button></h2>';
   // 29.2.1: read, don't create -- this used to add macro_names on render.
   const names=cfg.macro_names||{};
   const users=macroUsers();
   for(const n of macroSlots()){const s=(cfg.macros&&cfg.macros[n])||[];
   const nm=names[n]||'';
   h+=`<details class="macro" id="macro-${n}"><summary><b>${nm?nm+' (M'+n+')':'Macro '+n}</b> — ${s.length?
-  macroToText(s).split('\n').filter(l=>l!=='.').slice(0,3).join(' · '):'<span class="muted">empty</span>'}</summary>
+  macroLines(s).filter(l=>l.kind==='step').slice(0,3).map(l=>l.text).join(' · '):'<span class="muted">empty</span>'}</summary>
   <label>Name (optional)</label><input type="text" data-mn="${n}" value="${nm.replace(/"/g,'&quot;')}" placeholder="e.g. Copy">
   <div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-start">
     <div style="flex:1 1 18rem;min-width:14rem">
-      <label>Steps</label>
+      <label>Steps <button data-mfr="${n}" class="txmini" style="font-size:.7rem" title="Find and replace in this macro">🔍</button></label>
       <textarea data-m="${n}" rows="${Math.max(3,s.length)}">${macroToText(s)}</textarea>
     </div>
     <div style="flex:1 1 12rem;min-width:11rem">
@@ -11555,13 +11882,143 @@ function renderMacros(){
     if(i.value.trim())cfg.macro_names[i.dataset.mn]=i.value.trim();
     else delete cfg.macro_names[i.dataset.mn];});
   el.querySelectorAll('[data-masg]').forEach(b=>b.onclick=()=>masgStart(b.dataset.masg));
+  el.querySelectorAll('[data-mfr]').forEach(b=>b.onclick=e=>{e.preventDefault();
+    frPop(el.querySelector(`textarea[data-m="${b.dataset.mfr}"]`));});
+  $('macfrbtn').onclick=macFrToggle;
   if(_masg)masgBind();
   const add=$('macroadd');
   if(add)add.onclick=()=>{const n=macroMax()+1;
     cfg.macros=cfg.macros||{};cfg.macros[n]=[];
     render();toast('added Macro '+n+' — give it steps, then ⬆ Save to device');
-    setTimeout(()=>gotoMacro(n),50);};
+    setTimeout(()=>gotoMacro(n),50);};  try{renderMacroRec();}catch(e){console.warn('macro recorder',e);}   // 30.10
+  foldEnhance(el.parentElement);                                       // 30.14
 }
+/* 30.10: the recorder. Events from the pad (keys always; clicks and
+   movement if ticked) become steps: a quick press-and-release is one plain
+   step, anything held longer is _down ... _up, gaps are {wait}, movement is
+   {move} sent at most every MREC_MOVE_MS. Playback sends the steps in the
+   box to the engine (`macrotest`, s6) into the tester, at the speed set. */
+const MREC_TAP_MS=60, MREC_MIN_GAP=15, MREC_MOVE_MS=25;
+const MREC_BTN=[1,3,2,4,5];                     // MouseEvent.button -> btnN
+let mrec=null, mrecRun=null;
+const MACRO_TESTERS=[
+  {id:'text',label:'Text field',
+   html:()=>`<textarea id="mtestbox" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off"
+     placeholder="the Pi plays the macro here" style="width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:.85rem"></textarea>
+     <button class="txmini" onclick="$('mtestbox').value=''">Clear</button>`,
+   focus:()=>$('mtestbox')}];
+function mtester(){return MACRO_TESTERS.find(t=>t.id===($('mtestkind')||{}).value)||MACRO_TESTERS[0];}
+function mrecSteps(ev){
+  const out=[];let last=ev.length?ev[0].t:0;
+  for(let i=0;i<ev.length;i++){const e=ev[i];
+    const gap=e.t-last;
+    if(i>0&&gap>=MREC_MIN_GAP)out.push({wait:Math.round(gap/5)*5});
+    last=e.t;
+    if(e.k==='m'){out.push({move:[e.dx,e.dy]});continue;}
+    const nx=ev[i+1];
+    if(e.k==='d'&&nx&&nx.k==='u'&&nx.u===e.u&&nx.t-e.t<MREC_TAP_MS){out.push([e.u]);last=nx.t;i++;continue;}
+    out.push([(e.u|(e.k==='d'?MACRO_DOWN:MACRO_UP))>>>0]);}
+  // anything still held when recording stopped is released at the end
+  return out;}
+function mrecScaled(steps,speed){
+  return steps.map(s=>s&&!Array.isArray(s)&&'wait' in s?{wait:Math.round(s.wait/speed)}:s);}
+function mrecSpeed(){const v=+($('mrecspeed')||{}).value;return v>=0.1&&v<=10?v:1;}
+function mrecState(t){const s=$('mrecstate');if(s)s.textContent=t;}
+function mrecUsage(e){
+  const u=BROWSER_CODE2HID[e.code];if(u!==undefined)return 0x00070000+u;
+  const m=BROWSER_MEDIA2USAGE[e.code];if(m!==undefined)return((0x0c<<16)|m)>>>0;
+  const f=/^F(\d+)$/.exec(e.code||'');if(f&&+f[1]>=13&&+f[1]<=24)return 0x00070068+(+f[1]-13);
+  return null;}
+function mrecStart(){
+  mrec={ev:[],held:new Set(),skipped:new Set(),mv:null};
+  const pad=$('mrecpad');pad.focus();
+  pad.textContent='recording -- press keys here';$('mrecgo').textContent='■ Stop recording';
+  mrecState('');}
+function mrecFinish(){
+  if(!mrec)return;
+  const r=mrec;mrec=null;mrecFlushMove(r,true);
+  const t=performance.now();
+  for(const u of r.held)r.ev.push({k:'u',u,t});
+  const steps=mrecSteps(r.ev);
+  $('mrectext').value=macroToText(steps);fitField($('mrectext'));
+  $('mrecpad').textContent='click here, then ● Record';$('mrecgo').textContent='● Record';
+  mrecState(r.ev.length?`${steps.length} steps`+(r.skipped.size?` · not recorded (no macro name): ${[...r.skipped].join(', ')}`:'')
+    :'nothing recorded');}
+function mrecFlushMove(r,force){
+  const m=r.mv;if(!m||(!m.dx&&!m.dy))return;
+  if(!force&&performance.now()-m.t0<MREC_MOVE_MS)return;
+  r.ev.push({k:'m',dx:Math.round(m.dx),dy:Math.round(m.dy),t:m.t0});r.mv=null;}
+function mrecBind(){
+  const pad=$('mrecpad');if(!pad||pad._b)return;pad._b=1;
+  const key=down=>e=>{if(!mrec)return;
+    e.preventDefault();e.stopPropagation();if(e.repeat)return;
+    const u=mrecUsage(e);if(u==null){mrec.skipped.add(e.code||e.key);return;}
+    mrecFlushMove(mrec,true);
+    if(down)mrec.held.add(u);else if(!mrec.held.delete(u))return;
+    mrec.ev.push({k:down?'d':'u',u,t:performance.now()});};
+  pad.addEventListener('keydown',key(true));pad.addEventListener('keyup',key(false));
+  const btn=down=>e=>{if(!mrec||!$('mrecclicks').checked)return;
+    e.preventDefault();const n=MREC_BTN[e.button];if(!n)return;
+    const u=0x00090000+n;mrecFlushMove(mrec,true);
+    if(down)mrec.held.add(u);else if(!mrec.held.delete(u))return;
+    mrec.ev.push({k:down?'d':'u',u,t:performance.now()});};
+  pad.addEventListener('mousedown',btn(true));pad.addEventListener('mouseup',btn(false));
+  pad.addEventListener('contextmenu',e=>{if(mrec)e.preventDefault();});
+  pad.addEventListener('mousemove',e=>{if(!mrec||!$('mrecmove').checked)return;
+    const t=performance.now();
+    if(mrec.mv&&t-mrec.mv.t0>=MREC_MOVE_MS)mrecFlushMove(mrec,true);
+    if(!mrec.mv)mrec.mv={dx:0,dy:0,t0:t};
+    mrec.mv.dx+=e.movementX;mrec.mv.dy+=e.movementY;});
+  pad.addEventListener('blur',()=>{if(mrec)mrecState('recording paused -- click the pad to carry on');});
+  pad.addEventListener('focus',()=>{if(mrec)mrecState('');});
+  $('mrecgo').onclick=()=>mrec?mrecFinish():mrecStart();
+  $('mrecplay').onclick=mrecPlay;
+  $('mrecstop').onclick=()=>{pfCmd('macrotest stop').catch(()=>{});};
+  $('mrecload').onclick=()=>{const n=$('mrecslot').value;if(n==='new')return toast('pick a macro to load',true);
+    $('mrectext').value=macroToText((cfg.macros||{})[n]||[]);fitField($('mrectext'));
+    mrecState('loaded Macro '+n);};
+  $('mrecsave').onclick=mrecSave;
+  const k=$('mtestkind');
+  k.innerHTML=MACRO_TESTERS.map(t=>`<option value="${t.id}">${esc(t.label)}</option>`).join('');
+  k.onchange=()=>{$('mtestarea').innerHTML=mtester().html();};
+  k.onchange();}
+function renderMacroRec(){
+  mrecBind();
+  const sl=$('mrecslot');if(!sl)return;
+  const names=cfg.macro_names||{}, v=sl.value;
+  sl.innerHTML='<option value="new">a new macro</option>'+macroSlots().map(n=>
+    `<option value="${n}">Macro ${n}${names[n]?' · '+esc(names[n]):''}</option>`).join('');
+  if([...sl.options].some(o=>o.value===v))sl.value=v;}
+function mrecPlay(){
+  const t=$('mrectext').value;
+  const bad=macroTextBad(t);if(bad.length){macroBadToast(bad);return;}
+  const steps=textToMacro(t);if(!steps.length){toast('nothing to play',true);return;}
+  if(mrecRun){toast('a playback is already running -- ■ Stop it first',true);return;}
+  const box=mtester().focus();if(box)box.focus();
+  const id=Math.random().toString(36).slice(2,8);
+  mrecRun={id,t0:performance.now()};
+  mrecState('playing at '+mrecSpeed()+'× …');
+  pfCmd('macrotest '+JSON.stringify({steps,speed:mrecSpeed(),id}))
+    .catch(()=>{mrecRun=null;mrecState('');toast('not sent -- connect to the Pi first',true);});
+  // a lost "done" must not leave the button refusing for ever
+  setTimeout(()=>{if(mrecRun&&mrecRun.id===id){mrecRun=null;mrecState('');}},60000);}
+function mrecLive(txt){
+  if(/^macrotest refused/.test(txt)){mrecRun=null;mrecState('');toast(txt,true);return;}
+  const m=/^macrotest done (\{.*\})/.exec(txt);if(!m)return;
+  let r;try{r=JSON.parse(m[1]);}catch(_){return;}
+  if(!mrecRun||r.id!==mrecRun.id)return;
+  mrecRun=null;mrecState((r.stopped?'stopped after ':'played in ')+fmtMs(r.ms));}
+function mrecSave(){
+  const t=$('mrectext').value;
+  const bad=macroTextBad(t);if(bad.length){macroBadToast(bad);return;}
+  const steps=mrecScaled(textToMacro(t),mrecSpeed());
+  let n=$('mrecslot').value;
+  cfg.macros=cfg.macros||{};
+  if(n==='new')n=String(macroMax()+1);
+  else if((cfg.macros[n]||[]).length&&!confirm('Replace the steps of Macro '+n+'?'))return;
+  cfg.macros[n]=steps;
+  renderMacros();renderMacroRec();$('mrecslot').value=n;
+  toast('saved into Macro '+n+' — ⬆ Save to device');}
 /* 29.19 (2026-10-08): ⌨ Assign a macro by pressing: key alone -> kbd_mappings
    `${L},${canon}`; button -> mouse_mappings `${L},${b}`; mods + key ->
    mod_chords `${L|-1},${mods},${canon}`; mods + button -> canon BTN_MC+b.
@@ -13172,8 +13629,10 @@ function liveOut(txt){
     if(typeof renderOptChars==='function'&&$('optsec')&&$('optsec').open)renderOptChars();
     toast('Right Alt (double tap): '+(om[1]==='ON'?'Mac option/alt mode — Left Alt is Option and never reaches Windows; Right Alt is Windows Alt':'Windows option/alt mode — Alt is Windows Alt: Alt+←/→ is Back/Forward (ticked characters still type)'));return;}
   if(txt.startsWith('typetest ')){tspLive(txt);return;}               // 30.2
+  if(txt.startsWith('macrotest ')){mrecLive(txt);return;}             // 30.10
   if(txt.startsWith('escape')){
-    if(/^escape: typing stopped/.test(txt))toast('⎋ Escape: typing stopped');return;}
+    if(/^escape: typing stopped/.test(txt))toast('⎋ Escape: typing stopped');
+    if(/^escape: macro test stopped/.test(txt))toast('⎋ Escape: macro test stopped');return;}
   // 29.24: the calibration's own end, or the reason it was refused
   if(txt.startsWith('mwtest ')){
     if(/^mwtest refused/.test(txt)){toast(txt,true);if(testMW&&!testMW.done){testMW.done=true;
@@ -14646,7 +15105,14 @@ function txSyncPaneSize(){
   window._txRO = new ResizeObserver(entries => {
     if(txSizing) return;
     const e = entries[0]; if(!e) return;
-    const w = Math.round(e.contentRect.width), h = Math.round(e.contentRect.height);
+    // 30.13: the border box -- the box --txw/--txh size (box-sizing:
+    // border-box). contentRect excludes the padding, so every show of the
+    // tab wrote back a size ~20 px smaller and the panes shrank until they
+    // could not be grabbed. A hidden tab measures 0 x 0: ignored.
+    const bb = e.borderBoxSize && e.borderBoxSize[0];
+    const w = Math.round(bb ? bb.inlineSize : e.target.offsetWidth),
+          h = Math.round(bb ? bb.blockSize : e.target.offsetHeight);
+    if(!w || !h) return;
     const strip = $('txstrip'); if(!strip) return;
     if(strip.dataset.w === String(w) && strip.dataset.h === String(h)) return;
     txSizing = true;
@@ -14725,6 +15191,103 @@ function txTagSelection(tagId){
     }
   }
 }
+/* 30.10: Find & Replace beyond Text Transform. The matching is the 24.3
+   core below (txfrApply: invisibles folded, literal unless "regex", $1 only
+   in regex mode); this is the control around it, in two shapes:
+     frHTML + frBind   a compact bar inside a panel, over one target or
+                       many (Macros: every macro, or one)
+     frPop(textarea)   a small floating one under a single box
+   A target is {label, get(), set(v), check(v)?}. check names why a result
+   cannot be saved (a macro name the parser does not know), and one refusal
+   stops the whole Replace all -- never half of it. Undo is one level, over
+   every target the last Replace all changed. */
+function frHTML(id){
+  return `<div class="frbar"${id?` id="${id}"`:''}>
+    <textarea data-fr="find" rows="1" spellcheck="false" placeholder="find" data-nofit></textarea>
+    <textarea data-fr="repl" rows="1" spellcheck="false" placeholder="replace with (empty deletes)" data-nofit></textarea>
+    <label><input type="checkbox" data-fr="rx"> regex</label>
+    <label><input type="checkbox" data-fr="case"> match case</label>
+    <span data-fr="scope"></span>
+    <button data-fr="count" class="txmini">🔍 Find</button>
+    <button data-fr="all" class="txmini primary">⇄ Replace all</button>
+    <button data-fr="undo" class="txmini" disabled>⟲ Undo</button>
+    <button data-fr="close" class="txmini" title="Close">✕</button>
+    <div data-fr="stat" class="muted"></div><pre data-fr="prev"></pre></div>`;}
+function frSeen(s){return String(s).replace(/\n/g,'⏎').replace(/\t/g,'⇥').replace(TXFR_NBSP,'␣');}
+function frBind(root,getTargets,onClose){
+  const q=s=>root.querySelector(`[data-fr="${s}"]`);
+  let undo=null;
+  const say=(m,bad)=>{const s=q('stat');s.textContent=m;s.style.color=bad?'var(--err)':'';};
+  const run=replace=>{
+    const o={find:q('find').value,repl:q('repl').value,regex:q('rx').checked,matchCase:q('case').checked};
+    const pv=q('prev');pv.style.display='none';
+    if(!o.find){say('type or paste something to find',true);return;}
+    try{txfrRegex(o);}catch(e){say('that regex will not compile: '+e.message,true);return;}
+    const ts=getTargets(), changes=[], lines=[];let n=0;
+    for(const t of ts){
+      const raw=t.get(), hay=txfrFold(raw), r=txfrApply(raw,hay,o);
+      if(!r.count)continue;n+=r.count;
+      for(const m of r.hits.slice(0,3))lines.push((t.label?t.label+':  ':'')+frSeen(m[0])+'   →   '
+        +frSeen(txfrExpand(o.repl,m,hay,o.regex)));
+      changes.push({t,old:raw,neu:r.text,count:r.count});}
+    if(lines.length){pv.textContent=lines.slice(0,12).join('\n')+(lines.length>12?'\n…':'');pv.style.display='block';}
+    const where=ts.length>1&&changes.length?` in ${changes.length} of ${ts.length}`:'';
+    if(!replace||!n){say(n?`${n} match${n>1?'es':''}${where}`:'no matches');return;}
+    for(const c of changes){const why=c.t.check&&c.t.check(c.neu);
+      if(why){say('nothing replaced -- '+(c.t.label?c.t.label+': ':'')+why,true);return;}}
+    for(const c of changes)c.t.set(c.neu);
+    undo=changes;q('undo').disabled=false;
+    say(`replaced ${n}${where}`);};
+  q('count').onclick=()=>run(false);
+  q('all').onclick=()=>run(true);
+  q('undo').onclick=()=>{if(!undo)return;for(const c of undo)c.t.set(c.old);
+    undo=null;q('undo').disabled=true;say('undone');};
+  q('close').onclick=()=>{if(onClose)onClose();};
+  q('find').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();run(false);}});
+  root.addEventListener('keydown',e=>{if(e.key==='Escape'&&onClose){e.stopPropagation();onClose();}});
+  return {say};}
+function frMacroCheck(v){const b=macroTextBad(v);
+  return b.length?'unknown step name'+(b.length>1?'s':'')+': '+b.join(', '):null;}
+// One box: the recorder's steps, a macro's steps, or any textarea.
+function frPop(ta){
+  if(!ta)return;
+  let p=$('frpop');
+  if(!p){p=document.createElement('div');p.id='frpop';document.body.appendChild(p);}
+  p.innerHTML=frHTML();
+  const close=()=>{p.style.display='none';p._for=null;};
+  frBind(p,()=>[{label:'',get:()=>p._for.value,
+    check:isMacroBox(p._for)?frMacroCheck:null,
+    set:v=>{const t=p._for;t.value=v;t.dispatchEvent(new Event('change'));fitField(t);}}],close);
+  p._for=ta;
+  const r=ta.getBoundingClientRect();
+  p.style.display='block';
+  p.style.left=Math.max(8,Math.min(r.left,window.innerWidth-p.offsetWidth-8))+'px';
+  p.style.top=(r.bottom+6+p.offsetHeight<window.innerHeight?r.bottom+6:Math.max(8,r.top-p.offsetHeight-6))+'px';
+  p.querySelector('[data-fr="find"]').focus();}
+// Every macro, or one: the Macros page's own bar.
+function macFrToggle(){
+  const host=$('macfr');if(!host)return;
+  if(host.style.display!=='none'){host.style.display='none';return;}
+  host.style.display='';
+  if(!host._b){host._b=1;host.innerHTML=frHTML('macfrbar');
+    const sc=host.querySelector('[data-fr="scope"]');
+    sc.innerHTML='in <select data-fr="which"></select>';
+    frBind(host,()=>{
+      const w=sc.querySelector('select').value;
+      return macroSlots().filter(n=>(w==='all'||String(n)===w)&&((cfg.macros||{})[n]||[]).length)
+        .map(n=>({label:'M'+n+((cfg.macro_names||{})[n]?' '+cfg.macro_names[n]:''),
+          get:()=>macroToText(cfg.macros[n]),check:frMacroCheck,
+          set:v=>{cfg.macros[n]=textToMacro(v);}}));},
+      ()=>{host.style.display='none';});
+    // a Replace all rewrites cfg.macros, so the list redraws after it
+    host.addEventListener('click',e=>{const a=e.target.closest('[data-fr="all"],[data-fr="undo"]');
+      if(a)setTimeout(()=>{renderMacros();},0);});}
+  const sel=host.querySelector('[data-fr="which"]'),was=sel.value,names=cfg.macro_names||{};
+  sel.innerHTML='<option value="all">every macro</option>'+macroSlots()
+    .filter(n=>((cfg.macros||{})[n]||[]).length)
+    .map(n=>`<option value="${n}">Macro ${n}${names[n]?' · '+esc(names[n]):''}</option>`).join('');
+  if([...sel.options].some(o=>o.value===was))sel.value=was;
+  host.querySelector('[data-fr="find"]').focus();}
 /* 24.3: find & replace. Both sides are folded the same way for matching
    (CR/CRLF -> LF, the non-breaking space family -> space); the fold keeps
    length, so replacements splice into the ORIGINAL and untouched text is
@@ -17085,8 +17648,186 @@ function switchTab(t){
   if(t==='bt'&&device)btCmd('list');
   if(t==='exp'){if(cfg)renderExp();renderSets();}   // populate on open, not just on read
   if(t==='map'){uiRestoreOpen();renderDevices();if(device)getFile(3);requestAnimationFrame(drawChords);}
-  setTimeout(pageMapBuild,60);
+  setTimeout(()=>{foldEnhance();pageMapBuild();},60);                     // 30.14
   setTimeout(()=>{const pg=pageMapPage();if(pg)fitFieldsIn(pg);},120);}   // 30.9
+/* 30.10: "How macros are written" follows the macro being edited -- a
+   floating copy beside whichever macro box has focus (the Macros list, the
+   mapping editor's new-macro box, the tester), right of it if there is
+   room, else left, else not at all. It stays while you click inside it;
+   the Macros page's own column hides meanwhile, so there are never two. */
+const MACPRIMER_W=360;
+function isMacroBox(el){return !!el&&el.tagName==='TEXTAREA'
+  &&(el.dataset.m!==undefined||el.id==='im'||el.classList.contains('macrobox'));}
+function macPrimerFloat(ta){
+  let f=$('macprimerfloat');
+  if(!f){f=document.createElement('div');f.id='macprimerfloat';f.className='panel primer';
+    f.dataset.primer='mac';document.body.appendChild(f);
+    f.addEventListener('mousedown',()=>{f._keep=true;setTimeout(()=>{f._keep=false;},400);});}
+  const r=ta.getBoundingClientRect();
+  const right=r.right+10+MACPRIMER_W<=window.innerWidth-8, left=r.left-10-MACPRIMER_W>=8;
+  if(!right&&!left){f.style.display='none';return;}
+  try{renderPrimers();}catch(_){}
+  macTimings(ta,f);
+  f.style.display='block';
+  f.style.left=(right?r.right+10:r.left-10-MACPRIMER_W)+'px';
+  f.style.top=Math.max(8,Math.min(r.top,window.innerHeight-Math.min(f.offsetHeight,window.innerHeight-16)-8))+'px';
+  const side=$('macprimer');if(side)side.style.visibility='hidden';
+  f._for=ta;}
+function macPrimerHide(){
+  const f=$('macprimerfloat');if(!f||f._keep)return;
+  f.style.display='none';f._for=null;
+  const side=$('macprimer');if(side)side.style.visibility='';}
+document.addEventListener('focusin',e=>{if(isMacroBox(e.target))macPrimerFloat(e.target);});
+/* 30.12: Timings, at the top of the floating pane. Named timings
+   ("$panel = 350ms") each with a field that changes every use at once;
+   then the plain waits grouped by length and by the two steps around them,
+   each group with "name it", which turns all of them into one named
+   timing. Edits go through the box's text, so its own change handler
+   saves them, and Undo in the box takes them back. */
+function macTimings(ta,f){
+  const old=f.querySelector('#mactimings');if(old)old.remove();
+  const t=ta.value, defs=[], groups=new Map();
+  for(const line of t.split('\n')){
+    const d=MACRO_DEF_RX.exec(line.trim());
+    if(d){defs.push({name:d[1],ms:Math.round(+d[2]*((d[3]||'').toLowerCase()==='s'?1000:1))});continue;}
+    const w=/^\s*wait\s+(\d+)\s*ms(?:\s+·\s(.*))?$/i.exec(line);
+    if(w){const k=w[1]+'|'+(w[2]||'');
+      groups.set(k,(groups.get(k)||{ms:+w[1],note:w[2]||'',n:0}));groups.get(k).n++;}}
+  if(!defs.length&&!groups.size)return;
+  // one length between different steps also gets an "every N ms" group
+  const byMs={};for(const x of groups.values())(byMs[x.ms]=byMs[x.ms]||[]).push(x);
+  for(const[ms,xs]of Object.entries(byMs))if(xs.length>1)
+    groups.set(ms+'|*',{ms:+ms,note:'*',n:xs.reduce((s,x)=>s+x.n,0)});
+  const g=[...groups.values()].sort((a,b)=>(b.note==='*')-(a.note==='*')||b.n-a.n||a.ms-b.ms);
+  const d=document.createElement('div');d.id='mactimings';
+  d.style.cssText='border-bottom:1px solid var(--line);margin-bottom:.4rem;padding-bottom:.35rem;font-size:.78rem';
+  d.innerHTML='<b>Timings</b> <span class="muted">in this macro</span>'
+    +defs.map(x=>`<div style="margin:.15rem 0"><code>$${esc(x.name)}</code> = <input type="number" min="0" step="1"
+       data-tv="${esc(x.name)}" value="${x.ms}" style="width:5rem"> ms</div>`).join('')
+    +g.slice(0,12).map((x,i)=>`<div style="margin:.15rem 0">${x.note==='*'?'every ':''}${x.ms} ms <span class="muted">${x.note&&x.note!=='*'?'· '+esc(x.note):''}</span>
+       ${x.n>1?' ×'+x.n:''} <button class="txmini" data-tn="${i}" title="Make every one of these a named timing">name it</button></div>`).join('')
+    +(g.length>12?`<div class="muted">… ${g.length-12} more</div>`:'');
+  f.insertBefore(d,f.firstChild);
+  const write=v=>{ta.value=v;ta.dispatchEvent(new Event('input',{bubbles:true}));
+    ta.dispatchEvent(new Event('change'));fitField(ta);macTimings(ta,f);};
+  d.querySelectorAll('[data-tv]').forEach(inp=>inp.onchange=()=>{
+    const nm=inp.dataset.tv, ms=Math.max(0,Math.round(+inp.value||0));
+    write(ta.value.split('\n').map(l=>{const m=MACRO_DEF_RX.exec(l.trim());
+      return m&&m[1]===nm?'$'+nm+' = '+ms+'ms':l;}).join('\n'));});
+  d.querySelectorAll('[data-tn]').forEach(b=>b.onclick=()=>{
+    const x=g[+b.dataset.tn];
+    const any=x.note==='*';
+    let nm=(prompt('Name for every '+x.ms+' ms wait'+(x.note&&!any?' between '+x.note:'')+':',
+      'wait'+(defs.length+1))||'').trim().replace(/^\$/,'');
+    if(!nm)return;
+    if(!/^[a-z_]\w*$/i.test(nm)){toast('a name is letters, digits and _ , starting with a letter',true);return;}
+    if(defs.some(z=>z.name.toLowerCase()===nm.toLowerCase())){toast('$'+nm+' is already used in this macro',true);return;}
+    const rx=new RegExp('^(\\s*)wait\\s+'+x.ms+'\\s*ms(\\s+·\\s'+(any?'.*':x.note.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+')?$','i');
+    const lines=ta.value.split('\n').map(l=>{const m=rx.exec(l);
+      if(!m||(!any&&((x.note&&!m[2])||(!x.note&&m[2]))))return l;
+      return m[1]+'wait $'+nm+(m[2]||'');});
+    const at=lines.findIndex(l=>!MACRO_DEF_RX.test(l.trim()));
+    lines.splice(at<0?lines.length:at,0,'$'+nm+' = '+x.ms+'ms');
+    write(lines.join('\n'));});}
+document.addEventListener('input',e=>{if(!isMacroBox(e.target))return;
+  const f=$('macprimerfloat');if(f&&f._for===e.target&&f.style.display!=='none')macTimings(e.target,f);});
+document.addEventListener('focusout',e=>{if(isMacroBox(e.target))setTimeout(()=>{
+  const f=$('macprimerfloat');if(f&&!f.contains(document.activeElement))macPrimerHide();},150);});
+window.addEventListener('scroll',()=>{const f=$('macprimerfloat');
+  if(f&&f._for&&f.style.display!=='none')macPrimerFloat(f._for);},{passive:true});
+/* 30.10: autocomplete where a box has a defined syntax. AC_SOURCES maps a
+   test for the box to a source: (text, caret) -> {start, items:[{v, hint}]}
+   or null. The list sits under the caret; Up/Down choose, Tab takes the
+   highlighted one, Enter takes it only after Up/Down (Enter is a new step
+   in a macro), Esc closes. Insertion goes through insertText, so Undo
+   takes it back and the box's own change handler still sees an edit. */
+const AC_MAX=8;
+let _acVocab=null;
+function macroVocab(){
+  if(_acVocab)return _acVocab;
+  const v=new Map(), ok=/^[a-z][a-z0-9_]*$/;
+  for(const k of Object.keys(NAME2MOD))v.set(k,'modifier');
+  for(const k of Object.keys(NAME2KEY))if(ok.test(k)&&!v.has(k)&&k.length>1)v.set(k,'key');
+  for(const k of Object.keys(_mediaByName()))if(ok.test(k)&&!v.has(k))v.set(k,'media key');
+  for(let i=1;i<=5;i++)v.set('btn'+i,'mouse button');
+  v.set('wheel','scroll');
+  v.set('wait','wait 250ms -- a pause');v.set('move','move dx,dy -- the pointer');
+  return _acVocab=v;}
+function acMacroSource(text,caret){
+  const ls=text.lastIndexOf('\n',caret-1)+1, line=text.slice(ls,caret);
+  if(/^\s*"/.test(line))return null;                       // a quoted text step
+  if(/^\s*\{\{/.test(line)){                               // an include
+    const m=/\{\{\s*([a-z]*)$/i.exec(line);if(!m)return null;
+    const items=Object.keys(cfg.macros||{}).map(n=>({v:'{{macro:'+n+'}}',
+      hint:(cfg.macro_names||{})[n]||''}));
+    items.push({v:'{{expansion:',hint:'set:trigger}}'});
+    return {start:ls+line.indexOf('{{'),items:items.filter(i=>i.v.slice(2).startsWith(m[1].toLowerCase()))};}
+  const m=/([A-Za-z][A-Za-z0-9_]*)$/.exec(line);if(!m)return null;
+  const tok=m[1].toLowerCase(), start=caret-m[1].length;
+  const us=tok.lastIndexOf('_');
+  if(us>0){                                                // name_ -> _down / _up
+    const base=tok.slice(0,us), suf=tok.slice(us);
+    if(!macroVocab().has(base))return null;
+    return {start,items:[['_down','hold down'],['_up','release']]
+      .filter(([s])=>s.startsWith(suf)&&s!==suf).map(([s,h])=>({v:base+s,hint:h}))};}
+  const items=[];
+  for(const[k,hint]of macroVocab())if(k.startsWith(tok)&&k!==tok)items.push({v:k,hint});
+  items.sort((a,b)=>a.v.length-b.v.length||(a.v<b.v?-1:1));
+  return {start,items};}
+const AC_SOURCES=[[isMacroBox,acMacroSource]];
+function acSource(el){const s=AC_SOURCES.find(([t])=>t(el));return s?s[1]:null;}
+function acCaretXY(ta){
+  // A copy of the box with the same text up to the caret; the marker's
+  // position is the caret's.
+  const cs=getComputedStyle(ta), d=document.createElement('div');
+  for(const p of['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing',
+    'paddingTop','paddingLeft','paddingRight','borderTopWidth','borderLeftWidth','boxSizing','tabSize'])d.style[p]=cs[p];
+  Object.assign(d.style,{position:'absolute',visibility:'hidden',whiteSpace:'pre-wrap',
+    wordWrap:'break-word',width:ta.offsetWidth+'px',top:'0',left:'-9999px'});
+  d.textContent=ta.value.slice(0,ta.selectionStart);
+  const mk=document.createElement('span');mk.textContent='​';d.appendChild(mk);
+  document.body.appendChild(d);
+  const r=ta.getBoundingClientRect(), x=r.left+mk.offsetLeft-ta.scrollLeft,
+    y=r.top+mk.offsetTop-ta.scrollTop+mk.offsetHeight;
+  d.remove();return {x,y};}
+function acClose(){const b=$('acbox');if(b){b.style.display='none';b._for=null;}}
+function acUpdate(ta){
+  const src=acSource(ta);if(!src||ta.selectionStart!==ta.selectionEnd)return acClose();
+  const r=src(ta.value,ta.selectionStart);
+  if(!r||!r.items.length)return acClose();
+  let b=$('acbox');
+  if(!b){b=document.createElement('div');b.id='acbox';document.body.appendChild(b);
+    b.addEventListener('mousedown',e=>{e.preventDefault();
+      const li=e.target.closest('[data-i]');if(li&&b._for){b._sel=+li.dataset.i;acTake(b._for);}});}
+  b._for=ta;b._r=r;b._items=r.items.slice(0,AC_MAX);b._sel=0;b._moved=false;
+  acPaint();
+  const p=acCaretXY(ta);
+  b.style.display='block';
+  b.style.left=Math.min(p.x,window.innerWidth-b.offsetWidth-8)+'px';
+  b.style.top=(p.y+b.offsetHeight+4>window.innerHeight?p.y-b.offsetHeight-22:p.y+2)+'px';}
+function acPaint(){
+  const b=$('acbox');
+  b.innerHTML=b._items.map((it,i)=>`<div data-i="${i}" class="${i===b._sel?'on':''}"><b>${esc(it.v)}</b>`
+    +(it.hint?` <span class="mut">${esc(it.hint)}</span>`:'')+'</div>').join('')
+    +(b._r.items.length>AC_MAX?`<div class="mut">+${b._r.items.length-AC_MAX} more — keep typing</div>`:'');}
+function acTake(ta){
+  const b=$('acbox'), it=b._items[b._sel];if(!it)return;
+  ta.focus();ta.setSelectionRange(b._r.start,ta.selectionStart);
+  if(!document.execCommand('insertText',false,it.v)){
+    ta.setRangeText(it.v,b._r.start,ta.selectionEnd,'end');
+    ta.dispatchEvent(new Event('input',{bubbles:true}));}
+  ta._acDirty=true;acClose();}
+document.addEventListener('input',e=>{if(acSource(e.target))acUpdate(e.target);});
+document.addEventListener('keydown',e=>{
+  const b=$('acbox');if(!b||b.style.display==='none'||b._for!==e.target)return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();b._moved=true;
+    b._sel=(b._sel+(e.key==='ArrowDown'?1:b._items.length-1))%b._items.length;acPaint();}
+  else if(e.key==='Tab'||(e.key==='Enter'&&b._moved)){e.preventDefault();acTake(e.target);}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();acClose();}},true);
+document.addEventListener('focusout',e=>{const b=$('acbox');if(b&&b._for===e.target)setTimeout(acClose,120);
+  // the box's change handler saw a value its focus-time copy matches if
+  // only insertText changed it in some engines; fire it once to be sure
+  if(e.target._acDirty){e.target._acDirty=false;e.target.dispatchEvent(new Event('change'));}});
 /* 30.9: text fields grow to fit their text. A text input widens to its
    content and returns to its own width
    when the text is short again (capped at 520 px, inside its panel); a
