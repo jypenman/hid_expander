@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.16</title>
+<title>HID Config 30.17.1</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -372,6 +372,10 @@ label.inl input{margin:0}
 .mchl-ta{position:relative;display:block;width:100%;box-sizing:border-box;
   background:transparent!important;color:transparent!important;caret-color:var(--fg)}
 .mc-c{color:var(--mut);font-style:italic}
+.upane{resize:both;overflow:auto;min-width:160px;min-height:48px}   /* 30.17 */
+.panegrip{position:absolute;top:2px;right:6px;cursor:move;opacity:.55;font-size:.85rem;line-height:1;
+  user-select:none;touch-action:none;z-index:3;padding:2px}
+.panegrip:hover{opacity:1}
 .frbar{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;font-size:.8rem}
 .frbar textarea{flex:1 1 9rem;min-width:7rem;height:1.9rem;min-height:1.9rem;resize:vertical;
   font-family:ui-monospace,monospace;font-size:.8rem;padding:.25rem .4rem;box-sizing:border-box}
@@ -1866,6 +1870,11 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.17.1',items:[
+   {t:'Training: chosen shortcuts are described from the set you chose them from (RStudio, not OneNote) -- with a selector where several sets share the keys',k:'trainpane'}]},
+ {v:'30.17',items:[
+   {t:'Floating panes move and resize: ⠿ drags one (double-click it to put it back), the corner resizes it; remembered in this browser',k:'macprimer'},
+   {t:'The mapping editor resizes from its corner too, and keeps its size',k:'editor'}]},
  {v:'30.16',items:[
    {t:'Usage: a row can be in several groups -- your own (✎, comma separated), every mapping group, every shortcut set that lists it; it counts in each',k:'usagepane'},
    {t:'Usage: "What to track" is now Shortcut sets -- everything you press is counted, so the Track ticks are gone; in use = used',k:'trackpane'},
@@ -2683,78 +2692,7 @@ function onReport(e){
       // Recorded only once the bytes are complete and parse. Eight zeros
       // (a pre-21.4 CFG_END) = no hash.
       if(digest&&digest.length===8&&digest.some(b=>b!==0))cfgHash[curFile]=digest;
-      if(curFile===0){cfg=obj;
-normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();featureApplyPage();toast('✓ config read');
-        $('svcwarn').style.display='none';}
-      else if(curFile===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
-      else if(curFile===8){testRuns=(obj&&obj.runs)||[];testHistMeta=obj||{};renderTestHistory();}
-      else if(curFile===3){
-        lastEng=obj;adoptEffective(obj);adoptAdvertised(obj);updateConStat();
-        if($('mwsec')&&$('mwsec').open)try{renderMouseWrite();}catch(e){}   // 29.2
-        // 26.5: the Test tab asks for a FRESH status at the start and end of
-        // a run; resolve anyone waiting on this read.
-        try{const w=window._engWaiters||[];window._engWaiters=[];w.forEach(r=>r(obj));}catch(_){}
-        // 24.7: refresh the APM readout on each status poll, but only while
-        // its tab is actually on screen -- rebuilding two tables every ten
-        // seconds behind a hidden panel is work nobody asked for.
-        if($('page-perf')&&$('page-perf').style.display!=='none'){
-          renderApm(); renderStages(); renderPerfLive();}
-        // 20.8.2: the engine version comes from engine_status (fid 3),
-        // never fid 0, the config file served verbatim.
-        try{
-          const ev=obj.engine_version||null;
-          _uiMin=obj.ui_min||null;
-          showVersions(ev||'(pre-20.8.1)');
-          // 25.5 (2026-09-09): warn only below the engine's minimum UI
-          // (UI_MIN in s6_orchestrator.py); an engine ahead of the page is
-          // normal during a deploy.
-          if(ev){
-            const below=_uiMin&&_verCmp(UI_VERSION,_uiMin)===-1;
-            if(below)
-              toast(`⚠ This UI (${_verNum(UI_VERSION)}) is older than engine `
-                    +`${ev} requires (needs ${_uiMin}+). Saving from here can `
-                    +`write config this engine reads differently — re-deploy `
-                    +`ui/hidconfig.html before you save.`,true);
-            else if(!_uiMin&&_verNum(ev)!==_verNum(UI_VERSION))
-              // No floor declared: a pre-25.5 engine. Fall back to the old
-              // equality test rather than assume compatibility.
-              toast(`⚠ Pi engine is ${ev}, this UI expects `
-                    +`${_verNum(UI_VERSION)} — re-deploy the .py files`,true);
-          }
-        }catch(e){}
-        if(typeof pfAdoptStats==='function')pfAdoptStats(obj);
-        updateOsBtn();   // 3.1: refresh the OS-mismatch badge once the engine's
-                         // active_os is known (post-save it was going stale)
-        if(typeof renderDevices==='function')renderDevices();
-        if($('engpane').style.display!=='none'||obj.config_error)renderEngineStatus(obj);}
-      else if(curFile===4){
-        expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
-        _setsChannelOk=!!(obj&&'sets'in obj);
-        $('setsave').disabled=false;renderSets();}
-      else if(curFile===7){
-        // 20.6: Text Transform storage. Merged rather than assigned, so a
-        // half-written Pi folder can never wipe what is already in this
-        // browser -- the Pi is a sync target here, not the sole authority.
-        txAdoptFromPi(obj);
-      }
-      else if(curFile===6){
-        clips=(obj&&obj.clips&&typeof obj.clips==='object')?obj.clips:{};
-        // 26.4: the revision this copy was served at. Echoed back on save so
-        // the Pi can refuse a write built on a stale read -- see _write_clips.
-        // Same idea as _cfgSnap for the config (21.4).
-        _clipsRev=(obj&&obj.rev)||null;
-      // 23.8: this copy is current AS OF NOW. Record the engine's note-write
-      // count at this moment; anything beyond it means the keyboard has
-      // written since, and what is on screen is behind.
-      if(typeof markClipsRead==='function')markClipsRead();
-        _clipsChannelOk=!!(obj&&'clips'in obj);
-        renderClips();}
-      else if(curFile===5){
-        // 19.6: read additions back, so applied packs stay visible.
-        additions=(obj&&obj.additions&&typeof obj.additions==='object')?obj.additions:{};
-        _addsChannelOk=!!(obj&&'additions'in obj);
-        render();}
-      else{exps=obj&&typeof obj==='object'?obj:{};renderExp();toast('✓ expansions read');}
+      adoptFile(curFile,obj);                                              // 30.17
     }catch(err){toast('read error: '+err.message,true);
       try{log('read error @ fid '+curFile+': '+err.message,'er','log');}catch(_){}}
     finally{_readDone();}}   // never wedge the read queue on an error
@@ -2796,6 +2734,83 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();featureApp
 let _readQ=[],_reading=false,_readTimer=null,_setsChannelOk=false;
 // What the pending ack belongs to, so the toast can tell the truth.
 let _lastOp=null;
+/* 30.17: what a file read from the Pi does to the page, by fid. Called by
+   the USB read path (CFG_END) -- and by tools/serve_mirror.py, which loads
+   a copy of Pi1's state into the page for testing the same way. */
+function adoptFile(fid,obj){
+      if(fid===0){cfg=obj;
+normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();featureApplyPage();toast('✓ config read');
+        $('svcwarn').style.display='none';}
+      else if(fid===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
+      else if(fid===8){testRuns=(obj&&obj.runs)||[];testHistMeta=obj||{};renderTestHistory();}
+      else if(fid===3){
+        lastEng=obj;adoptEffective(obj);adoptAdvertised(obj);updateConStat();
+        if($('mwsec')&&$('mwsec').open)try{renderMouseWrite();}catch(e){}   // 29.2
+        // 26.5: the Test tab asks for a FRESH status at the start and end of
+        // a run; resolve anyone waiting on this read.
+        try{const w=window._engWaiters||[];window._engWaiters=[];w.forEach(r=>r(obj));}catch(_){}
+        // 24.7: refresh the APM readout on each status poll, but only while
+        // its tab is actually on screen -- rebuilding two tables every ten
+        // seconds behind a hidden panel is work nobody asked for.
+        if($('page-perf')&&$('page-perf').style.display!=='none'){
+          renderApm(); renderStages(); renderPerfLive();}
+        // 20.8.2: the engine version comes from engine_status (fid 3),
+        // never fid 0, the config file served verbatim.
+        try{
+          const ev=obj.engine_version||null;
+          _uiMin=obj.ui_min||null;
+          showVersions(ev||'(pre-20.8.1)');
+          // 25.5 (2026-09-09): warn only below the engine's minimum UI
+          // (UI_MIN in s6_orchestrator.py); an engine ahead of the page is
+          // normal during a deploy.
+          if(ev){
+            const below=_uiMin&&_verCmp(UI_VERSION,_uiMin)===-1;
+            if(below)
+              toast(`⚠ This UI (${_verNum(UI_VERSION)}) is older than engine `
+                    +`${ev} requires (needs ${_uiMin}+). Saving from here can `
+                    +`write config this engine reads differently — re-deploy `
+                    +`ui/hidconfig.html before you save.`,true);
+            else if(!_uiMin&&_verNum(ev)!==_verNum(UI_VERSION))
+              // No floor declared: a pre-25.5 engine. Fall back to the old
+              // equality test rather than assume compatibility.
+              toast(`⚠ Pi engine is ${ev}, this UI expects `
+                    +`${_verNum(UI_VERSION)} — re-deploy the .py files`,true);
+          }
+        }catch(e){}
+        if(typeof pfAdoptStats==='function')pfAdoptStats(obj);
+        updateOsBtn();   // 3.1: refresh the OS-mismatch badge once the engine's
+                         // active_os is known (post-save it was going stale)
+        if(typeof renderDevices==='function')renderDevices();
+        if($('engpane').style.display!=='none'||obj.config_error)renderEngineStatus(obj);}
+      else if(fid===4){
+        expSets=(obj&&obj.sets&&typeof obj.sets==='object')?obj.sets:{};
+        _setsChannelOk=!!(obj&&'sets'in obj);
+        $('setsave').disabled=false;renderSets();}
+      else if(fid===7){
+        // 20.6: Text Transform storage. Merged rather than assigned, so a
+        // half-written Pi folder can never wipe what is already in this
+        // browser -- the Pi is a sync target here, not the sole authority.
+        txAdoptFromPi(obj);
+      }
+      else if(fid===6){
+        clips=(obj&&obj.clips&&typeof obj.clips==='object')?obj.clips:{};
+        // 26.4: the revision this copy was served at. Echoed back on save so
+        // the Pi can refuse a write built on a stale read -- see _write_clips.
+        // Same idea as _cfgSnap for the config (21.4).
+        _clipsRev=(obj&&obj.rev)||null;
+      // 23.8: this copy is current AS OF NOW. Record the engine's note-write
+      // count at this moment; anything beyond it means the keyboard has
+      // written since, and what is on screen is behind.
+      if(typeof markClipsRead==='function')markClipsRead();
+        _clipsChannelOk=!!(obj&&'clips'in obj);
+        renderClips();}
+      else if(fid===5){
+        // 19.6: read additions back, so applied packs stay visible.
+        additions=(obj&&obj.additions&&typeof obj.additions==='object')?obj.additions:{};
+        _addsChannelOk=!!(obj&&'additions'in obj);
+        render();}
+      else{exps=obj&&typeof obj==='object'?obj:{};renderExp();toast('✓ expansions read');}
+}
 function getFile(fid){_readQ.push(fid);_drainReads();}
 // 21.4: the hash the Pi reported per fid, offered back so an unchanged
 // file is not resent. Cleared on disconnect.
@@ -7759,8 +7774,11 @@ function isTracked(file, chord){
 function isTrained(chord){
   return (cfg.kbd_train || []).includes(chord);}
 
-function setTrained(chord, on){
-  cfg.kbd_train = cfg.kbd_train || [];
+function setTrained(chord, on, file){
+  cfg.kbd_train = cfg.kbd_train || [];   // 30.17.1: and which set it came from
+  if(on && file){ cfg.kbd_train_src = cfg.kbd_train_src || {}; cfg.kbd_train_src[chord] = file; }
+  if(!on && cfg.kbd_train_src){ delete cfg.kbd_train_src[chord];
+    if(!Object.keys(cfg.kbd_train_src).length) delete cfg.kbd_train_src; }
   const i = cfg.kbd_train.indexOf(chord);
   if(on && i < 0) cfg.kbd_train.push(chord);
   if(!on && i >= 0) cfg.kbd_train.splice(i, 1);
@@ -7796,7 +7814,7 @@ function renderTrack(){
         <tr><td><b>Train</b></td><td title="I already know this one"><b>Know</b></td>
             <td><b>Shortcut</b></td><td><b>Does what</b></td><td><b>/wk</b></td><td><b>Total</b></td></tr>
         ${chords.map(([k, does]) => { const u = _cnt.get(_chordNorm(k)); return `<tr>
-          <td><input type="checkbox" data-train="${esc(k)}" ${isTrained(k)?'checked':''}></td>
+          <td><input type="checkbox" data-train="${esc(k)}" data-trainfile="${esc(c.file)}" ${isTrained(k)?'checked':''}></td>
           <td><input type="checkbox" data-know="${esc(k)}" ${isKnown(k)?'checked':''}
                 title="I already know this one"></td>
           <td style="font-family:ui-monospace,monospace">${esc(k)}</td>
@@ -7816,7 +7834,7 @@ function renderTrack(){
     if(n){ window.scrollBy(0, n.getBoundingClientRect().top - top);
       try{ n.focus({preventScroll:true}); }catch(_){}}};
   el.querySelectorAll('[data-train]').forEach(cb => cb.onchange = () => keepPlace(cb, () => {
-    setTrained(cb.dataset.train, cb.checked);
+    setTrained(cb.dataset.train, cb.checked, cb.dataset.trainfile);
     if(cb.checked && isKnown(cb.dataset.train)) setKnown(cb.dataset.train, false);
     renderTraining(); renderTrack();}));
   // 28.9: "I already know this one" -- takes it off the practice list.
@@ -7877,13 +7895,13 @@ function renderPracticeKbd(){
   if(!chosen.length){el.innerHTML='';return;}
   const counts=_usageByNorm();
   let hide=new Set();try{hide=new Set(JSON.parse(localStorage.getItem('hc.pkhide')||'[]'));}catch(_){}
-  const appOf=ch=>{const d=corpusDesc(ch);return (d&&d.app)||'(no set)';};
+  const appOf=ch=>{const d=chosenDesc(ch);return (d&&d.app)||'(no set)';};
   const apps=[...new Set(chosen.map(appOf))];
   const col=a=>PK_PALETTE[apps.indexOf(a)%PK_PALETTE.length];
   const by=new Map();
   for(const ch of chosen){const pc=parseCorpusChord(ch);if(!pc)continue;
     const app=appOf(ch);if(hide.has(app))continue;
-    const d=corpusDesc(ch);
+    const d=chosenDesc(ch);
     (by.get(pc.canon)||by.set(pc.canon,[]).get(pc.canon)).push({ch,app,mods:pc.mods,
       st:pkStage(ch,counts),d:d?d.text.replace(/^[^—]{1,40}—\s*/,''):''});}
   const bits=heldModBits(heldInputs());
@@ -7915,7 +7933,7 @@ function renderPracticeKbd(){
   // vi: one shortcut to focus on -- his choice, else the top-priority one
   // not yet learned
   const focus=pkFocus(counts);
-  const fd=corpusDesc(focus),fst=pkStage(focus,counts);
+  const fd=chosenDesc(focus),fst=pkStage(focus,counts);
   const side=`<div style="flex:0 0 11rem;font-size:.72rem;margin-left:.5rem">
     <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.4rem">${apps.map(a=>
       `<button data-pkapp="${esc(a)}" style="font-size:.66rem;padding:.05rem .35rem;border:2px solid ${col(a)};
@@ -7971,12 +7989,12 @@ function pkFocusOne(counts){
   counts=counts||_usageByNorm();
   return chosen.find(id=>pkStage(id,counts).s!=='learned')||chosen[0]||null;}
 function focusInfo(id){
-  const d=corpusDesc(id),st=pkStage(id,_usageByNorm());
+  const d=chosenDesc(id),st=pkStage(id,_usageByNorm());
   const sec=d&&/^([^—]{1,40})\s—\s/.exec(d.text);
   return {id,app:(d&&d.app)||'',sec:sec?sec[1]:'',st,
     text:d?d.text.replace(/^[^—]{1,40}—\s*/,''):'',trained:((cfg&&cfg.kbd_train)||[]).includes(id)};}
 // where: 'add' appends; a number replaces that card; none replaces the first
-function focusSet(id,where){
+function focusSet(id,where,file){
   if(!cfg){toast('read the device first',true);return;}
   const L=focusIds().slice();
   if(where==='add'){if(!L.includes(id))L.push(id);}
@@ -7984,7 +8002,7 @@ function focusSet(id,where){
   cfg.kbd_focus_list=[...new Set(L.filter(Boolean))];
   cfg.kbd_focus=cfg.kbd_focus_list[0];
   let added=false;
-  if(!(cfg.kbd_train||[]).includes(id)){setTrained(id,true);added=true;}
+  if(!(cfg.kbd_train||[]).includes(id)){setTrained(id,true,file);added=true;}
   profileTouched();
   renderPracticeKbd();renderFocusChip();renderFocusFloat();
   if(added&&typeof renderTraining==='function')renderTraining();
@@ -8039,9 +8057,9 @@ function focusPick(where){
     dlg.addEventListener('click',e=>{
       if(e.target===dlg||e.target.closest('[data-fd="close"]')){dlg.style.display='none';return;}
       const a=e.target.closest('[data-fpick]');
-      if(a){dlg.style.display='none';focusSet(a.dataset.fpick,_fpWhere);}});
+      if(a){dlg.style.display='none';focusSet(a.dataset.fpick,_fpWhere,a.dataset.ffile);}});
     dlg.addEventListener('keydown',e=>{if(e.key==='Escape')dlg.style.display='none';
-      if(e.key==='Enter'){const a=dlg.querySelector('[data-fpick]');if(a){dlg.style.display='none';focusSet(a.dataset.fpick,_fpWhere);}}});
+      if(e.key==='Enter'){const a=dlg.querySelector('[data-fpick]');if(a){dlg.style.display='none';focusSet(a.dataset.fpick,_fpWhere,a.dataset.ffile);}}});
     dlg.querySelector('#focusq').addEventListener('input',e=>{_focusQ=e.target.value;focusList();});}
   if(!refData('corpus')&&device&&!_corpusAsked)loadCorpus();
   dlg.style.display='flex';
@@ -8052,7 +8070,7 @@ function focusList(){
   const q=_focusQ.trim().toLowerCase(),cur=pkFocus();
   const chosen=(cfg&&cfg.kbd_train)||[];
   const hit=(id,txt)=>!q||id.toLowerCase().includes(q)||txt.toLowerCase().includes(q);
-  const row=(id,f,extra)=>`<div data-fpick="${esc(id)}" style="padding:.2rem .3rem;border-bottom:1px solid var(--line);cursor:pointer${id===cur?';background:var(--panel2)':''}">
+  const row=(id,f,extra)=>`<div data-fpick="${esc(id)}"${f.file?` data-ffile="${esc(f.file)}"`:''} style="padding:.2rem .3rem;border-bottom:1px solid var(--line);cursor:pointer${id===cur?';background:var(--panel2)':''}">
     <b style="font-family:ui-monospace,monospace">${esc(id)}</b> <span class="muted">${esc(f.app)}${f.sec?' · '+esc(f.sec):''}${extra}</span>
     <div style="font-size:.74rem">${esc(f.text)}</div></div>`;
   const mine=chosen.filter(id=>{const f=focusInfo(id);return hit(id,f.text+' '+f.app+' '+f.sec);});
@@ -8061,7 +8079,7 @@ function focusList(){
   if(q)for(const c of corp)for(const[k,does]of Object.entries(c.shortcuts||{})){
     if(seen.has(k)||others.length>=60)continue;
     const t=String(does||'');
-    if(hit(k,t+' '+(c.app||''))){seen.add(k);others.push([k,{app:c.app||c.name||'',sec:(/^([^—]{1,40})\s—\s/.exec(t)||[])[1]||'',
+    if(hit(k,t+' '+(c.app||''))){seen.add(k);others.push([k,{file:c.file,app:c.app||c.name||'',sec:(/^([^—]{1,40})\s—\s/.exec(t)||[])[1]||'',
       text:t.replace(/^[^—]{1,40}—\s*/,'')}]);}}
   box.innerHTML=`<div class="muted" style="margin:.1rem 0 .2rem">In training · ${mine.length}</div>
     ${mine.map(id=>{const f=focusInfo(id);return row(id,f,` · ${f.st.per}/wk · ${f.st.s}`);}).join('')||'<div class="muted">none match</div>'}
@@ -8168,17 +8186,52 @@ function _usageByNorm(){
     const k=_chordNorm(id),o=m.get(k)||{count:0,per_week:0};
     o.count+=v.count||0;o.per_week=Math.round((o.per_week+(v.per_week||0))*100)/100;m.set(k,o);}
   return m;}
-function corpusDesc(chord){
+/* 30.17.1: a chord in several sets (Ctrl+Shift+M is RStudio's and
+   OneNote's) is described from the set it was CHOSEN from. `file` names
+   that set; without it, the first set of the active OS wins, as before --
+   which is how OneNote's text came to sit on his RStudio choices. */
+function corpusDesc(chord,file){
   const want=_chordNorm(chord),aos=/^mac/i.test(cfg&&cfg.active_os||'')?'mac':'win';
+  if(file)for(const c of (refData('corpus')||[]))if(c.file===file)
+    for(const[k,d]of Object.entries(c.shortcuts||{}))
+      if(_chordNorm(k)===want)return {text:d,app:c.app||c.name||c.file,file:c.file};
   let any=null;
   for(const c of (refData('corpus')||[])){
     const fam=/^mac/i.test(c.os||'')?'mac':/^win/i.test(c.os||'')?'win':'';
     for(const[k,d]of Object.entries(c.shortcuts||{}))
       if(_chordNorm(k)===want){
-        const hit={text:d,app:c.app||c.name||c.file};
+        const hit={text:d,app:c.app||c.name||c.file,file:c.file};
         if(fam===aos)return hit;
         any=any||hit;}}
   return any;}
+// Every set that has this chord: [{file, app, os}]
+function corpusSetsFor(chord){
+  const want=_chordNorm(chord),out=[];
+  for(const c of (refData('corpus')||[]))
+    if(Object.keys(c.shortcuts||{}).some(k=>_chordNorm(k)===want))
+      out.push({file:c.file,app:c.app||c.name||c.file,os:c.os||''});
+  return out;}
+/* The set a chosen shortcut came from: cfg.kbd_train_src (written when it is
+   chosen, or picked in Chosen to practise) if that set still has it; else
+   the set holding the most of his other chosen shortcuts -- his RStudio
+   picks land in RStudio -- active OS first on a tie. */
+function trainSrc(ch){
+  const sets=corpusSetsFor(ch);
+  if(!sets.length)return null;
+  const mine=((cfg&&cfg.kbd_train_src)||{})[ch];
+  if(mine&&sets.some(s=>s.file===mine))return mine;
+  if(sets.length===1)return sets[0].file;
+  const chosen=((cfg&&cfg.kbd_train)||[]).filter(x=>x!==ch).map(_chordNorm);
+  const aos=/^mac/i.test(cfg&&cfg.active_os||'')?'mac':'win';
+  const score=s=>{const c=(refData('corpus')||[]).find(x=>x.file===s.file);
+    const ks=new Set(Object.keys((c&&c.shortcuts)||{}).map(_chordNorm));
+    return chosen.filter(n=>ks.has(n)).length*2+((s.os||'').toLowerCase().startsWith(aos)?1:0);};
+  return sets.slice().sort((a,b)=>score(b)-score(a))[0].file;}
+function chosenDesc(ch){return corpusDesc(ch,trainSrc(ch));}
+// the RStudio set of the active OS (R_EDIT_PICKS are its chords)
+function rstudioSet(){
+  const aos=/^mac/i.test(cfg&&cfg.active_os||'')?'mac':'win',cs=(refData('corpus')||[]).filter(c=>/rstudio/i.test(c.app||c.name||c.file||''));
+  const c=cs.find(x=>(x.os||'').toLowerCase().startsWith(aos))||cs[0];return c?c.file:null;}
 function isKnown(ch){return ((cfg&&cfg.kbd_known)||[]).includes(ch);}
 function setKnown(ch,on){
   cfg.kbd_known=cfg.kbd_known||[];
@@ -8253,7 +8306,10 @@ function renderTraining(){
             <td><b>Per week</b></td><td><b>Total</b></td><td></td></tr>
         ${chosen.map((id, i) => {
           const c = cnt(id);
-          const d = desc[id] || corpusDesc(id);
+          // 30.17.1: from the set it was chosen from (desc[], the Pi's
+          // usage description, picks the first set -- not used here)
+          const d = chosenDesc(id) || desc[id];
+          const srcs = corpusSetsFor(id), src = trainSrc(id);
           // A chosen shortcut never used reads 0 -- the most useful thing this
           // list can say -- rather than being left out for want of a number.
           // 29.23: the Pi's rate when it has one (weeks the app was in use).
@@ -8264,7 +8320,10 @@ function renderTraining(){
               <input type="number" min="1" max="${chosen.length}" value="${i+1}"
                 data-tprio="${esc(id)}" style="width:3.2rem"></td>
             <td style="font-family:ui-monospace,monospace">${esc(id)}</td>
-            <td class="muted">${d ? esc(d.text) + (d.app ? ` <span style="font-size:.72rem">· ${esc(d.app)}</span>` : '')
+            <td class="muted">${d ? esc(d.text) + (srcs.length > 1
+                   ? ` <select data-tsrc="${esc(id)}" style="font-size:.72rem;width:auto" title="Which set you chose it from -- its description follows">${srcs.map(s =>
+                       `<option value="${esc(s.file)}" ${s.file === src ? 'selected' : ''}>${esc(s.app)}${srcs.filter(x => x.app === s.app).length > 1 ? ' (' + esc(s.os) + ')' : ''}</option>`).join('')}</select>`
+                   : (d.app ? ` <span style="font-size:.72rem">· ${esc(d.app)}</span>` : ''))
                  : (refData('corpus') ? '<i>not in any set</i>' : '<i>reading the shortcut sets…</i>')}</td>
             <td${per ? '' : ' style="color:var(--warn)"'}${pi ? ` title="per week over the ${pi.active} of ${pi.weeks} weeks ${esc(pi.app || 'its app')} was in use · ${esc(pi.stage)}"` : ''}>${haveU ? per : '—'}
               <input type="number" min="0.1" step="0.5" data-trate="${esc(id)}" style="width:3.4rem;margin-left:.2rem"
@@ -8284,7 +8343,7 @@ function renderTraining(){
     <details style="margin-bottom:.5rem"><summary style="cursor:pointer">
       <b>Suggested for your editing</b> <span class="muted">· RStudio: find &amp; replace,
       refactoring, multiple cursors · ${picks.length}</span></summary>
-      <table style="width:100%">${picks.map(([ch, why]) => { const d = corpusDesc(ch);
+      <table style="width:100%">${picks.map(([ch, why]) => { const d = corpusDesc(ch, rstudioSet());
         return `<tr><td style="font-family:ui-monospace,monospace">${esc(ch)}</td>
           <td>${esc(why)}${d ? `<div class="muted" style="font-size:.72rem">${esc(d.text)}</div>` : ''}</td>
           <td><a class="mlink" data-tadd="${esc(ch)}">＋ practise</a></td></tr>`;}).join('')}</table>
@@ -8299,11 +8358,16 @@ function renderTraining(){
     if($('tlclear')) $('tlclear').onclick = () => { trainFrom = trainTo = ''; renderTraining(); };
     el.querySelectorAll('[data-untrain]').forEach(a => a.onclick = () => {
       setTrained(a.dataset.untrain, false); renderTraining(); renderTrack();});
+    el.querySelectorAll('[data-tsrc]').forEach(s => s.onchange = () => {     // 30.17.1
+      cfg.kbd_train_src = cfg.kbd_train_src || {};
+      cfg.kbd_train_src[s.dataset.tsrc] = s.value;
+      profileTouched(); renderTraining(); renderPracticeKbd(); renderFocusChip(); renderFocusFloat();
+      toast('described from ' + s.options[s.selectedIndex].text + ' — ⬆ Save to device to keep it');});
     el.querySelectorAll('[data-tknow]').forEach(a => a.onclick = () => {
       setKnown(a.dataset.tknow, true); renderTraining(); renderTrack();
       toast('marked as known: ' + a.dataset.tknow);});
     el.querySelectorAll('[data-tadd]').forEach(a => a.onclick = () => {
-      setTrained(a.dataset.tadd, true); renderTraining(); renderTrack();});
+      setTrained(a.dataset.tadd, true, rstudioSet()); renderTraining(); renderTrack();});
     el.querySelectorAll('[data-tprio]').forEach(inp => inp.onchange = () => {
       setTrainPriority(inp.dataset.tprio, (+inp.value || 1) - 1); renderTraining();});
     // 29.16 (vi.2): his "natural rate" for a shortcut -- written on his edit
@@ -12022,6 +12086,62 @@ function renderPrimers(){
     el.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{
       _primerSetOpen(k,b.dataset.pc===open?'':b.dataset.pc);renderPrimers();});
     el.querySelector('[data-pfold]').onclick=()=>{foldSet('primer-'+k,true);renderPrimers();};});}
+/* 30.17: the page's floating panes move and resize. ⠿ (top right) drags
+   one; double-click it to put it back where the page places it; the corner
+   resizes it. Where you put it and its size are remembered in this browser
+   and re-applied after the page places the pane itself (the placing
+   functions are wrapped below). The mapping editor already drags by its
+   title bar; it gets the resize corner and remembered size. */
+const PANE_IDS=['macprimerfloat','frpop','tapspanel','palette','editor'];
+function paneGet(id){try{return JSON.parse(localStorage.getItem('hc.pane.'+id)||'null')||{};}catch(_){return {};}}
+function paneSet(id,v){try{if(v&&Object.keys(v).length)localStorage.setItem('hc.pane.'+id,JSON.stringify(v));else localStorage.removeItem('hc.pane.'+id);}catch(_){}}
+function paneApply(el){
+  if(!el)return;paneDecorate(el);if(el._grip)el._grip();
+  const s=paneGet(el.id);
+  if(s.x!=null&&el.id!=='editor'){
+    const x=Math.max(0,Math.min(s.x,innerWidth-60)),y=Math.max(0,Math.min(s.y,innerHeight-40));
+    Object.assign(el.style,{left:x+'px',top:y+'px',right:'auto',bottom:'auto'});}
+  if(s.w)el.style.width=s.w+'px';
+  if(s.h)el.style.height=s.h+'px';}
+function paneDecorate(el){
+  if(!el||el._pane)return;el._pane=1;
+  el.classList.add('upane');
+  if(el.id!=='editor'){
+    const grip=()=>{if(!el.querySelector(':scope>.panegrip')){const g=document.createElement('div');
+      g.className='panegrip';g.textContent='⠿';g.title='Drag to move · double-click to put it back';el.appendChild(g);}};
+    grip();el._grip=grip;new MutationObserver(grip).observe(el,{childList:true});
+    let d=null;
+    el.addEventListener('pointerdown',e=>{if(!e.target.classList.contains('panegrip'))return;
+      const r=el.getBoundingClientRect();d={dx:e.clientX-r.left,dy:e.clientY-r.top};
+      e.preventDefault();try{e.target.setPointerCapture(e.pointerId);}catch(_){}
+      if(el===$('macprimerfloat'))el._keep=true;});
+    el.addEventListener('pointermove',e=>{if(!d)return;
+      Object.assign(el.style,{left:(e.clientX-d.dx)+'px',top:(e.clientY-d.dy)+'px',right:'auto',bottom:'auto'});});
+    el.addEventListener('pointerup',()=>{if(!d)return;d=null;
+      const r=el.getBoundingClientRect();
+      const x=Math.max(0,Math.min(Math.round(r.left),innerWidth-60)),y=Math.max(0,Math.min(Math.round(r.top),innerHeight-40));
+      Object.assign(el.style,{left:x+'px',top:y+'px'});
+      paneSet(el.id,Object.assign(paneGet(el.id),{x,y}));
+      if(el===$('macprimerfloat'))setTimeout(()=>{el._keep=false;},300);});
+    el.addEventListener('dblclick',e=>{if(!e.target.classList.contains('panegrip'))return;
+      paneSet(el.id,null);Object.assign(el.style,{left:'',top:'',right:'',bottom:'',width:'',height:''});
+      toast('put back — it goes where the page places it next time it opens');});}
+  // a size set by the resize corner (inline width/height) is remembered --
+  // when the size changes, and when the mouse is let go on the pane
+  const keepSize=()=>{
+    if(!el.style.width&&!el.style.height)return;
+    const r=el.getBoundingClientRect();if(!r.width||!r.height)return;
+    const s=paneGet(el.id),w=Math.round(r.width),hh=Math.round(r.height);
+    if(s.w!==w||s.h!==hh)paneSet(el.id,Object.assign(s,{w,h:hh}));};
+  if(window.ResizeObserver)new ResizeObserver(keepSize).observe(el);
+  el.addEventListener('mouseup',keepSize);}
+// placed by the page, then where you put it
+for(const fn of['macPrimerFloat','frPop','tapsLayout']){
+  const orig=window[fn];
+  if(typeof orig==='function')window[fn]=function(...a){const r=orig.apply(this,a);
+    for(const id of PANE_IDS){const el=document.getElementById(id);if(el&&el.style.display!=='none')paneApply(el);}
+    return r;};}
+document.addEventListener('DOMContentLoaded',()=>{for(const id of PANE_IDS)paneApply(document.getElementById(id));});
 /* 30.14: anything you might want out of the way folds. A panel whose first
    child is a heading gets a ▾ on it; a click on the heading (not on a button
    or field inside it) folds everything else in the panel. Applied on each
