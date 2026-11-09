@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.17.1</title>
+<title>HID Config 30.26</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -157,8 +157,10 @@ input:focus-visible,textarea:focus-visible,.dockgrip:focus-visible{
    (header stop) and --in-off (a <th>'s stop). */
 details[open]>summary{position:sticky;top:calc(var(--sticky-under) + var(--sum-off,0px));
   z-index:30;background:Canvas}
-th{position:sticky;top:calc(var(--sticky-under) + var(--in-off,0px));z-index:26;background:Canvas}
-@media (max-height:520px){details[open]>summary,th{position:static}}
+th,tr.hdr>td{position:sticky;top:calc(var(--sticky-under) + var(--in-off,0px));z-index:26;background:Canvas}
+.msel,.msel>td{background:color-mix(in srgb,var(--hi) 22%,transparent)!important}
+.mselrect{position:fixed;z-index:300;pointer-events:none;border:1px solid var(--hi);background:color-mix(in srgb,var(--hi) 15%,transparent)}
+@media (max-height:520px){details[open]>summary,th,tr.hdr>td{position:static}}
 .tab{padding:.4rem 1rem;border:1px solid var(--line);border-radius:8px 8px 0 0;cursor:pointer;font-weight:600}
 .tab.on{background:var(--hi);color:#fff;border-color:var(--hi)}
 .pills{display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0}
@@ -640,7 +642,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
 .tapsx{padding:.12rem .4rem;border-radius:5px;margin:.05rem 0}
 .tapsx.on{background:var(--panel2);font-weight:600}
 .tapsxarrow{color:var(--hi);font-size:.72rem}
-#tapspanel{position:fixed;z-index:60;width:250px;max-height:calc(100vh - 2rem);overflow:auto;
+#tapspanel{position:fixed;z-index:81;width:250px;max-height:calc(100vh - 2rem);overflow:auto;
   border:1px solid var(--line);border-radius:8px;padding:.45rem .55rem;
   background:var(--panel);color:var(--fg);box-shadow:0 4px 18px rgba(0,0,0,.25)}
 #editor.assigning{border-left:3px solid var(--hi)}
@@ -1035,6 +1037,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
         <span class="muted" id="txedit-sub"></span>
         <span style="flex:1"></span>
         <span class="muted" id="txedit-state"></span>
+        <button data-txa="edit-dup" title="A copy of this transform, with its own name, to change without touching this one">⧉ Duplicate</button>
         <button data-txa="edit-next" title="Choose which transforms appear as follow-on buttons above the next pane">⇢ Next steps…</button>
         <button data-txa="edit-reset" title="Discard your version and restore the built-in code">⟲ Reset</button>
         <button data-txa="edit-save" class="primary">✓ Save</button>
@@ -1048,7 +1051,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       </div>
       <div class="txeditgrid">
         <div class="txpane">
-          <label for="txedit-code">Code <span class="muted">— a function of
+          <label for="txedit-code" id="lang-txjs">Code <span class="muted">— <b>JavaScript</b> (runs in this page): a function of
             <code>(text, H)</code> returning text. <code>H</code> holds the shared helpers.</span></label>
           <textarea id="txedit-code" class="txbox txcode txresize" spellcheck="false"></textarea>
         </div>
@@ -1242,7 +1245,9 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
          since 30.6. -->
     <div id="practicekbd" style="float:right;margin:0 0 .5rem .8rem;max-width:100%"></div>
     <h2 style="font-size:1rem">Training</h2>
-    <div id="trainbody"></div>
+    <!-- 30.21: below the floated keyboard, never under it -- an open
+         section's sticky header is opaque and painted over the float -->
+    <div id="trainbody" style="clear:both"></div>
   </div>
 </div>
 <!-- 26.5 (2026-09-12): Test: typing and mousing per device, with the engine's
@@ -1483,6 +1488,10 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
     ~2 s of <b>⬆ Save sets</b>. Regex items support $1–$9 captures,
     {{#…}} inline calculation, {YYYY}-{MM}-{DD} date math and {^} cursor
     placement.</p>
+    <p class="muted" id="lang-exp" style="font-size:.78rem">Languages: a <b>regex</b> trigger is
+    <b>Python <code>re</code></b> syntax (the engine runs it; not RE2, not JavaScript), matched
+    at the end of what you typed. Values use this page's own <b>template syntax</b>:
+    <code>$1</code>, <code>{{#…}}</code>, <code>{YYYY}</code>, <code>{^}</code>.</p>
     <div class="bar">
       <button id="setsave" class="primary" disabled>⬆ Save sets</button>
       <button id="setnew">＋ New set</button>
@@ -1746,7 +1755,7 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
         numeric escape. Windows has two, and <b>no single one works everywhere</b> —
         pick the one matching where you type most.
         <table style="width:100%;margin:.4rem 0;font-size:.78rem">
-          <tr><td><b>Method</b></td><td><b>Sends</b></td><td><b>Works in</b></td><td><b>Fails in</b></td></tr>
+          <tr class="hdr"><td><b>Method</b></td><td><b>Sends</b></td><td><b>Works in</b></td><td><b>Fails in</b></td></tr>
           <tr style="background:rgba(120,200,120,.10)">
               <td><code>win_auto</code> <b>(default)</b></td>
               <td>Alt+0NNN when the character is CP1252, hex otherwise</td>
@@ -1870,6 +1879,47 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.26',items:[
+   {t:'Macros: Shared timings — a named wait used by several macros ($panel in the paste-from-history pack) is changed once, in all of them',k:'macrolist'},
+   {t:'Paste from clipboard history, pack 4: n × Ctrl+V pastes oldest first, every item through Win+V, with one $panel wait for every opening — installed into the profile on request',k:'macrolist'},
+   {t:'A symbol pressed twice is retyped by the OTHER method: an Office-method expansion (Checkboxes) now by the OS default; a tapped ☑ (Alt+Shift+C ×4) gets the retry too (engine 30.26)',k:'macrolist'}]},
+ {v:'30.25',items:[
+   {t:'Training: a shortcut several apps share counts for the app whose own shortcuts you pressed in the same hour (or the hour before or after) — OneNote presses no longer make an RStudio pick "learned" (engine 30.25)',k:'trainbody'},
+   {t:'Training: presses with no clear app are counted as unknown, for no app',k:'trainbody'},
+   {t:'Training: each Chosen-to-practise row shows its own app\'s rate; hover for the other apps and the unknown presses',k:'trainbody'}]},
+ {v:'30.24',items:[
+   {t:'A shortcut you made now beats a ticked macOS Option character on the same keys (engine 30.24)',k:'editor'},
+   {t:'Shortcut editor: "Which one wins" lists every rule that matches the same press, top first',k:'editor'},
+   {t:'Drag that list to choose the winner yourself; reset returns to the default',k:'editor'}]},
+ {v:'30.23',items:[
+   {t:'Multi-select in the lists you re-order (Chosen to practise, the roadmap, performance priorities): Ctrl/⌘+click, Shift+click, or draw a box from the margin; drag one to move them all',k:'trainbody'},
+   {t:'Undo and redo for the profile: ⌘/Ctrl+Z, Shift+⌘/Ctrl+Z or Ctrl+Y, unlimited while the page is open',k:'trainbody'},
+   {t:'Header rows stay on screen as a long list scrolls (every table with headers)',k:'trainbody'},
+   {t:'Text Transform: ＋ Add in each category\'s menu, and ⧉ Duplicate in the editor',k:'txedit'},
+   {t:'The language each code box takes is named beside it, and listed under Changes',k:'lang-exp'},
+   {t:'A read error clears itself when the retry succeeds',k:'toast'}]},
+ {v:'30.22',items:[
+   {t:'Usage: a shortcut you also reach through a layer (the left-hand mouse) is one combined row; ▸ shows each way of pressing it',k:'usagebody'},
+   {t:'Usage: ⏱ the time from the first modifier down to the shortcut\'s key, mean ± SD (engine 30.22 records it, mouse-button chords included)',k:'usagebody'},
+   {t:'APM history: time in each APM band is the main view, By day folds open (with each day\'s busiest band), and By hour shows ±1 SD across days',k:'apmhbody'}]},
+ {v:'30.21',items:[
+   {t:'Training: one Chosen-to-practise row per set a shortcut was chosen in, each with its own priority, and the other sets shown greyed',k:'trainbody'},
+   {t:'Training: a Group column (the set\'s sections) to filter and sort by; click a key on the Training keyboard to list its items',k:'trainbody'},
+   {t:'Training: the Focus panel lists every focus, as the floating window does; ＋ add… takes several in one go',k:'practicekbd'},
+   {t:'Shortcut sets: 🍎/🪟 icons and a Show filter; groups of sets; a ? box for "I don\'t understand this one"',k:'trackbody'},
+   {t:'Fixed: the Chosen-to-practise header no longer covers the Training keyboard',k:'trainbody'}]},
+ {v:'30.20',items:[
+   {t:'Modifier shortcuts and combos: Search actions is back above On press, always shown',k:'editor'},
+   {t:'Groups in a modifier shortcut: Add works (the Delete column was lying over it), says what it did, and ▾ lists your groups',k:'editor'},
+   {t:'The Taps list opens on top of the editor instead of under it',k:'editor'},
+   {t:'Modifier shortcuts list what else uses the chord: ones you press (most first), ones you are learning, then the shortcut sets',k:'editor'},
+   {t:'Assignments: a 👁 beside each group in the Group column shows or hides it, same as its pill',k:'asgtbl'}]},
+ {v:'30.18',items:[
+   {t:'Copy/Paste: a clip can be as big as the Pi can read back -- all clips together up to about 1.8 MB (was 32 K characters a clip, 128 KB in all); the box shows how long a big one takes to save',k:'clipdock'},
+   {t:'Copy/Paste: 💾 Save sends just that clip, checked against the text you opened; if it changed on the Pi meanwhile, it is refused and your text stays in the box',k:'clipdock'},
+   {t:'Pi1 re-attaches its USB link once by itself when the computer has wedged it (30 s of failed keys while you type), and writes a HID Note saying so',k:'debug'}]},
+ {v:'30.17.3',items:[
+   {t:'Debug mode (the Debug monitor recording) no longer starts by itself on connect; Preferences → Layout → Debug mode turns it on, for as many seconds as you choose',k:'prefsbody'}]},
  {v:'30.17.1',items:[
    {t:'Training: chosen shortcuts are described from the set you chose them from (RStudio, not OneNote) -- with a selector where several sets share the keys',k:'trainpane'}]},
  {v:'30.17',items:[
@@ -2470,6 +2520,13 @@ function vhHTML(all){
   return h;}
 
 /* The full list, in the Changes tab. Same numbers, same links. */
+/* 30.23: every place code is written, and its language. k = an element id
+   or data-uikey, opened with vhGo like the version links. */
+const LANGS=[
+  {l:'Python re (regular expressions)',w:'Expansion triggers marked Regex',k:'lang-exp'},
+  {l:'Template syntax (this page’s own)',w:'Expansion values: $1, {{#…}}, {YYYY}, {^}',k:'lang-exp'},
+  {l:'JavaScript',w:'Text Transform: a transform’s code (✎ on any transform)',k:'txtools'},
+  {l:'JavaScript regular expressions',w:'Find & Replace with “regex” ticked (Text Transform and elsewhere)',k:'txfind'}];
 function renderAppHistory(){
   const el=$('logappbody');if(!el)return;
   const items=vhNumbered();
@@ -2478,6 +2535,9 @@ function renderAppHistory(){
     h+=`<div style="margin-top:.5rem"><b>${esc(rel.v)}</b>`+vhDate(rel);
     for(const it of items.filter(x=>x.v===rel.v)) h+=vhItemHTML(it,'.8rem');
     h+='</div>';}
+  h=`<details style="margin-bottom:.5rem"><summary style="cursor:pointer"><b>Languages on this page</b>
+      <span class="muted">· where code is written, and in what</span></summary>
+    ${LANGS.map(x=>`<div style="font-size:.8rem;margin:.1rem 0"><b>${esc(x.l)}</b> — <a class="mlink" data-vhk="${esc(x.k)}" style="cursor:pointer">${esc(x.w)}</a></div>`).join('')}</details>`+h;
   el.innerHTML=h||'<p class="muted">Nothing recorded.</p>';
   el.querySelectorAll('[data-vhk]').forEach(a=>a.onclick=()=>vhGo(a.dataset.vhk));}
 
@@ -2585,7 +2645,13 @@ while(el.childNodes.length>500)el.removeChild(el.firstChild);}
    memory only). */
 const _msgLog=[];
 function _hms(d){return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});}
-function toast(m,bad){const t=$('toast');t.textContent=m;t.style.color=bad?'var(--err)':'var(--ok)';
+// 30.23: an error given a `key` clears itself when toastClear(key) says the
+// thing it was about has since worked (a retried read that succeeded).
+function toastClear(prefix){
+  if(!toast._errKey||!String(toast._errKey).startsWith(prefix))return;
+  const e=$('toasterr');if(e)e.style.display='none';
+  toast._errKey=null;toast('the retry worked — error cleared');}
+function toast(m,bad,key){const t=$('toast');if(bad)toast._errKey=key||null;t.textContent=m;t.style.color=bad?'var(--err)':'var(--ok)';
 clearTimeout(toast._t);toast._t=setTimeout(()=>t.textContent='',3500);
 const now=new Date();_msgLog.push({t:now,m:String(m),bad:!!bad});
 if(_msgLog.length>1000)_msgLog.shift();
@@ -2683,7 +2749,7 @@ function onReport(e){
         // 19.2: retry a short read once automatically.
         const missing=rxTotal-buf.length;
         if(!window._reReadTried){window._reReadTried=curFile;
-          toast(`short read (${missing} bytes missing) — retrying…`,true);
+          toast(`short read (${missing} bytes missing) — retrying…`,true,'read');
           setTimeout(()=>getFile(curFile),350);return;}
         window._reReadTried=null;
         toast(`short read — ${missing} bytes missing. Reconnect and try again.`,true);return;}
@@ -2693,6 +2759,7 @@ function onReport(e){
       // (a pre-21.4 CFG_END) = no hash.
       if(digest&&digest.length===8&&digest.some(b=>b!==0))cfgHash[curFile]=digest;
       adoptFile(curFile,obj);                                              // 30.17
+      toastClear('read');                                                  // 30.23
     }catch(err){toast('read error: '+err.message,true);
       try{log('read error @ fid '+curFile+': '+err.message,'er','log');}catch(_){}}
     finally{_readDone();}}   // never wedge the read queue on an error
@@ -2709,8 +2776,9 @@ function onReport(e){
     // that lost chunks is named as that, not as the JSON error it causes.
     if(pfTotal&&buf.length!==pfTotal){
       _usageWait=false;
-      toast(`reply from the Pi arrived incomplete: ${buf.length.toLocaleString()} of ${pfTotal.toLocaleString()} bytes — try again`,true);
+      toast(`reply from the Pi arrived incomplete: ${buf.length.toLocaleString()} of ${pfTotal.toLocaleString()} bytes — try again`,true,'pf');
       return;}
+    toastClear('pf');                                    // 30.23: a later reply came whole
     pfResult(new TextDecoder().decode(buf));}
   else if(t===BT_BEGIN){btTotal=d[1]|(d[2]<<8)|(d[3]<<16)|(d[4]<<24);btGot={};}
   else if(t===BT_CHUNK){btGot[d[1]|(d[2]<<8)]=d.slice(4,4+d[3]);}
@@ -2719,6 +2787,14 @@ function onReport(e){
     const buf=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let o=0;
     for(const p of parts){buf.set(p,o);o+=p.length;}
     btResult(new TextDecoder().decode(buf));}
+  else if(t===ACK&&_ackWait){                                      // 30.18
+    const w=_ackWait;_ackWait=null;_lastOp=null;
+    if(--_putPending<=0)saveDone();
+    toast('✓ saved');w.res();}
+  else if(t===ERR&&_ackWait){
+    const w=_ackWait;_ackWait=null;_lastOp=null;
+    if(_putPending)saveDone('not saved');
+    w.rej(new Error(new TextDecoder().decode(d.slice(1)).replace(/\0+$/,'')));}
   else if(t===ACK){
     // 20.3: the toast says what the ack ended (a read or a save).
     toast(_lastOp==='put'?'✓ saved (hot-reloads ~2s)':'✓ done');
@@ -2798,6 +2874,8 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();featureApp
         // the Pi can refuse a write built on a stale read -- see _write_clips.
         // Same idea as _cfgSnap for the config (21.4).
         _clipsRev=(obj&&obj.rev)||null;
+        _clipReadText={};
+        for(const[k,v]of Object.entries(clips))_clipReadText[k]=(v&&v.text)||'';
       // 23.8: this copy is current AS OF NOW. Record the engine's note-write
       // count at this moment; anything beyond it means the keyboard has
       // written since, and what is on screen is behind.
@@ -2840,12 +2918,25 @@ function _readPoke(){
   clearTimeout(_readTimer);
   _readTimer=setTimeout(()=>{
     if(_reading)toast('read stalled (no data for '+(READ_IDLE_MS/1000)
-      +'s) — retrying is safe',true);
+      +'s) — retrying is safe',true,'read');
     _readDone();
   },READ_IDLE_MS);}
 function _readDone(){clearTimeout(_readTimer);_reading=false;_drainReads();}
 /* 29.1: one save at a time; each waits until the previous is fully sent. */
 let _putChain=Promise.resolve();
+// 30.18: a write that waits for the Pi's ACK or ERR (putFile only sends).
+// Rides the same chain, so it cannot interleave with another write.
+let _ackWait=null;
+function putFileAck(fid,obj){
+  const run=()=>new Promise((res,rej)=>{
+    const w={res,rej};_ackWait=w;
+    _putFileNow(fid,obj).then(()=>setTimeout(()=>{
+        if(_ackWait===w){_ackWait=null;saveDone('no answer');
+          rej(new Error('no answer from the Pi'));}},20000),
+      e=>{if(_ackWait===w)_ackWait=null;rej(e);});});
+  const p=_putChain.then(run,run);
+  _putChain=p.catch(()=>{});
+  return p;}
 function putFile(fid,obj){
   const run=()=>_putFileNow(fid,obj);
   const p=_putChain.then(run,run);
@@ -2925,9 +3016,12 @@ $('connect').onclick=async()=>{
     if(window._cfgTries>=2)$('svcwarn').style.display='block';
   },4000);
   startStatusPoll();
-  // start the event stream so wireframe highlighting works with the debug
-  // panel closed.
-  eventsOn(60);
+  // 30.17.3: the event stream (Debug monitor recording) starts on connect
+  // only when Preferences -> Layout says so -- it costs the Pi time on every
+  // key. Off by default; "Show key presses" still starts it on demand.
+  try{pfLoad();}catch(_){}
+  { const L=PREFS.look||{};
+    if(L.evauto) eventsOn(Math.max(1,+L.evsecs||60)); }
   syncClock();   // Bug 2: push this browser's clock to the Pi on every connect
 };
 function updateOsBtn(){
@@ -4384,8 +4478,113 @@ function editableLayout(d){
   return layouts[d.id];}
 
 /* ============ rendering ============ */
+/* 30.23: undo / redo for the profile, unlimited while the page is open.
+   A snapshot is taken whenever render() or profileTouched() runs, which is
+   after every edit made through the page; a fresh read or load (a new cfg
+   object) starts a new history. Reads cfg only -- never writes it except
+   on the user's own Cmd/Ctrl+Z. In a text field the browser's own undo
+   applies instead. */
+/* 30.23: multi-select in the re-orderable lists (Chosen to practise, the
+   roadmap, the performance priorities). Ctrl/Cmd+click toggles a row,
+   a plain click selects that row alone,
+   Shift+click takes the run from the last row clicked, and a drag begun on
+   the list's background (a margin, a header, between releases) draws a
+   rectangle that selects every row it touches; Esc clears. Dragging a
+   selected row moves all of them, in the order they are listed. The
+   selection is view state, keyed by each row's id so it survives a
+   re-render; it is never written to cfg. */
+const _msel={};
+const _MSEL_SKIP='input,select,textarea,a,button,label,summary,option';
+function mselBind(root,name,sel,key,area){
+  const s=_msel[name]=_msel[name]||{set:new Set(),anchor:null};
+  const items=()=>[...root.querySelectorAll(sel)].filter(it=>key(it)!=null);
+  s.order=()=>items().map(key);
+  s.paint=()=>items().forEach(it=>it.classList.toggle('msel',s.set.has(key(it))));
+  const live=new Set(s.order());
+  s.set.forEach(k=>{if(!live.has(k))s.set.delete(k);});
+  s.paint();
+  if(root._msel===name)return;
+  root._msel=name;
+  root.addEventListener('mousedown',e=>{
+    if(e.target.closest(sel)&&(e.shiftKey||e.metaKey||e.ctrlKey))e.preventDefault();});
+  root.addEventListener('click',e=>{
+    const it=e.target.closest(sel);
+    if(!it||!root.contains(it)||e.target.closest(_MSEL_SKIP))return;
+    const k=key(it);if(k==null)return;
+    if(e.shiftKey&&s.anchor!=null){
+      const o=s.order(),a=o.indexOf(s.anchor),b=o.indexOf(k);
+      if(a<0||b<0)return;
+      if(!(e.metaKey||e.ctrlKey))s.set.clear();
+      o.slice(Math.min(a,b),Math.max(a,b)+1).forEach(x=>s.set.add(x));}
+    else if(e.metaKey||e.ctrlKey){
+      s.set.has(k)?s.set.delete(k):s.set.add(k);s.anchor=k;}
+    else{s.set=new Set([k]);s.anchor=k;}
+    s.paint();});
+  // The rectangle: from a point in `area` that is neither a row nor a control
+  root.addEventListener('mousedown',e=>{
+    if(e.button!==0||e.target.closest(sel)||e.target.closest(_MSEL_SKIP))return;
+    if(area&&!e.target.closest(area))return;
+    const x0=e.clientX,y0=e.clientY,add=e.metaKey||e.ctrlKey;
+    const base=add?new Set(s.set):new Set();
+    let box=null;
+    const move=m=>{
+      if(!box&&Math.abs(m.clientX-x0)+Math.abs(m.clientY-y0)<5)return;
+      if(!box){box=document.createElement('div');box.className='mselrect';document.body.appendChild(box);}
+      const l=Math.min(x0,m.clientX),t=Math.min(y0,m.clientY),r=Math.max(x0,m.clientX),b=Math.max(y0,m.clientY);
+      Object.assign(box.style,{left:l+'px',top:t+'px',width:(r-l)+'px',height:(b-t)+'px'});
+      try{getSelection().removeAllRanges();}catch(_){}
+      s.set=new Set(base);
+      items().forEach(it=>{const q=it.getBoundingClientRect();
+        if(q.right>l&&q.left<r&&q.bottom>t&&q.top<b)s.set.add(key(it));});
+      s.paint();};
+    const up=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);
+      if(box)box.remove();};
+    document.addEventListener('mousemove',move);document.addEventListener('mouseup',up);});}
+// What a drag of row `k` moves: the selection when k is in it, else k alone.
+function mselIds(name,k){
+  const s=_msel[name];
+  if(!s||!s.set.has(k)||s.set.size<2)return [k];
+  return s.order().filter(x=>s.set.has(x));}
+// Where a block of moved rows lands among the others: after the target when
+// dragged downwards, before it when dragged upwards -- what a single drag did.
+function mselPlace(order,ids,target){
+  if(ids.includes(target))return null;
+  const rest=order.filter(x=>!ids.includes(x));
+  let at=rest.indexOf(target);if(at<0)return null;
+  if(order.indexOf(ids[0])<order.indexOf(target))at++;
+  rest.splice(at,0,...ids);return rest;}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  for(const s of Object.values(_msel))if(s.set.size){s.set.clear();s.paint&&s.paint();}});
+let _undo=[],_redo=[],_undoCur=null,_undoObj=null,_undoBusy=false;
+function undoNote(){
+  if(!cfg||_undoBusy)return;
+  let s;try{s=JSON.stringify(cfg);}catch(_){return;}
+  if(cfg!==_undoObj){_undoObj=cfg;_undoCur=s;_undo=[];_redo=[];return;}
+  if(s===_undoCur)return;
+  _undo.push(_undoCur);_undoCur=s;_redo.length=0;}
+function undoStep(back){
+  undoNote();                                    // edits not yet noted
+  const from=back?_undo:_redo,to=back?_redo:_undo;
+  if(!from.length){toast(back?'nothing to undo':'nothing to redo');return;}
+  to.push(_undoCur);_undoCur=from.pop();
+  _undoBusy=true;
+  try{cfg=JSON.parse(_undoCur);_undoObj=cfg;render();profileTouched();
+    try{renderTraining();renderTrack();}catch(_){}}
+  finally{_undoBusy=false;}
+  toast((back?'undone':'redone')+' ('+_undo.length+' more to undo) — ⬆ Save to device to keep it');}
+document.addEventListener('keydown',e=>{
+  if(!(e.metaKey||e.ctrlKey)||e.altKey)return;
+  const k=(e.key||'').toLowerCase();
+  const isUndo=k==='z'&&!e.shiftKey,isRedo=(k==='z'&&e.shiftKey)||(k==='y'&&e.ctrlKey&&!e.metaKey);
+  if(!isUndo&&!isRedo)return;
+  const a=document.activeElement;
+  if(a&&(a.isContentEditable||(/^(INPUT|TEXTAREA)$/.test(a.tagName)
+     &&!/^(checkbox|radio|button|range|color)$/.test(a.type||''))))return;
+  e.preventDefault();undoStep(isUndo);});
 function render(){
   if(!cfg)return;
+  undoNote();                                                          // 30.23
   try{renderFocusChip();}catch(_){}     // 29.24.1: the top bar's focus,
                                         // from any tab. 25.6: the
                                         // held-effects cache lives for one
@@ -5776,7 +5975,7 @@ function renderMapTable(){
     for(const[u,v]of Object.entries(t))
       add(`≡ ${esc(devName(dev))}: ${MODS[u]||KEYS[u]||u}`,null,null,null)
         .hold='baseline → '+(v===0?'∅':(MODS[v]||KEYS[v]||v));
-  let h='<tr><td><b>Input</b></td><td><b>Tap / Hold / Baseline</b></td>';
+  let h='<tr class="hdr"><td><b>Input</b></td><td><b>Tap / Hold / Baseline</b></td>';
   const _lys=allLayers();      // 27.6: every layer, not the first six
   for(const L of _lys)h+=`<td><b>${esc(layerName(L))}</b></td>`;
   h+='</tr>';
@@ -6273,8 +6472,15 @@ window.saveOneSet=async()=>{
    channel (fid 6), served by the hidconfig sidecar; the engine never reads
    it. Nothing is typed. Rendered with textContent / .value only. */
 let clips={},_clipsChannelOk=false,_clipEdit={},_clipOpen={};
-const CLIP_MAX=32768;        // per slot  (~3.5 s to send)
-const CLIP_TOTAL_MAX=131072; // all slots (~15 s)
+// 30.18: one ceiling, the Pi's (s0 CLIPS_MAX): every clip together must come
+// back in one read of at most 0xFFFF chunks -- ~1.79 MB, ~3 min at ~9 KB/s.
+// A single clip saves on its own (engine 30.17.2), so no smaller cap per slot.
+const CLIP_TOTAL_MAX=0xFFFF*(32-4),CLIP_MAX=CLIP_TOTAL_MAX;
+// each clip's text as last read from the Pi: the base a single-clip save
+// is checked against (the Pi refuses it if that clip changed since)
+let _clipReadText={};
+function clipFp(t){const b=new TextEncoder().encode(t||'');let x=0x811c9dc5;
+  for(const c of b){x^=c;x=Math.imul(x,0x01000193)>>>0;}return x.toString(16).padStart(8,'0')+':'+b.length;}
 function clipBytes(){
   try{return new TextEncoder().encode(JSON.stringify({clips})).length;}catch(_){return 0;}}
 function safeClipName(n){
@@ -6524,12 +6730,13 @@ function _renderClipsInner(){
     const _count=()=>{
       if(!cnt)return;
       const n=ta.value.length,left=CLIP_MAX-n;
-      cnt.textContent=`${n.toLocaleString()} / ${CLIP_MAX.toLocaleString()} characters`
-        +(left<=0?' — at the limit':left<500?` — ${left} left`:'');
+      cnt.textContent=`${n.toLocaleString()} characters`
+        +(n>20000?` — about ${Math.max(1,Math.round(n/9000))} s to save`:'')
+        +(left<=0?' — at the limit':left<20000?` — ${left.toLocaleString()} left`:'');
       // Warn while there is still room to do something about it, rather than
       // going red only once it is too late.
       cnt.style.color=left<=0?'var(--bad,#dc2626)'
-                     :left<500?'var(--pick,#d97706)':'';};
+                     :left<20000?'var(--pick,#d97706)':'';};
     if(editing)ta.oninput=()=>{
       if(ta.value.length>CLIP_MAX){ta.value=ta.value.slice(0,CLIP_MAX);
         toast(`truncated to ${CLIP_MAX.toLocaleString()} characters`,true);}
@@ -6559,13 +6766,30 @@ window.addClip=()=>{
   if(clips[key]){toast('that name is taken',true);return;}
   clips[key]={name:key,text:'',note:''};
   _clipEdit[key]=true;renderClips();};
+// 30.18: one clip, on its own, checked against the text it was read with --
+// a note typed on the keyboard meanwhile no longer blocks it, and a refusal
+// leaves the text in the box (the whole-set save re-read over it).
 window.saveClip=async(key,text)=>{
   if(text.length>CLIP_MAX){toast('too long — trim it first',true);return;}
-  clips[key]=clips[key]||{name:key};
-  clips[key].text=text;
+  if(!device){toast('connect first',true);return;}
+  const had=Object.prototype.hasOwnProperty.call(_clipReadText,key);
+  const name=(clips[key]&&clips[key].name)||key;
+  try{await putFileAck(6,{op:'put1',key,name,text,
+                          base:had?clipFp(_clipReadText[key]):null});}
+  catch(err){
+    const m=String(err.message||err);
+    if(/missing 'clips'/.test(m)){        // an engine before 30.17.2
+      clips[key]=clips[key]||{name:key};clips[key].text=text;
+      delete _clipEdit[key];_clipOpen[key]=true;
+      await saveClips();return;}
+    toast('NOT saved — '+m+(/on the Pi/.test(m)
+      ?' — your text is still in the box; ↻ Refresh shows the Pi\'s':''),true);
+    return;}
+  clips[key]=Object.assign(clips[key]||{name},{text});
+  _clipReadText[key]=text;
   delete _clipEdit[key];
   _clipOpen[key]=true;              // 19.9 #1.2: stay open after saving
-  await saveClips();};
+  renderClips();};
 /* 19.9 #4.1: move one of YOUR rules into an imported pack (and back out), so a
    pack can be improved over time.  The rule is removed from the profile and
    written into the pack file, which is then saved to the Pi. */
@@ -6888,7 +7112,7 @@ function renderHistory(lines){
     '<p class="muted">No history yet. It is written on each Save to device.</p>';
     return; }
   el.innerHTML = '<table style="width:100%">'
-    + '<tr><td><b>When</b></td><td><b>Note</b></td><td><b>Kind</b></td><td></td></tr>'
+    + '<tr class="hdr"><td><b>When</b></td><td><b>Note</b></td><td><b>Kind</b></td><td></td></tr>'
     + _histIndex.map(e => `<tr>
         <td>${new Date(e.ts*1000).toLocaleString()}</td>
         <td>${esc(e.note)}</td>
@@ -6919,7 +7143,7 @@ function renderHistoryDiff(seq, oldCfg){
       + `<p class="muted" style="font-size:.78rem">${rows.length} change(s)
          since then. ✕ puts that one value back; everything else stays as
          it is now.</p>`
-      + '<table style="width:100%"><tr><td><b>What</b></td><td><b>Then</b></td>'
+      + '<table style="width:100%"><tr class="hdr"><td><b>What</b></td><td><b>Then</b></td>'
       + '<td><b>Now</b></td><td></td></tr>'
       + rows.map((r,i) => `<tr>
           <td>${esc(histPathLabel(r.path))}</td>
@@ -6980,6 +7204,7 @@ function fmtChars(n){
 let usageGroupHide = new Set();
 let usageSortRev = false;              // 29.0: the second click on a header
 let usageGroupFold = new Set();        // 29.0: collapsed groups
+let usageTwinOpen = new Set();         // 30.22: opened combined rows (view only)
 try{ usageGroupFold = new Set(JSON.parse(localStorage.getItem('hc.ugrpfold')||'[]')); }catch(_){}
 try{ usageGroupHide = new Set(JSON.parse(localStorage.getItem('hc.ugrphide')||'[]')); }catch(_){}
 /* 29.21 (2026-10-08): filter chips: hide single-key swaps (output one key, no
@@ -7220,6 +7445,13 @@ function chordDevs(id){
               count:v.count,per_week:v.per_week});}
   return out.sort((a,b)=>(b.count||0)-(a.count||0));}
 
+/* 30.22: modifier-to-key time (engine 30.22+, usageData.lead =
+   {chord: [n, mean ms, sd ms]}): how long from the first modifier down to
+   the chord's key, a fluency measure -- shorter is more fluent. */
+function usageLeadHTML(id){
+  const l = usageData && usageData.lead && usageData.lead[id];
+  if(!l) return '';
+  return `<div class="muted" style="font-size:.7rem;font-family:inherit" title="modifier to key: mean ${l[1]} ms, SD ${l[2]} ms, over ${l[0]} timed presses (the first chord of each hold)">⏱ ${Math.round(l[1])} ms ±${Math.round(l[2])}</div>`;}
 function usageRows(kind){
   if(!usageData) return [];
   const src = usageData[kind] || {};
@@ -7469,6 +7701,32 @@ function renderUsage(){
     // Only expansions save typing, so only they get the column. A "Saved"
     // column reading 0 down every shortcut row would be a column that means
     // nothing, which is worse than a missing one.
+    /* 30.22: a binding reached through a layer, "X (L2 E)", is another way
+       of pressing X; when X is a row too, the two are one combined row with
+       each way folded under it (usageTwinOpen). Shortcuts only. */
+    const twins = new Map(), twinOf = new Set();
+    if(kind === 'shortcuts'){
+      const ids = new Set(rows.map(r => r.id));
+      for(const r of rows){ const m = /^(.+?) \((L\d[^)]*)\)$/.exec(r.id);
+        if(m && ids.has(m[1]) && m[1] !== r.id){
+          (twins.get(m[1]) || twins.set(m[1], []).get(m[1])).push(r); twinOf.add(r.id); }}}
+    const one = (r, o) => `<tr${o.tw ? ' class="utwin" data-utwin="' + esc(o.tw) + '"' : ''}>
+          <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
+          <td>${r.per_week}</td>
+          ${usageGroupCell(r)}
+          <td style="font-family:ui-monospace,monospace;max-width:18rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${o.ind ? ';padding-left:1.3rem' : ''}" title="${esc(r.id)}${o.tip ? '\n' + esc(o.tip) : ''}${r.ins.length?'\nrun by: '+esc(r.ins.join(', ')):''}">${o.pre || ''}${esc(r.id)}${o.post || ''}${
+            r.ins.length?`<div class="muted" style="font-size:.72rem;font-family:inherit">← ${esc(r.ins.join(' · '))}</div>`:''}</td>
+          <td class="muted" style="font-size:.76rem">${usageRefHTML(r)}</td>
+          <td class="muted">${r.count}</td>
+          ${saved ? `<td class="muted" title="${
+            r.chars ? 'the text produced, less the trigger you typed'
+                    : 'recorded before 24.3, when this was not counted'
+          }">${r.chars ? fmtChars(r.chars) : '—'}</td>` : ''}
+          <td class="muted">${esc(r.os)}</td>
+          <td>${kind==='shortcuts'?devCellHTML(r.id):''}<a class="mlink"
+                 data-ugo="${kind}" data-uid="${esc(r.id)}"
+                 title="Go to where this is defined">✎</a></td>
+        </tr>`;
     const saved = kind === 'expansions';
     const totalChars = saved ? rows.reduce((a, r) => a + r.chars, 0) : 0;
     return `<details ${openDefault ? 'open' : ''} data-uikey="usage-${kind}">
@@ -7476,7 +7734,7 @@ function renderUsage(){
         <span class="muted">· ${rows.length} entr${rows.length===1?'y':'ies'}${
           totalChars ? ' · ' + fmtChars(totalChars) + ' saved' : ''}</span>${chips}</summary>
       ${rows.length ? `<table style="width:100%">
-        <tr>${sh('desc','Does what')}${sh('per_week','Per week')}<td>${sh('group','Group',1)} <a class="mlink ugrpfilter"
+        <tr class="hdr">${sh('desc','Does what')}${sh('per_week','Per week')}<td>${sh('group','Group',1)} <a class="mlink ugrpfilter"
               title="Sort by group, and choose which groups to show"
               style="${usageGroupHide.size?'color:var(--hi);font-weight:700':''}">▾${usageGroupHide.size?' '+usageGroupHide.size+' hidden':''}</a></td>
             ${sh('id','What you press')}<td><b>Reference</b></td>
@@ -7491,23 +7749,17 @@ function renderUsage(){
                  ${usageGroupFold.has(g) ? '▸' : '▾'} ${g ? esc(g) : '<i>(no group)</i>'}
                  <span class="muted" style="font-weight:400">· ${rows.filter(x => (x.group.g || '') === g).length}</span></td></tr>` : '';
           if(usageSort === 'group' && usageGroupFold.has(g)) return head;
-          return head + `<tr>
-          <td class="udesc" data-uid="${esc(r.id)}">${usageDescHTML(r)}</td>
-          <td>${r.per_week}</td>
-          ${usageGroupCell(r)}
-          <td style="font-family:ui-monospace,monospace;max-width:18rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.id)}${r.ins.length?'\nrun by: '+esc(r.ins.join(', ')):''}">${esc(r.id)}${
-            r.ins.length?`<div class="muted" style="font-size:.72rem;font-family:inherit">← ${esc(r.ins.join(' · '))}</div>`:''}</td>
-          <td class="muted" style="font-size:.76rem">${usageRefHTML(r)}</td>
-          <td class="muted">${r.count}</td>
-          ${saved ? `<td class="muted" title="${
-            r.chars ? 'the text produced, less the trigger you typed'
-                    : 'recorded before 24.3, when this was not counted'
-          }">${r.chars ? fmtChars(r.chars) : '—'}</td>` : ''}
-          <td class="muted">${esc(r.os)}</td>
-          <td>${kind==='shortcuts'?devCellHTML(r.id):''}<a class="mlink"
-                 data-ugo="${kind}" data-uid="${esc(r.id)}"
-                 title="Go to where this is defined">✎</a></td>
-        </tr>`;}).join('')}</table>`
+          if(twinOf.has(r.id)) return head;                        // 30.22: under its twin
+          const kids = twins.get(r.id);
+          if(!kids) return head + one(r, {post: kind === 'shortcuts' ? usageLeadHTML(r.id) : ''});
+          // 30.22: one combined row, the ways of reaching it folded under it
+          const all = [r, ...kids], sum = k => all.reduce((a, x) => a + (+x[k] || 0), 0);
+          const open = usageTwinOpen.has(r.id);
+          const comb = Object.assign({}, r, {count: sum('count'), per_week: Math.round(sum('per_week') * 100) / 100});
+          return head + one(comb, {pre: `<a class="mlink" data-utwinfold="${esc(r.id)}" title="Show each way of pressing it">${open ? '▾' : '▸'}</a> `,
+              post: ` <span class="muted" style="font-size:.7rem">· ${all.length} ways</span>`, tip: 'combined: ' + all.map(x => x.id).join(' + ')})
+            + (open ? all.map(x => one(x, {ind: 1, tw: r.id, post: usageLeadHTML(x.id), pre: x === r ? '<span class="muted" style="font-size:.7rem">keyboard: </span>' : ''})).join('') : '');
+        }).join('')}</table>`
         : '<p class="muted">Nothing recorded yet.</p>'}
     </details>`;
   };
@@ -7520,7 +7772,7 @@ function renderUsage(){
       <summary style="cursor:pointer"><b>Notes captured</b>
         <span class="muted">· ${rows.length} clip${rows.length===1?'':'s'}</span></summary>
       ${rows.length ? `<table style="width:100%">
-        <tr><td><b>Clip</b></td><td><b>Per week</b></td><td><b>Total</b></td><td><b>OS</b></td></tr>
+        <tr class="hdr"><td><b>Clip</b></td><td><b>Per week</b></td><td><b>Total</b></td><td><b>OS</b></td></tr>
         ${rows.map(r => `<tr><td>${esc(r.id)}</td><td>${r.per_week}</td>
           <td class="muted">${r.count}</td><td class="muted">${esc(r.os)}</td></tr>`).join('')}</table>`
         : '<p class="muted">no notes captured yet — older captures were counted in the expansions table until 26.8; <code>fix_usage_ids.py --prune-expansions</code> moves them here</p>'}
@@ -7536,7 +7788,7 @@ function renderUsage(){
         Shift plus a key, which is how you type a character rather than a
         shortcut you chose</span></summary>
       <table style="width:100%">
-        <tr><td><b>What you press</b></td><td><b>Produces</b></td>
+        <tr class="hdr"><td><b>What you press</b></td><td><b>Produces</b></td>
             <td><b>Per week</b></td><td><b>Total</b></td></tr>
         ${rows.map(({r, ch}) => `<tr>
           <td style="font-family:ui-monospace,monospace">${esc(r.id)}</td>
@@ -7608,6 +7860,10 @@ function renderUsage(){
       if(usageGroupHide.has(g)) usageGroupHide.delete(g); else usageGroupHide.add(g);
       try{ localStorage.setItem('hc.ugrphide', JSON.stringify([...usageGroupHide])); }catch(_){}}
     usageChipsSave(); renderUsage(); });
+  el.querySelectorAll('[data-utwinfold]').forEach(a => a.onclick = e => {   // 30.22
+    e.preventDefault(); const id = a.dataset.utwinfold;
+    if(usageTwinOpen.has(id)) usageTwinOpen.delete(id); else usageTwinOpen.add(id);
+    renderUsage();});
   el.querySelectorAll('[data-ugfold]').forEach(tr => tr.onclick = () => {
     const g = tr.dataset.ugfold;
     if(usageGroupFold.has(g)) usageGroupFold.delete(g); else usageGroupFold.add(g);
@@ -7774,15 +8030,89 @@ function isTracked(file, chord){
 function isTrained(chord){
   return (cfg.kbd_train || []).includes(chord);}
 
+/* 30.21: the sets a chord was chosen in. kbd_train_src[chord] is one file
+   (30.17.1) or a list of them (30.21, chosen in several sets); kbd_train
+   stays the plain chord list the engine reads (training.py). A chord with
+   none recorded predates 30.17.1: it counts as chosen in every set. */
+function trainSrcs(ch){
+  const v = ((cfg && cfg.kbd_train_src) || {})[ch];
+  return v == null ? [] : [].concat(v);}
+function _setTrainSrcs(ch, list){                        // write path only
+  if(list.length){ cfg.kbd_train_src = cfg.kbd_train_src || {};
+    cfg.kbd_train_src[ch] = list.length === 1 ? list[0] : list; }
+  else if(cfg.kbd_train_src){ delete cfg.kbd_train_src[ch];
+    if(!Object.keys(cfg.kbd_train_src).length) delete cfg.kbd_train_src; }}
+function isTrainedIn(ch, file){
+  if(!isTrained(ch)) return false;
+  const s = trainSrcs(ch); return !s.length || !file || s.includes(file);}
+/* One Training row per (chord, set). Order: kbd_train_order (row ids,
+   written when he reorders), else kbd_train's order. */
+function trainRows(){
+  const rows = [];
+  for(const ch of (cfg && cfg.kbd_train) || []){
+    const srcs = trainSrcs(ch);
+    if(!srcs.length){ rows.push({ch, src: '', file: trainSrc(ch) || '', id: ch + '\t'}); continue; }
+    for(const f of srcs) rows.push({ch, src: f, file: f, id: ch + '\t' + f});}
+  const ord = (cfg && cfg.kbd_train_order) || [];
+  if(ord.length){
+    const pos = new Map(ord.map((id, i) => [id, i]));
+    rows.forEach((r, i) => { r._k = pos.has(r.id) ? pos.get(r.id) : 1e6 + i; });
+    rows.sort((a, b) => a._k - b._k);}
+  return rows;}
+function _trainOrderTidy(){
+  if(!cfg.kbd_train_order) return;
+  const live = new Set(trainRows().map(r => r.id));
+  cfg.kbd_train_order = cfg.kbd_train_order.filter(id => live.has(id));
+  if(!cfg.kbd_train_order.length) delete cfg.kbd_train_order;}
+
 function setTrained(chord, on, file){
   cfg.kbd_train = cfg.kbd_train || [];   // 30.17.1: and which set it came from
-  if(on && file){ cfg.kbd_train_src = cfg.kbd_train_src || {}; cfg.kbd_train_src[chord] = file; }
-  if(!on && cfg.kbd_train_src){ delete cfg.kbd_train_src[chord];
-    if(!Object.keys(cfg.kbd_train_src).length) delete cfg.kbd_train_src; }
+  let srcs = trainSrcs(chord);
+  if(on){ if(file && !srcs.includes(file)) srcs = srcs.concat(file); }
+  else if(file && srcs.length > 1 && srcs.includes(file)) srcs = srcs.filter(f => f !== file); // one set of several
+  else srcs = null;
   const i = cfg.kbd_train.indexOf(chord);
-  if(on && i < 0) cfg.kbd_train.push(chord);
-  if(!on && i >= 0) cfg.kbd_train.splice(i, 1);
+  if(srcs === null){ if(i >= 0) cfg.kbd_train.splice(i, 1); _setTrainSrcs(chord, []); }
+  else { if(i < 0) cfg.kbd_train.push(chord); _setTrainSrcs(chord, srcs); }
+  _trainOrderTidy();
   profileTouched();}
+
+/* 30.21: "I don't understand what this does" -- the third answer beside
+   Train and Know, exclusive with both. cfg.kbd_unclear = [chords]. */
+function isUnclear(ch){ return ((cfg && cfg.kbd_unclear) || []).includes(ch); }
+function setUnclear(ch, on){
+  cfg.kbd_unclear = cfg.kbd_unclear || [];
+  const i = cfg.kbd_unclear.indexOf(ch);
+  if(on && i < 0){ cfg.kbd_unclear.push(ch); setTrained(ch, false); if(isKnown(ch)) setKnown(ch, false); }
+  if(!on && i >= 0) cfg.kbd_unclear.splice(i, 1);
+  if(!cfg.kbd_unclear.length) delete cfg.kbd_unclear;
+  profileTouched();}
+/* 30.21: a set's OS as an icon, and its in-set group: the set's own
+   `groups` {chord: [names]} when it has one, else the "Section — " its
+   description starts with (RStudio's sets are written that way). */
+const setOS = c => /^mac/i.test(c.os || '') ? 'mac' : /^win/i.test(c.os || '') ? 'win' : '';
+const OS_ICON = {mac: '🍎', win: '🪟'};
+function setGroupsOf(c, k, does){
+  const g = c && c.groups && c.groups[k];
+  if(g) return [].concat(g);
+  const m = /^([^—]{1,40})\s—\s/.exec(does || ''); return m ? [m[1].trim()] : [];}
+// Groups OF sets ("Office", "Data analysis"): cfg.kbd_set_groups =
+// {name: [files]}; a set can be in several.
+function setGroupsFor(file){
+  return Object.entries((cfg && cfg.kbd_set_groups) || {})
+    .filter(([, fs]) => (fs || []).includes(file)).map(([n]) => n).sort();}
+function setGroupEdit(name, file, on){
+  name = String(name || '').trim(); if(!name) return;
+  const G = cfg.kbd_set_groups = cfg.kbd_set_groups || {};
+  const fs = G[name] = G[name] || [];
+  const i = fs.indexOf(file);
+  if(on && i < 0) fs.push(file);
+  if(!on && i >= 0) fs.splice(i, 1);
+  if(!fs.length) delete G[name];
+  if(!Object.keys(G).length) delete cfg.kbd_set_groups;
+  profileTouched();}
+let _trackOS = '', _trackGrp = '';
+try{ _trackOS = localStorage.getItem('hc.trackos') || ''; _trackGrp = localStorage.getItem('hc.trackgrp') || ''; }catch(_){}
 
 function renderTrack(){
   const el = $('trackbody'); if(!el) return;
@@ -7800,7 +8130,19 @@ function renderTrack(){
   // where it was.
   const _open = new Set([...el.querySelectorAll('details[open][data-trackset]')]
     .map(d => d.dataset.trackset));
-  el.innerHTML = corpus.map(c => {
+  // 30.21: filter by OS and by group of sets (this viewer's choice only)
+  const allGrps = Object.keys((cfg && cfg.kbd_set_groups) || {}).sort();
+  if(_trackGrp && !allGrps.includes(_trackGrp)) _trackGrp = '';
+  const fbtn = (attr, v, cur, lab, tip) => `<button ${attr}="${esc(v)}" title="${esc(tip)}"
+    style="font-size:.72rem;padding:.05rem .4rem${cur === v ? ';background:var(--hi);color:#fff' : ''}">${lab}</button>`;
+  const bar = `<div class="bar" style="flex-wrap:wrap;gap:.25rem;margin:.2rem 0 .4rem;font-size:.75rem">
+    <span class="muted">Show:</span>
+    ${fbtn('data-tos', '', _trackOS, 'all', 'every set')}${fbtn('data-tos', 'mac', _trackOS, OS_ICON.mac + ' macOS', 'macOS sets only')}${fbtn('data-tos', 'win', _trackOS, OS_ICON.win + ' Windows', 'Windows sets only')}
+    ${allGrps.length ? '<span class="muted" style="margin-left:.4rem">group:</span>' + fbtn('data-tgrp', '', _trackGrp, 'any', 'every group') +
+      allGrps.map(g => fbtn('data-tgrp', g, _trackGrp, esc(g), 'sets in ' + g)).join('') : ''}</div>`;
+  const shown = corpus.filter(c => (!_trackOS || setOS(c) === _trackOS)
+    && (!_trackGrp || setGroupsFor(c.file).includes(_trackGrp)));
+  el.innerHTML = bar + (shown.length ? '' : '<p class="muted">No set matches.</p>') + shown.map(c => {
     const chords = Object.entries(c.shortcuts || {});
     const nOn = chords.filter(([k]) => isTracked(c.file, k)).length;
     const warn = (c.warnings || []).length
@@ -7808,25 +8150,42 @@ function renderTrack(){
     return `<details ${_open.has(c.file)?'open':''} data-trackset="${esc(c.file)}" style="margin:.25rem 0;border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem">
       <summary style="cursor:pointer">
         <b>${esc(c.app || c.name || c.file)}</b>
-        <span class="muted" style="font-size:.78rem">· ${esc(c.os||'')} · ${_haveU ? nOn + '/' + chords.length + ' used' : chords.length + ' shortcuts'}</span>${warn}
+        <span class="muted" style="font-size:.78rem">· ${OS_ICON[setOS(c)] || ''} ${esc(c.os||'')} · ${_haveU ? nOn + '/' + chords.length + ' used' : chords.length + ' shortcuts'}</span>${warn}
+        ${setGroupsFor(c.file).map(g => `<span class="pill" style="font-size:.66rem;margin-left:.2rem">${esc(g)}</span>`).join('')}
       </summary>
+      <div style="font-size:.72rem;margin:.15rem 0 .3rem">Groups of sets:
+        ${setGroupsFor(c.file).map(g => `<span class="grouppill">${esc(g)} <a class="mlink" data-sgrm="${esc(g)}" data-sgfile="${esc(c.file)}" title="take this set out of ${esc(g)}">✕</a></span>`).join(' ')}
+        <input data-sgadd="${esc(c.file)}" list="setgrouplist" placeholder="+ group (Enter)" maxlength="40" style="width:9rem;font-size:.72rem"></div>
       <table style="width:100%;font-size:.8rem">
-        <tr><td><b>Train</b></td><td title="I already know this one"><b>Know</b></td>
-            <td><b>Shortcut</b></td><td><b>Does what</b></td><td><b>/wk</b></td><td><b>Total</b></td></tr>
-        ${chords.map(([k, does]) => { const u = _cnt.get(_chordNorm(k)); return `<tr>
-          <td><input type="checkbox" data-train="${esc(k)}" data-trainfile="${esc(c.file)}" ${isTrained(k)?'checked':''}></td>
+        <tr><th>Train</th><th title="I already know this one">Know</th><th title="I don't understand what this does">?</th>
+            <th>Shortcut</th><th>Group</th><th>Does what</th><th>/wk</th><th>Total</th></tr>
+        ${chords.map(([k, does]) => { const u = _cnt.get(_chordNorm(k)); const unc = isUnclear(k); return `<tr>
+          <td><input type="checkbox" data-train="${esc(k)}" data-trainfile="${esc(c.file)}" ${isTrainedIn(k, c.file)?'checked':''}></td>
           <td><input type="checkbox" data-know="${esc(k)}" ${isKnown(k)?'checked':''}
                 title="I already know this one"></td>
+          <td><label class="unclear" title="I don't understand what this does" style="cursor:pointer">
+                <input type="checkbox" data-unclear="${esc(k)}" ${unc?'checked':''} style="${unc?'display:none':''}">${unc?'<b style="color:var(--warn)">?</b>':''}</label></td>
           <td style="font-family:ui-monospace,monospace">${esc(k)}</td>
+          <td class="muted" style="font-size:.72rem">${esc(setGroupsOf(c, k, does).join(', '))}</td>
           <td class="muted">${esc(does)}</td>
           <td>${_haveU ? (u ? u.per_week : 0) : '—'}</td>
           <td class="muted">${_haveU ? (u ? u.count : 0) : '—'}</td></tr>`; }).join('')}
-      </table></details>`;}).join('');
+      </table></details>`;}).join('')
+    + `<datalist id="setgrouplist">${allGrps.map(g => `<option value="${esc(g)}">`).join('')}</datalist>`;
+  el.querySelectorAll('[data-tos]').forEach(b => b.onclick = () => { _trackOS = b.dataset.tos;
+    try{ localStorage.setItem('hc.trackos', _trackOS); }catch(_){} renderTrack(); });
+  el.querySelectorAll('[data-tgrp]').forEach(b => b.onclick = () => { _trackGrp = b.dataset.tgrp;
+    try{ localStorage.setItem('hc.trackgrp', _trackGrp); }catch(_){} renderTrack(); });
+  el.querySelectorAll('[data-sgadd]').forEach(inp => inp.onkeydown = e => { if(e.key !== 'Enter') return;
+    setGroupEdit(inp.value, inp.dataset.sgadd, true); renderTrack();
+    toast('set added to “' + inp.value.trim() + '” — ⬆ Save to device to keep it'); });
+  el.querySelectorAll('[data-sgrm]').forEach(a => a.onclick = e => { e.preventDefault();
+    setGroupEdit(a.dataset.sgrm, a.dataset.sgfile, false); renderTrack(); });
 
   // The ticked box stays exactly where it was on screen, whatever the
   // re-render changed in height above it (the practice keyboard, Training).
   const keepPlace = (cb, fn) => {
-    const sel = `input[data-${cb.dataset.train != null ? 'train' : 'know'}]`;
+    const sel = `input[data-${cb.dataset.train != null ? 'train' : cb.dataset.know != null ? 'know' : 'unclear'}]`;
     const all = [...el.querySelectorAll(sel)], i = all.indexOf(cb);
     const top = cb.getBoundingClientRect().top;
     fn();
@@ -7836,10 +8195,15 @@ function renderTrack(){
   el.querySelectorAll('[data-train]').forEach(cb => cb.onchange = () => keepPlace(cb, () => {
     setTrained(cb.dataset.train, cb.checked, cb.dataset.trainfile);
     if(cb.checked && isKnown(cb.dataset.train)) setKnown(cb.dataset.train, false);
+    if(cb.checked && isUnclear(cb.dataset.train)) setUnclear(cb.dataset.train, false);
     renderTraining(); renderTrack();}));
   // 28.9: "I already know this one" -- takes it off the practice list.
   el.querySelectorAll('[data-know]').forEach(cb => cb.onchange = () => keepPlace(cb, () => {
-    setKnown(cb.dataset.know, cb.checked); renderTraining(); renderTrack();}));}
+    if(cb.checked && isUnclear(cb.dataset.know)) setUnclear(cb.dataset.know, false);
+    setKnown(cb.dataset.know, cb.checked); renderTraining(); renderTrack();}));
+  // 30.21: "?" -- exclusive with Train and Know; a click on the ? clears it
+  el.querySelectorAll('[data-unclear]').forEach(cb => cb.onchange = () => keepPlace(cb, () => {
+    setUnclear(cb.dataset.unclear, cb.checked); renderTraining(); renderTrack();}));}
 
 /* 29.0: the practice keyboard: keys that finish a chosen-to-practise chord
    are lit with a count; hovering lists them. With a modifier held
@@ -7918,7 +8282,7 @@ function renderPracticeKbd(){
       x.st.active!=null?`, over the ${x.st.active} of ${x.st.weeks} weeks ${x.app} was in use`:''}]`).join('\n'):'';
     const bg=isHeldMod?'rgba(239,68,68,.55)':top?pkStageBg(top.st):'transparent';
     const outline=top?`box-shadow:inset 0 0 0 2px ${col(top.app)};`:'';
-    return `<span class="pkkey" title="${esc(tip)}" style="display:inline-flex;align-items:center;justify-content:center;
+    return `<span class="pkkey" data-pku="${u}" title="${esc(tip)}" style="${list.length?'cursor:pointer;':''}display:inline-flex;align-items:center;justify-content:center;
       ${pos||'position:relative;'}width:${Math.round((w||1)*U)}px;height:${U-8}px;margin:1px;border:1px solid var(--line);
       border-radius:4px;font-size:${bits&&top?'.5rem':'.62rem'};line-height:1.05;overflow:hidden;background:${bg};color:var(--fg);
       white-space:normal;text-align:center;word-break:break-word;font-weight:400;${outline}">${face}${list.length&&!bits?`<sup style="position:absolute;right:2px;top:1px;font-size:.5rem">${list.length}</sup>`:''}</span>`;};
@@ -7940,10 +8304,15 @@ function renderPracticeKbd(){
         ${hide.has(a)?'opacity:.45':`background:${col(a)};color:#fff`}" title="Show or hide ${esc(a)} on the keyboard">${esc(a)}</button>`).join('')}</div>
     <div style="border:2px solid var(--hi);border-radius:6px;padding:.3rem .4rem">
       <div class="muted">Focus on</div>
-      <div style="font-family:ui-monospace,monospace;font-size:.85rem;font-weight:600">${esc(focus)}</div>
-      <div>${esc(fd?fd.text:'')}</div>
-      <div class="muted" ${fst.active!=null?`title="per week over the ${fst.active} of ${fst.weeks} weeks its app was in use"`:''}>${fst.per}/week of ${fst.t} · ${fst.s}</div>
-      <button id="pkchange" style="font-size:.7rem;margin-top:.2rem">change…</button></div>
+      ${/* 30.21: every focus, as in the floating window (same list) */
+        focusIds().map((id,i)=>{const d=chosenDesc(id),st=pkStage(id,counts);return `
+      <div class="pkfocus" style="${i?'border-top:1px dashed var(--line);margin-top:.25rem;padding-top:.2rem':''}">
+        <div style="display:flex;justify-content:space-between;gap:.3rem">
+          <a class="mlink" data-pkf="${i}" title="Change this one" style="font-family:ui-monospace,monospace;font-size:.85rem;font-weight:600">${esc(id)}</a>
+          <a class="mlink" data-pkfrm="${i}" title="Stop focusing on this one (it stays chosen to practise)">✕</a></div>
+        <div>${esc(d?d.text:'')}</div>
+        <div class="muted" ${st.active!=null?`title="per week over the ${st.active} of ${st.weeks} weeks its app was in use"`:''}>${st.per}/week of ${st.t} · ${st.s}</div></div>`;}).join('')}
+      <button id="pkchange" style="font-size:.7rem;margin-top:.2rem">＋ add…</button></div>
     <div class="muted" style="margin-top:.3rem;line-height:1.3">
       <span style="background:rgba(128,128,128,.25);padding:0 .25rem">unused</span>
       <span style="background:rgba(34,197,94,.7);padding:0 .25rem">learning</span>
@@ -7957,14 +8326,29 @@ function renderPracticeKbd(){
     ${bits?`holding <b>${esc(modsName(bits))}</b> — each key shows what it would do`
           :'hold a modifier to see what each key does; colour = how far along you are'}</div>
     <div style="display:flex;align-items:flex-start"><div style="font-family:ui-monospace,monospace;white-space:nowrap;overflow-x:auto">${
-      boardHTML}</div>${side}</div></fieldset>`;
-  el.onclick=e=>{if(e.target.closest('.pkkey,button,a,input,select,label'))return;
+      boardHTML}</div>${side}</div>
+    <div id="pkinfo" style="font-size:.74rem;margin-top:.3rem"></div></fieldset>`;
+  // 30.21: a click on a key lists its training items under the board
+  el.querySelectorAll('.pkkey[data-pku]').forEach(k=>k.onclick=e=>{e.stopPropagation();
+    const u=+k.dataset.pku,list=by.get(u)||[],box=$('pkinfo');if(!box)return;
+    if(box.dataset.u===String(u)){box.dataset.u='';box.innerHTML='';return;}   // again: close
+    box.dataset.u=String(u);
+    const kn=(k.firstChild&&k.firstChild.textContent||'').trim();     // not the count <sup>
+    box.innerHTML=!list.length?`<span class="muted">Nothing chosen to practise on ${esc(kn)}.</span>`
+      :`<b>${esc(kn)}</b> <span class="muted">· ${list.length} · click the key again to close</span>`+list.map(x=>`
+        <div style="display:flex;gap:.5rem;border-top:1px solid var(--line);padding:.1rem 0">
+          <span style="font-family:ui-monospace,monospace;min-width:9rem">${esc(x.ch)}</span>
+          <span style="flex:1">${esc(x.d||'(no description)')}</span>
+          <span class="muted">${esc(x.app)} · ${x.st.per}/wk of ${x.st.t} · ${esc(x.st.s)}</span></div>`).join('');});
+  el.onclick=e=>{if(e.target.closest('.pkkey,button,a,input,select,label,#pkinfo'))return;
     const t=document.querySelector('#usagetabs [data-ut="train"]');if(t)t.click();};
   el.querySelectorAll('[data-pkapp]').forEach(b=>b.onclick=()=>{
     const a=b.dataset.pkapp;if(hide.has(a))hide.delete(a);else hide.add(a);
     try{localStorage.setItem('hc.pkhide',JSON.stringify([...hide]));}catch(_){}
     renderPracticeKbd();});
-  const ch=$('pkchange');if(ch)ch.onclick=()=>pkChooseFocus();
+  const ch=$('pkchange');if(ch)ch.onclick=()=>focusPick('add');
+  el.querySelectorAll('[data-pkf]').forEach(a=>a.onclick=e=>{e.stopPropagation();focusPick(+a.dataset.pkf);});
+  el.querySelectorAll('[data-pkfrm]').forEach(a=>a.onclick=e=>{e.stopPropagation();focusRemove(+a.dataset.pkfrm);});
   renderFocusChip();renderFocusFloat();}
 // vi: the "change" dialog -- every chosen shortcut, with its app and the
 // section its set gives it ("Source — …"), and its stage.
@@ -8057,21 +8441,24 @@ function focusPick(where){
     dlg.addEventListener('click',e=>{
       if(e.target===dlg||e.target.closest('[data-fd="close"]')){dlg.style.display='none';return;}
       const a=e.target.closest('[data-fpick]');
-      if(a){dlg.style.display='none';focusSet(a.dataset.fpick,_fpWhere,a.dataset.ffile);}});
+      // 30.21: adding stays open, so several can be added in one go
+      if(a){if(_fpWhere!=='add')dlg.style.display='none';
+        focusSet(a.dataset.fpick,_fpWhere,a.dataset.ffile);if(_fpWhere==='add')focusList();}});
     dlg.addEventListener('keydown',e=>{if(e.key==='Escape')dlg.style.display='none';
       if(e.key==='Enter'){const a=dlg.querySelector('[data-fpick]');if(a){dlg.style.display='none';focusSet(a.dataset.fpick,_fpWhere,a.dataset.ffile);}}});
     dlg.querySelector('#focusq').addEventListener('input',e=>{_focusQ=e.target.value;focusList();});}
   if(!refData('corpus')&&device&&!_corpusAsked)loadCorpus();
   dlg.style.display='flex';
+  dlg.querySelector('b').textContent=where==='add'?'Add to focus — click several, Esc when done':'Focus on…';
   const q=dlg.querySelector('#focusq');q.value=_focusQ;focusList();
   setTimeout(()=>{q.focus();q.select();},0);}
 function focusList(){
   const box=$('focuslist');if(!box)return;
-  const q=_focusQ.trim().toLowerCase(),cur=pkFocus();
+  const q=_focusQ.trim().toLowerCase(),cur=pkFocus(),inF=new Set(focusIds());
   const chosen=(cfg&&cfg.kbd_train)||[];
   const hit=(id,txt)=>!q||id.toLowerCase().includes(q)||txt.toLowerCase().includes(q);
   const row=(id,f,extra)=>`<div data-fpick="${esc(id)}"${f.file?` data-ffile="${esc(f.file)}"`:''} style="padding:.2rem .3rem;border-bottom:1px solid var(--line);cursor:pointer${id===cur?';background:var(--panel2)':''}">
-    <b style="font-family:ui-monospace,monospace">${esc(id)}</b> <span class="muted">${esc(f.app)}${f.sec?' · '+esc(f.sec):''}${extra}</span>
+    <b style="font-family:ui-monospace,monospace">${esc(id)}</b>${_fpWhere==='add'&&inF.has(id)?' <span style="color:var(--ok)">✓ in focus</span>':''} <span class="muted">${esc(f.app)}${f.sec?' · '+esc(f.sec):''}${extra}</span>
     <div style="font-size:.74rem">${esc(f.text)}</div></div>`;
   const mine=chosen.filter(id=>{const f=focusInfo(id);return hit(id,f.text+' '+f.app+' '+f.sec);});
   const os=(cfg&&cfg.active_os)||'win',seen=new Set(chosen),others=[];
@@ -8218,8 +8605,8 @@ function corpusSetsFor(chord){
 function trainSrc(ch){
   const sets=corpusSetsFor(ch);
   if(!sets.length)return null;
-  const mine=((cfg&&cfg.kbd_train_src)||{})[ch];
-  if(mine&&sets.some(s=>s.file===mine))return mine;
+  const mine=trainSrcs(ch).find(f=>sets.some(s=>s.file===f));
+  if(mine)return mine;
   if(sets.length===1)return sets[0].file;
   const chosen=((cfg&&cfg.kbd_train)||[]).filter(x=>x!==ch).map(_chordNorm);
   const aos=/^mac/i.test(cfg&&cfg.active_os||'')?'mac':'win';
@@ -8241,9 +8628,18 @@ function setKnown(ch,on){
   if(on)setTrained(ch,false);             // known is the opposite of practising
   if(!cfg.kbd_known.length)delete cfg.kbd_known;
   profileTouched();}
-function setTrainPriority(ch,pos){
-  const t=cfg.kbd_train||[];const i=t.indexOf(ch);if(i<0)return;
-  t.splice(i,1);t.splice(Math.max(0,Math.min(t.length,pos)),0,ch);profileTouched();}
+// 30.21: moves one ROW (chord + set); a chord chosen in two sets can sit at
+// two priorities. kbd_train follows each chord's first row.
+function setTrainPriority(id,pos){
+  const rows=trainRows().map(r=>r.id);
+  if(!id.includes('\t')){const r=trainRows().find(x=>x.ch===id);if(!r)return;id=r.id;}
+  const i=rows.indexOf(id);if(i<0)return;
+  rows.splice(i,1);rows.splice(Math.max(0,Math.min(rows.length,pos)),0,id);
+  setTrainOrder(rows);}
+function setTrainOrder(rows){
+  cfg.kbd_train_order=rows;
+  cfg.kbd_train=[...new Set(rows.map(x=>x.split('\t')[0]))];
+  profileTouched();}
 // BONUS (his question): from the RStudio (Windows) set, the ones that fit
 // find-and-replace, refactoring and multiple cursors. Chords only -- the
 // descriptions come from the set itself at render time.
@@ -8277,7 +8673,7 @@ function trainLogHTML(){
       to <input type="date" id="tlto" value="${esc(trainTo)}">
       <button class="txmini" id="tlclear">all dates</button></div>
     ${rows.length ? `<table style="width:100%;font-size:.8rem">
-      <tr><td><b>Date</b></td><td><b>Shortcut</b></td><td><b>Crossed</b></td><td><b>Rate then</b></td></tr>
+      <tr class="hdr"><td><b>Date</b></td><td><b>Shortcut</b></td><td><b>Crossed</b></td><td><b>Rate then</b></td></tr>
       ${rows.slice().reverse().map(r => `<tr><td>${esc(r.date)}</td>
         <td style="font-family:ui-monospace,monospace">${esc(r.chord)}</td>
         <td>${r.from ? esc(word(r.from)) + ' → ' : ''}<b>${esc(word(r.to))}</b></td>
@@ -8285,6 +8681,7 @@ function trainLogHTML(){
       : '<p class="muted" style="font-size:.8rem">Nothing crossed in those dates.</p>'}
     <p class="muted" style="font-size:.74rem">"Started" is the day the Pi first saw it on your list.
       A rate counts only the weeks its app was in use.</p></details>`;}
+let _trainGrpF = '', _trainSort = '';                          // 30.21: view only
 function renderTraining(){
   const el = $('trainbody'); if(!el) return;
   const haveU = !!usageData;
@@ -8293,46 +8690,72 @@ function renderTraining(){
   const rare = rows.filter(r => r.per_week < 1)
     .sort((a,b)=>a.per_week-b.per_week).slice(0,20);
   const chosen = (cfg && cfg.kbd_train) || [];
+  const trows = trainRows();                                     // 30.21
+  // 30.21: each row's in-set group; a view filter and sort (priority, the
+  // number in the first column, is unchanged by either)
+  const rowGrp = r => { const c = (refData('corpus') || []).find(x => x.file === r.file);
+    const d = c && c.shortcuts && Object.entries(c.shortcuts).find(([k]) => _chordNorm(k) === _chordNorm(r.ch));
+    return setGroupsOf(c, d ? d[0] : r.ch, d ? d[1] : '').join(', '); };
+  trows.forEach((r, i) => { r.grp = rowGrp(r); r.prio = i + 1; });
+  const tgAll = [...new Set(trows.flatMap(r => r.grp ? r.grp.split(', ') : []))].sort();
+  if(_trainGrpF && !tgAll.includes(_trainGrpF)) _trainGrpF = '';
+  let vrows = trows.filter(r => !_trainGrpF || r.grp.split(', ').includes(_trainGrpF));
+  if(_trainSort === 'group') vrows = vrows.slice().sort((a, b) => (a.grp || '~').localeCompare(b.grp || '~') || a.prio - b.prio);
   const counts = _usageByNorm();
   const desc = (haveU && usageData.describe) || {};
   if(!refData('corpus') && device && !_corpusAsked) loadCorpus();
   const cnt = id => counts.get(_chordNorm(id));
   const chosenHTML = !chosen.length ? '' : `
-    <details open style="margin-bottom:.5rem"><summary style="cursor:pointer">
+    <details open style="margin-bottom:.5rem;padding:0 .6rem .4rem" id="trainchosen"><summary style="cursor:pointer">
       <b>Chosen to practise</b>
-      <span class="muted">· ${chosen.length} · drag a row, or type its priority</span></summary>
+      <span class="muted">· ${trows.length} · drag a row, or type its priority · Ctrl/⌘- or Shift-click, or draw a box from the margin, to move several</span></summary>
+      ${tgAll.length ? `<div style="font-size:.74rem;margin:.2rem 0">Group: <select id="tgfilter" style="font-size:.74rem;width:auto">
+        <option value="">all</option>${tgAll.map(g => `<option ${g === _trainGrpF ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>
+        ${vrows.length < trows.length ? `<span class="muted">· ${vrows.length} of ${trows.length}</span>` : ''}</div>` : ''}
       <table style="width:100%" id="traintbl">
-        <tr><td><b>Priority</b></td><td><b>Shortcut</b></td><td><b>Does what</b></td>
+        <tr class="hdr"><td><b>Priority</b></td><td><b>Shortcut</b></td>
+            <td><a class="mlink" id="tgsort" title="Sort by group (click again: by priority)"><b>Group</b>${_trainSort === 'group' ? ' ▲' : ''}</a></td><td><b>Does what</b></td>
             <td><b>Per week</b></td><td><b>Total</b></td><td></td></tr>
-        ${chosen.map((id, i) => {
-          const c = cnt(id);
+        ${vrows.map((row) => { const i = row.prio - 1;
+          const id = row.ch, c = cnt(id);
           // 30.17.1: from the set it was chosen from (desc[], the Pi's
-          // usage description, picks the first set -- not used here)
-          const d = chosenDesc(id) || desc[id];
-          const srcs = corpusSetsFor(id), src = trainSrc(id);
+          // usage description, picks the first set -- not used here).
+          // 30.21: one row per set it was chosen in.
+          const d = (row.file && corpusDesc(id, row.file)) || chosenDesc(id) || desc[id];
+          const srcs = corpusSetsFor(id), src = row.file;
+          const appName = f => { const s = srcs.find(x => x.file === f); return s ? s.app : f; };
+          const also = trainSrcs(id).filter(f => f !== row.src).map(appName);
+          const alsoHTML = !also.length ? '' : ` <span class="muted tralso" style="font-size:.68rem;opacity:.75"
+              title="also chosen in: ${esc(also.join(', '))}">· also ${esc(also.slice(0, 2).join(', '))}${also.length > 2
+              ? ` <a class="mlink" data-tralso="${esc(also.join(', '))}">+${also.length - 2}…</a>` : ''}</span>`;
           // A chosen shortcut never used reads 0 -- the most useful thing this
           // list can say -- rather than being left out for want of a number.
           // 29.23: the Pi's rate when it has one (weeks the app was in use).
-          const pi = haveU && usageData.training && usageData.training[id];
+          // 30.25: a shortcut several sets share is judged per app -- this
+          // row's set's app, from the hours its presses fell in (training.py)
+          const pi0 = haveU && usageData.training && usageData.training[id];
+          const pi = pi0 && pi0.apps && row.src && pi0.apps[appName(row.src)]
+            ? Object.assign({}, pi0, pi0.apps[appName(row.src)], {app: appName(row.src)}) : pi0;
           const per = pi ? pi.rate : c ? c.per_week : 0, tot = c ? c.count : 0;
-          return `<tr draggable="true" data-trow="${esc(id)}" style="cursor:grab">
+          return `<tr draggable="true" data-trow="${esc(row.id)}" style="cursor:grab">
             <td style="white-space:nowrap"><span class="muted" title="drag to reorder">⠿</span>
-              <input type="number" min="1" max="${chosen.length}" value="${i+1}"
-                data-tprio="${esc(id)}" style="width:3.2rem"></td>
+              <input type="number" min="1" max="${trows.length}" value="${i+1}"
+                data-tprio="${esc(row.id)}" style="width:3.2rem"></td>
             <td style="font-family:ui-monospace,monospace">${esc(id)}</td>
+            <td class="muted" style="font-size:.72rem">${esc(row.grp || '')}</td>
             <td class="muted">${d ? esc(d.text) + (srcs.length > 1
-                   ? ` <select data-tsrc="${esc(id)}" style="font-size:.72rem;width:auto" title="Which set you chose it from -- its description follows">${srcs.map(s =>
+                   ? ` <select data-tsrc="${esc(id)}" data-tsrcfrom="${esc(row.src)}" style="font-size:.72rem;width:auto" title="Which set you chose it from -- its description follows">${srcs.map(s =>
                        `<option value="${esc(s.file)}" ${s.file === src ? 'selected' : ''}>${esc(s.app)}${srcs.filter(x => x.app === s.app).length > 1 ? ' (' + esc(s.os) + ')' : ''}</option>`).join('')}</select>`
-                   : (d.app ? ` <span style="font-size:.72rem">· ${esc(d.app)}</span>` : ''))
+                   : (d.app ? ` <span style="font-size:.72rem">· ${esc(d.app)}</span>` : '')) + alsoHTML
                  : (refData('corpus') ? '<i>not in any set</i>' : '<i>reading the shortcut sets…</i>')}</td>
-            <td${per ? '' : ' style="color:var(--warn)"'}${pi ? ` title="per week over the ${pi.active} of ${pi.weeks} weeks ${esc(pi.app || 'its app')} was in use · ${esc(pi.stage)}"` : ''}>${haveU ? per : '—'}
+            <td${per ? '' : ' style="color:var(--warn)"'}${pi ? ` title="per week over the ${pi.active} of ${pi.weeks} weeks ${esc(pi.app || 'its app')} was in use · ${esc(pi.stage)}${pi0.apps ? ' · other apps: ' + esc(Object.entries(pi0.apps).filter(([a]) => a !== pi.app).map(([a, v]) => a + ' ' + v.rate + '/wk').join(', ') || 'none') + (pi0.unknown ? ' · ' + pi0.unknown + ' presses in no clear app' : '') : ''}"` : ''}>${haveU ? per : '—'}
               <input type="number" min="0.1" step="0.5" data-trate="${esc(id)}" style="width:3.4rem;margin-left:.2rem"
                 value="${((cfg.kbd_rate||{})[id])||''}" placeholder="${PK_TARGET}"
                 title="Its natural rate: how often a week you would use it once learned (default ${PK_TARGET}). Colours on the practice keyboard measure against this."></td>
             <td class="muted">${haveU ? tot : '—'}</td>
             <td style="white-space:nowrap"><a class="mlink" data-tknow="${esc(id)}"
                    title="I already know this one — stop practising it">✓ know it</a>
-                <a class="mlink" data-untrain="${esc(id)}" title="stop practising this">✕</a></td></tr>`;}).join('')}
+                <a class="mlink" data-untrain="${esc(id)}" data-untrainfile="${esc(row.src)}" title="stop practising this${row.src && trainSrcs(id).length > 1 ? ' in ' + esc(appName(row.src)) : ''}">✕</a></td></tr>`;}).join('')}
       </table>
       <p class="muted" style="font-size:.75rem">A zero in <b>Per week</b> is the point of the list:
         a shortcut you decided to learn and have not reached for.${haveU ? '' : ' Load Usage for the counts.'}</p>
@@ -8357,12 +8780,23 @@ function renderTraining(){
     if($('tlto')) $('tlto').onchange = e => tl('to', e.target.value);
     if($('tlclear')) $('tlclear').onclick = () => { trainFrom = trainTo = ''; renderTraining(); };
     el.querySelectorAll('[data-untrain]').forEach(a => a.onclick = () => {
-      setTrained(a.dataset.untrain, false); renderTraining(); renderTrack();});
+      setTrained(a.dataset.untrain, false, a.dataset.untrainfile || undefined); renderTraining(); renderTrack();});
+    // 30.21: the full "also chosen in" list, opened in place
+    el.querySelectorAll('[data-tralso]').forEach(a => a.onclick = e => {
+      e.stopPropagation(); a.closest('.tralso').textContent = '· also ' + a.dataset.tralso;});
     el.querySelectorAll('[data-tsrc]').forEach(s => s.onchange = () => {     // 30.17.1
-      cfg.kbd_train_src = cfg.kbd_train_src || {};
-      cfg.kbd_train_src[s.dataset.tsrc] = s.value;
+      // 30.21: replaces this row's set, keeping the chord's others
+      const ch = s.dataset.tsrc, from = s.dataset.tsrcfrom || '';
+      const was = trainSrcs(ch);
+      const now = [...new Set(from ? was.map(f => f === from ? s.value : f) : [s.value])];
+      _setTrainSrcs(ch, now);
+      if(cfg.kbd_train_order) cfg.kbd_train_order = cfg.kbd_train_order
+        .map(x => x === ch + '\t' + from ? ch + '\t' + s.value : x);
+      _trainOrderTidy();
       profileTouched(); renderTraining(); renderPracticeKbd(); renderFocusChip(); renderFocusFloat();
       toast('described from ' + s.options[s.selectedIndex].text + ' — ⬆ Save to device to keep it');});
+    if($('tgfilter')) $('tgfilter').onchange = e => { _trainGrpF = e.target.value; renderTraining(); };
+    if($('tgsort')) $('tgsort').onclick = () => { _trainSort = _trainSort === 'group' ? '' : 'group'; renderTraining(); };
     el.querySelectorAll('[data-tknow]').forEach(a => a.onclick = () => {
       setKnown(a.dataset.tknow, true); renderTraining(); renderTrack();
       toast('marked as known: ' + a.dataset.tknow);});
@@ -8383,8 +8817,12 @@ function renderTraining(){
       tr.ondragover = e => { e.preventDefault(); };
       tr.ondrop = e => { e.preventDefault();
         if(!dragId || dragId === tr.dataset.trow) return;
-        setTrainPriority(dragId, (cfg.kbd_train || []).indexOf(tr.dataset.trow));
-        renderTraining(); };});};
+        const ids = mselIds('train', dragId);
+        const rows = mselPlace(trainRows().map(r => r.id), ids, tr.dataset.trow);
+        if(!rows) return;
+        setTrainOrder(rows); renderTraining(); renderTrack();
+        if(ids.length > 1) toast(ids.length + ' moved — ⬆ Save to device to keep it'); };});
+    mselBind(el, 'train', '[data-trow]', it => it.dataset.trow, '#trainchosen');};
   if(typeof renderPracticeKbd === 'function') renderPracticeKbd();
   if(!haveU){
     el.innerHTML = chosenHTML + picksHTML + knownHTML
@@ -8448,7 +8886,7 @@ function renderBackups(lines){
     _bkList.push({name:p[0],ts:+p[1]*1000,size:+(p[2]||0)});}
   if(!_bkList.length){t.innerHTML='<tr><td class="muted">No backups yet — they appear after your first ⬆ Save to device.</td></tr>';return;}
   // group by what the backup is of, newest first
-  t.innerHTML='<tr><td><b>When</b></td><td><b>File</b></td><td><b>Size</b></td><td></td></tr>'
+  t.innerHTML='<tr class="hdr"><td><b>When</b></td><td><b>File</b></td><td><b>Size</b></td><td></td></tr>'
     +_bkList.map((b,i)=>{
       const isCfg=/^bridge_config\.json/.test(b.name);
       return `<tr>
@@ -8754,7 +9192,7 @@ function renderAssignTable(){
         <td class="asggrpcell${_asgGrpSel.has(member)?' grpsel':''}" data-grpcell="${esc(member)}"><input type="text" data-asggrp="${esc(member)}" placeholder="group" value="" style="width:7rem" maxlength="60" autocomplete="off">
           ${inGroups.map(n=>{
             const held=(cfg.mapping_groups[n].members||[]).find(m=>_ids.includes(m))||member;
-            return `<span class="grouppill" title="remove from ${esc(n)}" onclick="groupRemove('${esc(n)}','${esc(held)}')">${esc(n)} ✕</span>`;}).join('')}</td>
+            return `<a class="mlink" title="show/hide ${esc(n)} on the wireframes" onclick="groupEye('${esc(n)}')">${groupOn[n]===false?'🙈':'👁'}</a><span class="grouppill" title="remove from ${esc(n)}" onclick="groupRemove('${esc(n)}','${esc(held)}')">${esc(n)} ✕</span>`;}).join('')}</td>
         <td><button data-asgdel="${ri}" title="remove this Input→Output">✕</button></td></tr>`;}
     h+='</table></details>';}
   host.innerHTML=h;
@@ -9254,6 +9692,7 @@ function shortcutPanelHTML(canon){
    setTrained() are the only writers of the learning state and repaint the
    stage (not render(), which would rebuild the editor). */
 function profileTouched(){
+  undoNote();                                                          // 30.23
   heldPaintReset();
   if(typeof renderStage==='function')renderStage();
   // Directly, not through requestAnimationFrame: rAF does not fire while the
@@ -9593,7 +10032,7 @@ function renderOptRules(){
     `<a class="mlink" data-obind="${n},${u}">${esc(lab)} → ${esc(macroLabel(n))}</a>`).join(' · ');
   host.innerHTML=`<b>Mac option/alt mode list</b> <span class="muted">— rules that exist only in Mac option/alt mode. "Cmd" is the key next to the spacebar (Ctrl on Windows).</span>
     <div style="margin-top:.3rem"><b style="font-size:.78rem">What Option takes over, and where it moved</b>
-    <table style="font-size:.78rem"><tr><td><b>On Windows</b></td><td><b>Was</b></td><td><b>Now, in Mac option/alt mode</b></td></tr>${disp}</table></div>
+    <table style="font-size:.78rem"><tr class="hdr"><td><b>On Windows</b></td><td><b>Was</b></td><td><b>Now, in Mac option/alt mode</b></td></tr>${disp}</table></div>
     <div style="margin-top:.3rem"><b style="font-size:.78rem">In Mac option/alt mode only</b>
     ${own?`<table style="font-size:.78rem">${own}</table>`:'<span class="muted"> — none yet</span>'}
     ${binds?`<div style="margin-top:.2rem">Add your macros: ${binds}</div>`:''}</div>
@@ -10516,7 +10955,9 @@ function renderRoadmap(){
       const rel=t.closest('.rmrel').dataset.rmrel,before=t.classList.contains('rmitem')?t.dataset.rmid:null;
       if(before===id)return;
       if(before&&String(before).startsWith('new-')){toast('drop onto an item that is already on the roadmap',true);return;}
-      rmSend({op:'move',id,rel,before});};});}
+      const ids=mselIds('rm',id);if(before&&ids.includes(before))return;
+      ids.forEach(x=>rmSend({op:'move',id:x,rel,before}));};});
+  mselBind(el,'rm','.rmitem[draggable]',it=>it.dataset.rmid,'.rmrel');}
 window.exportChangelog=()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([changelogText()],{type:'text/plain'}));
@@ -10606,20 +11047,32 @@ window.addToGroup=(name,member)=>{
   name=String(name||'').trim();
   if(!validGroupName(name)){
     toast('group: dotted path of letters/digits/spaces/dashes, e.g. nav.arrows',true);return;}
+  cfg.mapping_groups=cfg.mapping_groups||{};          // write path (§2.5 rule 5)
+  const isNew=!cfg.mapping_groups[name];
   const g=cfg.mapping_groups[name]=cfg.mapping_groups[name]||
     {members:[],color:GROUP_COLORS[Object.keys(cfg.mapping_groups).length%GROUP_COLORS.length]};
-  if(!g.members.includes(member))g.members.push(member);
-  groupOn[name]=true;render();};
+  // 30.20: say what happened -- a silent Add read as one that did nothing
+  if(g.members.includes(member)){toast('already in “'+name+'”');return;}
+  g.members.push(member);
+  groupOn[name]=true;render();
+  toast((isNew?'new group “':'added to “')+name+'” — ⬆ Save to device to keep it');};
+// 30.20: each copy its own list (one id shared by several copies made the
+// field read whichever came first, possibly a stale empty one)
+let _grpListN=0;
 function groupAssignHTML(member){
+  const lid='grouplist'+(++_grpListN);
   const names=Object.keys(cfg.mapping_groups||{});
   const inGroups=names.filter(n=>(cfg.mapping_groups[n].members||[]).includes(member));
   return `<hr style="border:none;border-top:1px solid var(--line);margin:.5rem 0">
   <label>Groups <span class="muted">(dotted subgroups: nav.arrows)</span></label>
   ${inGroups.map(n=>`<span class="grouppill" onclick="groupRemove('${esc(n)}','${member}')">${esc(n)} ✕</span>`).join('')}
   <div class="grpadd" data-member="${esc(member)}" style="display:flex;gap:.4rem">
-    <input class="groupinput" list="grouplist" placeholder="nav.arrows" style="flex:1" maxlength="60">
+    <input class="groupinput" list="${lid}" placeholder="nav.arrows" style="flex:1;min-width:0" maxlength="60">
+    <button class="grouplistbtn" title="Show your groups" type="button">▾</button>
     <button class="groupaddbtn">Add</button></div>
-  <datalist id="grouplist">${groupNamesSorted().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;}
+  <datalist id="${lid}">${groupNamesSorted().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;}
+// 30.20: the Group column's eye -- the same switch as the group pill's
+window.groupEye=n=>{groupOn[n]=groupOn[n]===false;render();};
 window.groupRemove=(n,member)=>{
   const g=cfg.mapping_groups[n];if(!g)return;
   g.members=(g.members||[]).filter(m=>m!==member);
@@ -10634,6 +11087,8 @@ function bindGroupAssign(){
     const inp=w.querySelector('.groupinput'),b=w.querySelector('.groupaddbtn');
     const add=()=>addToGroup(inp.value,w.dataset.member);
     b.onclick=add;
+    const lb=w.querySelector('.grouplistbtn');
+    if(lb)lb.onclick=()=>{inp.focus();try{inp.showPicker();}catch(_){}};
     inp.onkeydown=e=>{if(e.key==='Enter')add();};});}
 function comboIdFor(keys){return 'combo-'+keys.slice().sort((a,b)=>a-b).join('-');}
 function comboScopeDev(id,c){
@@ -10645,6 +11100,90 @@ function comboScopeDev(id,c){
 /* 19.2 BF1: editor for a modifier shortcut (mods + key -> action).  Unlike a
    combo this fires from the engine's mod-chord table, which is the only path
    that can see held modifiers. */
+/* 30.20: what else answers to this chord, so a new shortcut is chosen
+   knowing what it would cover. Emphasis falls with how much it is his:
+   pressed (usage count, most first), being learned, then merely in a set
+   for the active OS. Reads only; nothing here writes cfg. */
+// The editor names keys by glyph (↑, Del); usage and the sets spell them out
+const _CC_KEY={'↑':'up','↓':'down','←':'left','→':'right','del':'delete',
+  'esc':'escape','return':'enter','pgup':'pageup','pgdn':'pagedown',
+  'page up':'pageup','page down':'pagedown'};
+function _ccNorm(s){const n=_chordNorm(s),i=n.lastIndexOf('+');
+  const k=n.slice(i+1);return n.slice(0,i+1)+(_CC_KEY[k]||k);}
+function chordCollisions(chord){
+  const want=_ccNorm(chord),out=[];
+  for(const[id,r]of Object.entries((typeof usageData!=='undefined'&&usageData&&usageData.shortcuts)||{}))
+    if(_ccNorm(id)===want&&r.count)out.push({tier:0,n:r.count,
+      text:`you pressed ${id} ${r.count}×`+(usageData.weeks?` in ${usageData.weeks} wk`:'')});
+  out.sort((a,b)=>b.n-a.n);
+  for(const ch of (cfg&&cfg.kbd_train)||[])
+    if(_ccNorm(ch)===want){const d=corpusDesc(ch,(cfg.kbd_train_src||{})[ch]);
+      out.push({tier:1,text:`you are learning ${ch}`+(d?` — ${d.app}: ${d.text}`:'')});}
+  const aos=/^mac/i.test(cfg&&cfg.active_os||'')?'mac':'win';
+  for(const c of (refData('corpus')||[])){
+    const fam=/^mac/i.test(c.os||'')?'mac':/^win/i.test(c.os||'')?'win':'';
+    if(fam&&fam!==aos)continue;
+    for(const[k,d]of Object.entries(c.shortcuts||{}))
+      if(_ccNorm(k)===want)out.push({tier:2,text:`${c.app||c.name||c.file}: ${d}`});}
+  return out;}
+function chordCollisionsHTML(chord){
+  const cs=chordCollisions(chord);
+  if(!cs.length)return refData('corpus')?`<div class="muted" style="font-size:.74rem;margin:.1rem 0 .3rem">No app shortcut uses ${esc(chord)}.</div>`:'';
+  const sty=['font-weight:600;color:var(--warn)','','color:var(--mut);font-size:.72rem'];
+  const row=c=>`<div style="${sty[c.tier]}">${c.tier===0?'⚠ ':c.tier===1?'◆ ':'· '}${esc(c.text)}</div>`;
+  const top=cs.filter(c=>c.tier<2),set=cs.filter(c=>c.tier===2);
+  const SHOW=4;
+  return `<div class="mccollide" style="font-size:.76rem;margin:.15rem 0 .4rem;padding:.25rem .4rem;border:1px solid var(--line);border-radius:6px">
+    <div class="muted" style="font-size:.72rem">${esc(chord)} is also:</div>
+    ${top.map(row).join('')}${set.slice(0,SHOW).map(row).join('')}
+    ${set.length>SHOW?`<details><summary class="muted" style="font-size:.72rem;cursor:pointer">${set.length-SHOW} more in shortcut sets</summary>${set.slice(SHOW).map(row).join('')}</details>`:''}</div>`;}
+/* 30.24: every rule that matches the same press as this one, in the
+   order the engine tries them (docs/MAPPING_MODEL.md §1, s2_mapping
+   _chord_pick): his drag order (cfg.mod_chord_order) first, then any rule
+   before a ticked Option character, then one-sided before either-side, the
+   active OS's table before the shared one, this layer before any layer.
+   A rule's id is "<os>|<key>" ("" = shared), the table and key as stored. */
+function chordRivals(mods,canon){
+  const fam=mods&0x0F,aos=/^mac/i.test(cfg.active_os||'')?'mac':'win',out=[];
+  const row=OPT_CHARS.find(r=>r[0]===canon);
+  const tbls=[[aos,((cfg.os_profiles||{})[aos]||{}).mod_chords||{}],['',cfg.mod_chords||{}]];
+  for(const[scope,t]of tbls)for(const[k,v]of Object.entries(t)){
+    const[ly,m,c]=k.split(',').map(Number);
+    if(c!==canon||(m&0x0F)!==fam||!(ly===-1||ly===layer)||v===undefined)continue;
+    const sides=[0x01,0x02,0x04,0x08].filter(b=>m&((b<<SIDE_L)|(b<<SIDE_R))).length;
+    const opt=!!scope&&!!row&&(fam===0x04||fam===0x06)&&JSON.stringify(v)===JSON.stringify(_optAct(row,fam===0x06));
+    out.push({id:scope+'|'+k,scope,key:k,v,ly,m,opt,
+      tie:[sides?0:1,scope?0:1,-sides,ly===-1?1:0]});}
+  const ord=((cfg.mod_chord_order||{})[fam+','+canon])||[];
+  const rank=r=>{const i=ord.indexOf(r.id);return i<0?ord.length:i;};
+  out.sort((a,b)=>rank(a)-rank(b)||(a.opt-b.opt)||a.tie.reduce((s,x,i)=>s||x-b.tie[i],0));
+  return out;}
+function chordRivalsHTML(mods,canon){
+  const rs=chordRivals(mods,canon);if(rs.length<2)return '';
+  const fam=mods&0x0F,set=((cfg.mod_chord_order||{})[fam+','+canon]);
+  return `<div class="mcrivals" data-mcrfam="${fam},${canon}" style="font-size:.76rem;margin:.15rem 0 .4rem;padding:.25rem .4rem;border:1px solid var(--line);border-radius:6px">
+    <div class="muted" style="font-size:.72rem">Which one wins when you press this: top first — drag to reorder.
+      ${set?'<a class="mlink" data-mcrreset="1" title="Back to the default: your rules before Option characters, then the most specific">reset</a>':'<span>(default order)</span>'}</div>
+    <ol style="margin:.15rem 0 0 1.2rem;padding:0">${rs.map((r,i)=>`<li draggable="true" data-mcrid="${esc(r.id)}" style="cursor:grab">
+      <b>${esc(modsName(r.m))}</b>${r.ly>=0?' · '+esc(layerName(r.ly)):''} → ${esc(asgActLabel(r.v))}
+      <span class="muted">· ${r.scope?esc(r.scope==='mac'?'Mac':'Windows')+' only':'all OSes'}${r.opt?' · ⌥ Option character':''}${i===0?' · <b>wins</b>':''}</span></li>`).join('')}</ol></div>`;}
+function chordRivalsBind(ed){
+  const box=ed.querySelector('.mcrivals');if(!box)return;
+  const key=box.dataset.mcrfam;
+  const write=ids=>{cfg.mod_chord_order=cfg.mod_chord_order||{};cfg.mod_chord_order[key]=ids;
+    profileTouched();renderEditor();toast('order set — ⬆ Save to device to keep it');};
+  const r=box.querySelector('[data-mcrreset]');
+  if(r)r.onclick=()=>{delete cfg.mod_chord_order[key];
+    if(!Object.keys(cfg.mod_chord_order).length)delete cfg.mod_chord_order;
+    profileTouched();renderEditor();toast('default order — ⬆ Save to device to keep it');};
+  let from=null;
+  box.querySelectorAll('[data-mcrid]').forEach(li=>{
+    li.ondragstart=e=>{from=li.dataset.mcrid;e.dataTransfer.effectAllowed='move';
+      try{e.dataTransfer.setData('text/plain',from);}catch(_){}};
+    li.ondragover=e=>{if(from)e.preventDefault();};
+    li.ondrop=e=>{e.preventDefault();if(!from||from===li.dataset.mcrid)return;
+      const ids=[...box.querySelectorAll('[data-mcrid]')].map(x=>x.dataset.mcrid);
+      const o=mselPlace(ids,[from],li.dataset.mcrid);from=null;if(o)write(o);};});}
 function renderModChordEd(ed){
   const cur=findModChord(sel.mods,sel.canon,sel.mcKey);
   // 30.15: a pack's rule is what this shortcut does -- shown, not edited
@@ -10669,13 +11208,21 @@ function renderModChordEd(ed){
     <b>Pass through unchanged</b> is the exception: it means “this exact combination is deliberately
     <i>not</i> rewritten”. Use it to carve one Shift variant out of a rule — without it, a missing
     Shift rule falls back to the no-Shift rule and sends that instead.</p>
+    ${chordCollisionsHTML(modsName(sel.mods)+'+'+mcName(sel.canon))}
+    ${chordRivalsHTML(sel.mods,sel.canon)}
     <div style="font-size:.78rem;margin:.2rem 0 .3rem">${[0x01,0x02,0x04,0x08].filter(b=>sel.mods&b).map(b=>
       `<label class="inl" style="margin-right:.6rem" title="Which ${_MODNAME[b]} this rule answers to">${_MODNAME[b]}
         <select data-mcside="${b}" style="width:auto;font-size:.76rem">
           <option value="either" ${modSide(sel.mods,b)==='either'?'selected':''}>either side</option>
           <option value="L" ${modSide(sel.mods,b)==='L'?'selected':''}>left only</option>
           <option value="R" ${modSide(sel.mods,b)==='R'?'selected':''}>right only</option></select></label>`).join('')}</div>
-    <div class="row"><div>
+    <div class="row"><div style="min-width:0">
+      <!-- 30.20: search first and always shown, as in the key editor (24.8) -->
+      <div id="pressAssign" style="margin-bottom:.45rem;padding-bottom:.4rem;border-bottom:1px dashed var(--line)">
+        <div class="muted" style="font-size:.72rem">Search actions — quick-assign to <b>On press</b> ↓:</div>
+        ${searchBoxHTML()}${capBoxHTML()}
+        <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
+      </div>
       <label>On press${a?'':' <span class="muted" style="font-weight:400">(not a rule yet)</span>'}</label><select id="mcact">
         ${a?'':(tsp?'<option value="asusual" selected>As usual (the keys themselves)</option>'
                    :'<option value="" selected disabled>— choose what it does —</option>')}
@@ -10688,15 +11235,10 @@ function renderModChordEd(ed){
         ${a&&a[0]==='expansion'?`<option value="expansion" selected>Expansion: ${esc(a[2]||'')}</option>`:''}
       </select><div id="mcargwrap"></div>
       ${tapsHTML(tsp,cur&&cur.action)}
-      <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
-        <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
-        ${searchBoxHTML()}${capBoxHTML()}
-        <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
-      </div>
       ${osScopeHTML('mcos',os)}
       ${noteFieldHTML(noteKey('mc',key))}
       ${groupAssignHTML('mc:'+key)}
-    </div><div>
+    </div><div style="flex:0 0 auto;min-width:0;align-self:flex-start">
       <button id="mcdel" style="margin-top:.2rem">🗑 Delete shortcut</button>
     </div></div>`;
   // These choose the modifiers SENT to the host: plain HID bits, not read
@@ -10715,7 +11257,6 @@ function renderModChordEd(ed){
       k==='key'?`<select id="mcarg">${keyOpts(outKey)}</select>`:
       k==='macro'?`<select id="mcarg">${macOpts(c2[0]==='macro'?c2[1]:(ui.pressMacro||1))}</select>`:
       k==='text'?`<input type="text" id="mcarg" value="${esc(c2[0]==='text'?(c2[1]||''):'')}" placeholder="text">`:'';
-    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress'||k==='expansion')?'':'none';
     bindArgs();};
   const commit=()=>{
     const k=$('mcact').value,el=$('mcarg'),v=el?el.value:null;
@@ -10769,7 +11310,8 @@ function renderModChordEd(ed){
       for(const g of Object.values(cfg.mapping_groups||{})){
         const i=(g.members||[]).indexOf('mc:'+key);if(i>=0)g.members[i]='mc:'+nk;}
       toast('now '+modsName(nm)+' + '+mcName(sel.canon)+' — ⬆ Save to device');}
-    sel.mods=nm;sel.mcKey=nk;render();});}
+    sel.mods=nm;sel.mcKey=nk;render();});
+  chordRivalsBind(ed);}
 function renderComboEd(ed){
   const c=cfg.combos[sel.id];
   if(!c){sel=null;return renderEditor();}
@@ -10789,7 +11331,12 @@ function renderComboEd(ed){
   ed.innerHTML=`<h2 style="font-size:1rem">${esc(title)} — layer ${layer}</h2>
     <p class="muted" style="font-size:.78rem">These keys pressed together (within ${c.window_ms||60} ms) fire one action; the keys are swallowed. <b>Shift-click</b> another key on a wireframe to add it, or a member to remove it.</p>
     ${scopeTabs}
-    <div class="row"><div>
+    <div class="row"><div style="min-width:0">
+      <div id="pressAssign" style="margin-bottom:.45rem;padding-bottom:.4rem;border-bottom:1px dashed var(--line)">
+        <div class="muted" style="font-size:.72rem">Search actions — quick-assign to <b>On press</b> ↓:</div>
+        ${searchBoxHTML()}${capBoxHTML()}
+        <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
+      </div>
       <label>On press</label><select id="cact">
         <option value="suppress" ${a[0]==='suppress'?'selected':''}>Nothing (swallow keys)</option>
         <option value="key" ${a[0]==='key'?'selected':''}>Key…</option>
@@ -10797,15 +11344,10 @@ function renderComboEd(ed){
         <option value="text" ${a[0]==='text'?'selected':''}>Type text…</option>
         <option value="os" ${a[0]==='os'?'selected':''}>Switch OS (win/mac)</option>
       </select><div id="cargwrap"></div>
-      <div id="pressAssign" style="margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--line)">
-        <div class="muted" style="font-size:.72rem">↳ quick-assign to <b>On press</b>:</div>
-        ${searchBoxHTML()}${capBoxHTML()}
-        <button id="newmacro" style="margin-top:.35rem">＋ New macro</button><div id="inlinemacro"></div>
-      </div>
       <label style="margin-top:.5rem">Window (ms)</label><input type="number" id="cwin" value="${c.window_ms||60}" min="20" max="500">
       ${osScopeHTML('cbos',(c.os&&[].concat(c.os)[0])||'')}
       ${noteFieldHTML(noteKey('combo',sel.id))}
-    </div><div>
+    </div><div style="flex:0 0 auto;min-width:0;align-self:flex-start">
       <button id="cdel" style="margin-top:.2rem">🗑 Delete combo</button>
     </div></div>`;
   // 19.3: re-bind after every rebuild of #cargwrap, and seed the picker
@@ -10819,8 +11361,6 @@ function renderComboEd(ed){
     w.innerHTML=k==='key'?`<select id="carg">${keyOpts(curKey)}</select>`:
       k==='macro'?`<select id="carg">${macOpts(curMac)}</select>`:
       k==='text'?`<input type="text" id="carg" value="${esc(curTxt)}" placeholder="text (may embed {{ctrl+c}})">`:'';
-    // quick-assign boxes only make sense for direct actions
-    $('pressAssign').style.display=(k==='key'||k==='macro'||k==='suppress')?'':'none';
     bindArgs();};
   const commit=()=>{
     const k=$('cact').value,el=$('carg'),v=el?el.value:null;
@@ -12205,9 +12745,40 @@ function qnoteDone(text){
     toast('✎ saved to HID Notes');}
   else toast('✗ '+text.replace(/^NOTE /,'')+' — the note is still in the box',true);}
 
+/* 30.26: shared timings -- a named wait ($panel) used by two or more
+   macros, in the shared table and every OS's. Changing one value here
+   writes it into every wait step of that name, so a family of macros (the
+   paste-from-history pack's ten) is tuned in one place. Read on render;
+   written only on his edit. */
+function sharedTimings(){
+  const tbls=[['',cfg.macros||{}],...Object.entries(cfg.os_profiles||{}).map(([o,p])=>[o,(p&&p.macros)||{}])];
+  const out={};
+  for(const[os,t]of tbls)for(const[n,s]of Object.entries(t))for(const x of (Array.isArray(s)?s:[])){
+    if(!x||Array.isArray(x)||typeof x!=='object'||!x.var||!('wait' in x))continue;
+    const v=out[x.var]=out[x.var]||{ms:new Set(),macros:new Set()};
+    v.ms.add(+x.wait);v.macros.add((os?os+' ':'')+'M'+n);}
+  return Object.fromEntries(Object.entries(out).filter(([,v])=>v.macros.size>1));}
+function sharedTimingsHTML(){
+  const st=sharedTimings(),ks=Object.keys(st).sort();
+  if(!ks.length)return '';
+  return `<details open id="sharedtimings" style="margin:.2rem 0 .6rem"><summary style="cursor:pointer"><b>Shared timings</b>
+    <span class="muted">· a named wait used by several macros — change it once here</span></summary>
+    <table style="width:auto;font-size:.8rem"><tr class="hdr"><td><b>Name</b></td><td><b>ms</b></td><td><b>Used in</b></td></tr>
+    ${ks.map(k=>{const v=st[k],ms=[...v.ms].sort((a,b)=>a-b),ma=[...v.macros];
+      return `<tr><td style="font-family:ui-monospace,monospace">$${esc(k)}</td>
+        <td><input type="number" min="0" step="10" data-stv="${esc(k)}" value="${ms.length===1?ms[0]:''}"
+          placeholder="${ms.length>1?esc(ms[0]+'–'+ms[ms.length-1]):''}" style="width:5rem"
+          title="${ms.length>1?'differs between macros: '+esc(ms.join(', '))+' ms -- a value here sets them all':''}"></td>
+        <td class="muted">${ma.length} macros${ma.length<=6?' · '+esc(ma.join(', ')):''}</td></tr>`;}).join('')}</table></details>`;}
+function sharedTimingSet(name,ms){
+  let n=0;
+  const tbls=[cfg.macros||{},...Object.values(cfg.os_profiles||{}).map(p=>(p&&p.macros)||{})];
+  for(const t of tbls)for(const s of Object.values(t))for(const x of (Array.isArray(s)?s:[]))
+    if(x&&!Array.isArray(x)&&typeof x==='object'&&x.var===name&&'wait' in x){x.wait=ms;n++;}
+  return n;}
 function renderMacros(){
   const el=$('macrolist');let h='<h2 style="font-size:1rem">Macros (one step per line; wait 250ms pauses; # comments)'
-    +' <button id="macfrbtn" class="txmini" style="font-size:.75rem" title="Find and replace across your macros">🔍 Find &amp; Replace</button></h2>';
+    +' <button id="macfrbtn" class="txmini" style="font-size:.75rem" title="Find and replace across your macros">🔍 Find &amp; Replace</button></h2>'+sharedTimingsHTML();
   // 29.2.1: read, don't create -- this used to add macro_names on render.
   const names=cfg.macro_names||{};
   const users=macroUsers();
@@ -12234,6 +12805,11 @@ function renderMacros(){
   el.innerHTML=h;
   try{renderPrimers();}catch(e){console.warn('primers',e);}
   el.querySelectorAll('textarea[data-m]').forEach(macHL);              // 30.15
+  el.querySelectorAll('[data-stv]').forEach(inp=>inp.onchange=()=>{    // 30.26
+    const ms=Math.round(+inp.value);if(!(ms>=0)||inp.value===''){renderMacros();return;}
+    const n=sharedTimingSet(inp.dataset.stv,ms);
+    profileTouched();renderMacros();
+    toast('$'+inp.dataset.stv+' = '+ms+' ms in '+n+' step'+(n===1?'':'s')+' — ⬆ Save to device to keep it');});
   el.querySelectorAll('textarea[data-m]').forEach(t=>t.onchange=()=>{
     const bad=macroTextBad(t.value);
     t.style.outline=bad.length?'2px solid var(--err)':'';
@@ -12534,7 +13110,7 @@ function macSelectHTML(cur){
 function renderDevs(){
   const t=$('devtable'); if(!t||!cfg)return;
   if(!cfg.devices)migrateDevices();
-  t.innerHTML=`<tr><td><b>Name</b></td><td><b>Kind</b></td><td><b>Pin</b></td>
+  t.innerHTML=`<tr class="hdr"><td><b>Name</b></td><td><b>Kind</b></td><td><b>Pin</b></td>
     <td><b>Gesture-node pin</b></td><td><b>Bluetooth device</b></td><td><b>Wireframe</b></td><td></td></tr>`;
   cfg.devices.forEach((d,i)=>{
     const tr=document.createElement('tr');tr.dataset.i=i;
@@ -13041,7 +13617,7 @@ function renderDurSettings(){
 
 function renderDynTable(view){
   const t=$('dyntable');if(!t)return;
-  t.innerHTML='<tr><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
+  t.innerHTML='<tr class="hdr"><td><b>Name</b></td><td><b>Trigger</b></td><td><b>Format</b></td>'
     +'<td><b>Produces</b></td><td><b>Trailing space</b></td>'
     +'<td><b>Duration</b></td><td></td></tr>';
   for(const[trig,spec]of Object.entries(view||cfg.dynamic_formats||{})){
@@ -13307,7 +13883,7 @@ function noteTagMismatch(r){
 function renderNoteTable(){
   const t=$('notetable');if(!t)return;
   const rules=(cfg&&cfg.note_rules)||[];
-  t.innerHTML='<tr><td><b>Saves into (Copy entry)</b></td><td><b>Start</b></td>'
+  t.innerHTML='<tr class="hdr"><td><b>Saves into (Copy entry)</b></td><td><b>Start</b></td>'
     +'<td><b>Start &amp; erase</b></td><td><b>End</b></td><td></td>'
     +'<td><b>Types after it</b></td><td><b>On</b></td><td></td></tr>';
   // The Add button is wired first, before the empty-state return.
@@ -13404,7 +13980,7 @@ function renderExp(){
   // 23.8 (2026-09-01): a Group column for expansions (a label, not a set).
   const tstats=(cfg&&cfg.exp_typing)||{};
   const totalN=Object.values(tstats).reduce((a,v)=>a+((v&&v.n)||0),0);
-  t.innerHTML='<tr><td><b>Label</b></td><td><b>Trigger</b></td>'
+  t.innerHTML='<tr class="hdr"><td><b>Label</b></td><td><b>Trigger</b></td>'
     +'<td title="Typing here is timed: ⏸ pause, ▶ resume, ⏹ record."><b>Expands to</b> <span class="muted" style="font-weight:400;font-size:.72rem">(timed)</span></td>'
     +'<td title="Estimated time saved per use: the mean of every sample. ＋ adds one, ✎ sets the estimate by hand. Hover a cell for SD, min and max."><b>Estimated time saved</b>'
     +(totalN?` <span class="muted" style="font-weight:400;font-size:.72rem">`
@@ -13824,7 +14400,7 @@ function fmtMs(ms){
 // 23.8: hyperlink expansions -- trigger, link text, URL.
 function renderLinks(){
   const t=$('linktable');if(!t)return;
-  t.innerHTML='<tr><td><b>Trigger</b></td><td><b>Link text</b></td>'
+  t.innerHTML='<tr class="hdr"><td><b>Trigger</b></td><td><b>Link text</b></td>'
     +'<td><b>URL</b></td><td></td></tr>';
   const h=(cfg&&cfg.hyperlinks)||{};
   for(const [trig,v] of Object.entries(h))
@@ -14085,7 +14661,7 @@ function renderSetTable(){
     dbox.value=st.description||'';
     dbox.oninput=()=>{st.description=dbox.value;markSetsDirty();};
   }
-  let h=`<tr><td><b>On</b></td><td><b>Trigger</b></td>
+  let h=`<tr class="hdr"><td><b>On</b></td><td><b>Trigger</b></td>
     <td title="Typing here is timed: ⏸ pause, ▶ resume, ⏹ record."><b>Expands to</b> <span class="muted" style="font-weight:400;font-size:.72rem">(timed)</span></td>
     <td title="Estimated time saved per use. ＋ adds a timing, ✎ sets it as a breakdown."><b>Estimated time saved</b></td>
     <td><b>Regex</b></td><td><b>Case</b></td>
@@ -14347,7 +14923,7 @@ function renderOsTab(){
     p.onclick=()=>{osView=o;renderOsTab();};tb.appendChild(p);}
   // per-device scrolling
   const devs=allDevices();
-  let sh=`<tr><td><b>Device</b></td>${oses.map(o=>`<td><b>${esc(o)}${o===osView?' ◀':''}</b></td>`).join('')}</tr>`;
+  let sh=`<tr class="hdr"><td><b>Device</b></td>${oses.map(o=>`<td><b>${esc(o)}${o===osView?' ◀':''}</b></td>`).join('')}</tr>`;
   for(const d of devs){
     sh+=`<tr><td>${esc(d.name)}</td>`+oses.map(o=>{
       const inv=((cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].scroll_invert)||{})[d.id];
@@ -14419,7 +14995,7 @@ function renderOsTab(){
   // unicode method
   // 20.7.4 #1: same catalogue as the per-expansion picker, so a method can
   // never appear in one list and not the other.
-  let uh=`<tr><td><b>OS</b></td><td><b>Unicode method</b></td></tr>`;
+  let uh=`<tr class="hdr"><td><b>OS</b></td><td><b>Unicode method</b></td></tr>`;
   for(const o of oses){
     const cur=(cfg.os_profiles&&cfg.os_profiles[o]&&cfg.os_profiles[o].unicode_method)||'';
     uh+=`<tr><td>${esc(o)}</td><td><select onchange="osUniSet('${esc(o)}',this.value)">`
@@ -14430,7 +15006,7 @@ function renderOsTab(){
   $('osuni').innerHTML=uh;
   // macro differences grid: base (win macros) vs each OS override
   const baseM=cfg.macros||{}, names=cfg.macro_names||{};
-  let gh=`<tr><td><b>Macro</b></td><td><b>base</b></td>${oses.filter(o=>o!=='win').map(o=>`<td><b>${esc(o)}${o===osView?' ◀':''}</b></td>`).join('')}</tr>`;
+  let gh=`<tr class="hdr"><td><b>Macro</b></td><td><b>base</b></td>${oses.filter(o=>o!=='win').map(o=>`<td><b>${esc(o)}${o===osView?' ◀':''}</b></td>`).join('')}</tr>`;
   for(let n=1;n<=26;n++){
     if(!baseM[n]||!baseM[n].length)continue;
     const nm=names[n]?names[n]+' (M'+n+')':'M'+n;
@@ -14457,7 +15033,7 @@ function renderModRemap(){
   const os=osView||cfg.active_os||'win';
   $('mrhdr').textContent='— '+os;
   const tbl=(cfg.os_profiles&&cfg.os_profiles[os]&&cfg.os_profiles[os].mod_remap)||{};
-  let h=`<tr><td><b>Physical key</b></td><td><b>Sends</b></td></tr>`;
+  let h=`<tr class="hdr"><td><b>Physical key</b></td><td><b>Sends</b></td></tr>`;
   for(const[b,n]of MOD_BITS){
     const cur=tbl[b]!==undefined?tbl[b]:'';
     h+=`<tr><td>${esc(n)}</td><td><select data-mr="${b}">
@@ -14553,7 +15129,7 @@ function renderOsMap(oses){
   for(const[k,v]of Object.entries(cfg.mouse_mappings||{})){const[L,id]=k.split(',').map(Number);rows.push({type:'btn',id,L,base:v});}
   rows.sort((a,b)=>a.L-b.L||a.type.localeCompare(b.type)||a.id-b.id);
   if(!rows.length){$('osmap').innerHTML='<tr><td class="muted">No base custom mappings yet.</td></tr>';return;}
-  let h=`<tr><td><b>Input</b></td><td><b>Layer</b></td><td><b>base output</b></td><td><b>${esc(osView||'')} override</b></td></tr>`;
+  let h=`<tr class="hdr"><td><b>Input</b></td><td><b>Layer</b></td><td><b>base output</b></td><td><b>${esc(osView||'')} override</b></td></tr>`;
   for(const r of rows){
     const inLbl=r.type==='key'?(KEYS[r.id]||('key '+r.id)):btnLabel(r.id);
     const ovm=osMapOv(osView,r.type);const kk=`${r.L},${r.id}`;
@@ -15967,6 +16543,7 @@ function txBuildTools(){
        </div>
        <div class="txpop" id="txpop-${g.id}">
          ${items.map(d => `<div class="txpopitem"><span data-txrun="${d.id}" data-stage="0">${txEsc(d.label)}</span><span class="txed" data-txedit="${d.id}">✎</span></div>`).join('')}
+         <div class="txpopitem"><span data-txa="new-in-group" data-txg="${g.id}" title="A new transform in ${txEsc(g.label)}">＋ Add</span></div>
        </div>`;
     bar.appendChild(w);
   }
@@ -16342,6 +16919,29 @@ function txInit(){
         TXstate.groups[gid] = Object.assign({}, TXstate.groups[gid], { id:gid, deleted:true });
         txSave(); $('txgedit').style.display = 'none'; txBuildTools(); txRenderManage();
         break; }
+      // 30.23: "＋ Add" inside a category's menu, and Duplicate in the editor
+      case 'new-in-group': {
+        const gid = t.dataset.txg, g = txGroup(gid);
+        const name = prompt('Name for the new transform in “' + (g ? g.label : gid) + '”?', 'My transform');
+        if(!name) return;
+        const id = 'u' + Date.now().toString(36);
+        TXstate.user[id] = { label:name, group:gid, desc:'',
+                             code:'(t, H) => {\n  // t is the incoming text. Return the new text.\n  return t;\n}' };
+        TXstate.home[id] = gid;
+        txCloseMenus(); txSave(); txBuildTools(); txOpenEdit(id);
+        break; }
+      case 'edit-dup': {
+        const src = $('txedit').dataset.id, e = txAll().find(x => x.id === src) || { label:src, group:'fix' };
+        const name = prompt('Name for the copy?', e.label + ' (copy)');
+        if(!name) return;
+        const id = 'u' + Date.now().toString(36), grp = TXstate.home[src] || e.group || 'fix';
+        TXstate.user[id] = { label:name, group:grp, desc:txDesc(src) || '', code:txCode(src) };
+        TXstate.home[id] = grp;
+        if(TXstate.next[src]) TXstate.next[id] = TXstate.next[src].slice();
+        txSave(); txBuildTools(); txOpenEdit(id);
+        $('txedit-label').focus(); $('txedit-label').select();
+        toast('duplicated as “' + name + '” — edit away; the original is unchanged');
+        break; }
       case 'new-transform': {
         const name = prompt('Name for the new transform?', 'My transform');
         if(!name) return;
@@ -16441,7 +17041,8 @@ const PF_DEFAULT_RECIPE =
 
 let PREFS = {
   // 29.21: hidebt / mwtab -- which top tabs show (Preferences → Layout)
-  look: { btnpad: 0.1, headpad: 0.25, hidebt: false, mwtab: false },   // 27.8 / 29.20: Preferences → Layout
+  look: { btnpad: 0.1, headpad: 0.25, hidebt: false, mwtab: false,   // 27.8 / 29.20: Preferences → Layout
+          evauto: false, evsecs: 60 },   // 30.17.3: debug recording on connect, and for how long
   stats: { name: '' },        // 29.29: the Usage/Performance/Training tab's label ('' = that)
   bench: {
     recipe: PF_DEFAULT_RECIPE,
@@ -16697,6 +17298,18 @@ const PF_SECTIONS = {
         nothing away, and ticking it again brings it back. Mouse writing
         normally sits at the top of the Macros page; as its own tab it moves
         there instead. Kept in this browser only.</p>`)}
+    </div>
+    <div class="pfrow">
+      <label>Debug mode</label>
+      <label class="inl"><input type="checkbox" id="pf-evauto" ${(PREFS.look||{}).evauto?'checked':''}> Start in debug mode on connect, for</label>
+      <input type="number" id="pf-evsecs" min="1" max="3600" step="1" value="${+((PREFS.look||{}).evsecs)||60}" style="width:5rem"> s
+      ${pfHelp('What this changes', `
+        <p>Debug mode is the Debug monitor's recording: the Pi sends every
+        key and report to this page, so the panes and the wireframe light up.
+        <b>It can slow your typing and mouse a little</b> -- the Pi does the
+        extra work on each key -- so it is off unless ticked here. "▶ Events"
+        and "Show key presses" still turn it on whenever you want. Kept in
+        this browser only.</p>`)}
     </div>`;
   },
 
@@ -16869,6 +17482,9 @@ function pfInit(){
     else if(id === 'pf-to')     { b.random_to = e.target.value; pfSchedule(); }
     else if(id === 'pf-statsname'){
       (PREFS.stats = PREFS.stats || {}).name = e.target.value; pfApplyTabs(); }
+    else if(id === 'pf-evauto') (PREFS.look = PREFS.look || {}).evauto = e.target.checked;
+    else if(id === 'pf-evsecs')
+      (PREFS.look = PREFS.look || {}).evsecs = Math.min(3600, Math.max(1, Math.round(+e.target.value) || 60));
     else if(id === 'pf-hidebt' || id === 'pf-mwtab'){
       (PREFS.look = PREFS.look || {})[id === 'pf-hidebt' ? 'hidebt' : 'mwtab'] = e.target.checked; pfApplyTabs(); }
     else if(id === 'pf-headpad'){
@@ -17096,10 +17712,12 @@ function perfRenderPrio(){
     const li = document.createElement('li');
     li.draggable = true;
     li.dataset.idx = i;
+    li.dataset.pid = p.id;
     li.innerHTML = '<span></span><span class="grip">⠿</span>';
     li.firstChild.textContent = p.label;      // textContent: never trust a label to markup
     ol.appendChild(li);
   });
+  mselBind(ol, 'perf', 'li', it => it.dataset.pid, null);
 }
 
 // Drag reorder. HTML5 drag rather than pointer maths because the list is short,
@@ -17128,10 +17746,14 @@ function perfRenderPrio(){
     e.preventDefault();
     const to = +li.dataset.idx;
     if(to !== from){
-      const moved = perfPrio.splice(from, 1)[0];
-      perfPrio.splice(to, 0, moved);
-      perfSavePrio();
-      perfRenderPrio();
+      const ids = mselIds('perf', perfPrio[from].id);
+      const ord = mselPlace(perfPrio.map(p => p.id), ids, perfPrio[to].id);
+      if(ord){
+        const byId = Object.fromEntries(perfPrio.map(p => [p.id, p]));
+        perfPrio = ord.map(x => byId[x]);
+        perfSavePrio();
+        perfRenderPrio();
+      }
     }
     from = null;
   });
@@ -17164,6 +17786,9 @@ function apmRates(x){
   return {acts, mean: x.t ? acts / x.t * 60 / tick_s : 0,
           active: x.t - idle > 0 ? acts / (x.t - idle) * 60 / tick_s : 0,
           top: Object.keys(x.b || {}).filter(k => x.b[k]).sort((a, b) => parseInt(b) - parseInt(a))[0] || '—'};}
+// 30.22: seconds as "3 h 20 m" / "4 m" / "40 s"
+function apmDur(s){ s = Math.round(s || 0);
+  return s >= 3600 ? Math.floor(s / 3600) + ' h ' + Math.round(s % 3600 / 60) + ' m' : s >= 60 ? Math.round(s / 60) + ' m' : s + ' s'; }
 function renderApmHist(){
   const el = $('apmhbody'), dd = $('apmhdays'); if(!el) return;
   if(dd) dd.innerHTML = APM_DOW.map(d => `<label class="inl" style="margin-right:.3rem"><input type="checkbox" data-apmdow="${d}" ${apmDow.has(d) ? 'checked' : ''}> ${d}</label>`).join('');
@@ -17183,20 +17808,40 @@ function renderApmHist(){
   const mx = Math.max(1, ...per.map(p => p.r.active));
   const stat = (v, l) => `<div style="flex:1;min-width:100px"><div style="font-size:1.3rem;font-weight:700">${v}</div><div class="muted" style="font-size:.72rem">${l}</div></div>`;
   const hrs = Object.keys(apmHist.hours || {}).map(Number).sort((a, b) => a - b);
-  const hr = hrs.map(hh => ({hh, r: apmRates(apmHist.hours[hh])}));
-  const hmx = Math.max(1, ...hr.map(x => x.r.active));
+  // 30.22: each hour's spread across the selected days (engine 30.22+
+  // sends dh = {day: {hour: [actions, ticks, idle]}}); without it, no bars
+  const dh = apmHist.dh || null;
+  const hr = hrs.map(hh => { const v = [];
+    if(dh) for(const d of days){ const c = (dh[d] || {})[hh]; if(c && c[1] - c[2] > 0) v.push(c[0] / (c[1] - c[2]) * 6); }
+    const m = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+    const sd = v.length > 1 ? Math.sqrt(v.reduce((a, b) => a + (b - m) * (b - m), 0) / (v.length - 1)) : 0;
+    return {hh, r: apmRates(apmHist.hours[hh]), m, sd, n: v.length}; });
+  const hmx = Math.max(1, ...hr.map(x => dh ? x.m + x.sd : x.r.active));
+  // 30.22: the share of time spent in each band, over the selection
+  const bk = Object.keys(tot.b || {}).filter(k => tot.b[k]).sort((a, b) => parseInt(a) - parseInt(b));
+  const bt = bk.reduce((a, k) => a + tot.b[k], 0) || 1;
+  const bandsHTML = bk.map(k => `<div style="display:flex;align-items:center;gap:.4rem;margin:.06rem 0">
+      <span style="flex:0 0 5rem;text-align:right" class="muted">${parseInt(k) === 0 && /^0-/.test(k) ? '0 (pause)' : esc(k)}</span>
+      <span style="flex:1;height:10px;background:var(--panel2);border-radius:4px;position:relative">
+        <span style="position:absolute;left:0;top:0;bottom:0;width:${(100 * tot.b[k] / bt).toFixed(1)}%;background:var(--hi);opacity:.6;border-radius:4px"></span></span>
+      <span style="flex:0 0 6.5rem" class="muted">${(100 * tot.b[k] / bt).toFixed(1)}% · ${apmDur(tot.b[k] * 10)}</span></div>`).join('');
   el.innerHTML = `<div class="row" style="margin:.4rem 0">${stat(R.mean.toFixed(1), 'mean APM, idle included')}${stat(R.active.toFixed(1), 'active APM, idle left out')}
       ${stat(esc(R.top), 'busiest band reached')}${stat(R.acts.toLocaleString(), 'actions, ' + days.length + ' day(s)')}</div>
-    <div style="margin:.3rem 0"><b>By day</b> <span class="muted">· bar = active APM, the line inside = mean</span></div>
+    <div style="margin:.3rem 0"><b>Time in each APM band</b> <span class="muted">· ${days.length} day(s) selected, ten-second windows</span></div>
+    ${bandsHTML || '<p class="muted">No bands recorded.</p>'}
+    <details data-uikey="apm-byday" style="margin-top:.4rem"><summary style="cursor:pointer"><b>By day</b> <span class="muted">· bar = active APM, the line inside = mean; busiest band on the right</span></summary>
     ${per.map(p => `<div style="display:flex;align-items:center;gap:.4rem;margin:.08rem 0">
       <span style="flex:0 0 7.5rem" class="muted">${esc(dowOf(p.d))} ${esc(p.d)}</span>
       <span style="flex:1;position:relative;height:11px;background:var(--panel2);border-radius:4px">
         <span style="position:absolute;left:0;top:0;bottom:0;width:${(100 * p.r.active / mx).toFixed(1)}%;background:var(--hi);opacity:.55;border-radius:4px"></span>
         <span style="position:absolute;left:0;top:4px;height:3px;width:${(100 * p.r.mean / mx).toFixed(1)}%;background:var(--fg)"></span></span>
-      <span style="flex:0 0 7rem;text-align:right">${p.r.active.toFixed(0)} <span class="muted">/ ${p.r.mean.toFixed(1)}</span></span></div>`).join('')}
-    <div style="margin:.6rem 0 .3rem"><b>By hour of the day</b> <span class="muted">· every day stored, local time</span></div>
-    <div style="display:flex;align-items:flex-end;gap:2px;height:70px">${hr.map(x => `<span title="${x.hh}:00 — active ${x.r.active.toFixed(0)} APM, mean ${x.r.mean.toFixed(1)}"
-      style="flex:1;background:var(--ok);opacity:.65;height:${Math.max(2, 100 * x.r.active / hmx).toFixed(0)}%"></span>`).join('')}</div>
+      <span style="flex:0 0 7rem;text-align:right">${p.r.active.toFixed(0)} <span class="muted">/ ${p.r.mean.toFixed(1)}</span></span>
+      <span style="flex:0 0 5rem" class="muted" title="busiest band reached that day">${esc(p.r.top)}</span></div>`).join('')}</details>
+    <div style="margin:.6rem 0 .3rem"><b>By hour of the day</b> <span class="muted">· ${dh ? 'the selected days: bar = mean active APM, line = ±1 SD across days' : 'every day stored'}, local time</span></div>
+    <div style="display:flex;align-items:flex-end;gap:2px;height:70px">${hr.map(x => { const v = dh ? x.m : x.r.active;
+      return `<span title="${x.hh}:00 — ${dh ? `mean active ${x.m.toFixed(0)} APM, SD ${x.sd.toFixed(0)}, over ${x.n} day(s)` : `active ${x.r.active.toFixed(0)} APM, mean ${x.r.mean.toFixed(1)}`}"
+      style="flex:1;position:relative;height:100%"><span style="position:absolute;left:0;right:0;bottom:0;background:var(--ok);opacity:.65;height:${Math.max(2, 100 * v / hmx).toFixed(0)}%"></span>${dh && x.n > 1 ? `
+      <span style="position:absolute;left:45%;width:2px;background:var(--fg);opacity:.7;bottom:${Math.max(0, 100 * (x.m - x.sd) / hmx).toFixed(0)}%;height:${(100 * Math.min(2 * x.sd, x.m + x.sd) / hmx).toFixed(0)}%"></span>` : ''}</span>`; }).join('')}</div>
     <div style="display:flex;gap:2px" class="muted">${hr.map(x => `<span style="flex:1;text-align:center;font-size:.62rem">${x.hh % 3 ? '' : x.hh}</span>`).join('')}</div>
     <p class="muted" style="font-size:.74rem;margin-top:.5rem">${apmHist.n_hours} stored hours, ${esc(apmHist.first || '')} to ${esc(apmHist.last || '')} (UTC).
       Active APM leaves out the ten-second windows with no action at all; mean counts them.</p>`;}
