@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HID Config 30.26</title>
+<title>HID Config 30.27.3</title>
 <style>
 /* 20.8.2: --hi (blue) = an action you can press; --pick (amber) = state:
    selected, armed or waiting. */
@@ -1659,6 +1659,17 @@ overflow-y:auto;display:flex;flex-direction:column;gap:.5rem}
       open/close pair, so another note type is just another letter.</p>
     </details>
   </div>
+  <!-- 30.27.3: Copy to Pi1's typing setting -->
+  <div class="panel" id="frommacpanel" data-uikey="frommac">
+    <h2 style="font-size:1rem">📋 Copy to Pi1 — <code>;;v;;</code> types what the Mac sent</h2>
+    <p class="muted" style="font-size:.8rem">On the Mac: right-click → Services → Copy to Pi1 (or its
+    hotkey). Here: <code>;;v;;</code> types the first 2,000 characters, <code>;;v2;;</code> the next,
+    and so on; <kbd>Esc</kbd> stops it. R and brace-language code is typed without its indentation
+    and comments. 📋 From Mac in the floating "Keys I'm learning" window copies all of it as sent.</p>
+    <label style="font-size:.8rem" title="Before the first Enter of a part, the Pi types a countdown and waits, so Esc can stop an accidental ;;v;; before anything is sent. 0 = no countdown. Saved to the Pi when changed.">Countdown before the first Enter:
+      <input id="fmcountval" type="number" min="0" max="30" step="1" style="width:3.5rem"> seconds</label>
+    <span id="fmcountnote" class="muted" style="font-size:.75rem;margin-left:.4rem"></span>
+  </div>
   <div class="panel">
   <div class="bar"><button id="expread" disabled>⬇ Read expansions</button>
     <button id="expwrite" class="primary" disabled>⬆ Save expansions</button>
@@ -1879,6 +1890,12 @@ const UI_VERSION=(document.title.match(/([\d.]+(?:\s*BF\d+)?)\s*$/)||[])[1]||'?'
 // entry whose key no longer resolves greys out. Maintained by hand beside
 // docs/CHANGELOG.md.
 const VERSION_HISTORY=[
+ {v:'30.27.3',items:[
+   {t:'Expansions: ;;v;; countdown before the first Enter is now a setting (📋 Copy to Pi1 panel), 0 = none; the engine also types R/brace code without indentation and recognised code without comments (engine 30.27.1–30.27.3)',k:'frommac'}]},
+ {v:'30.27',items:[
+   {t:'Copy to Pi1: send text from the Mac (right-click → Services → Copy to Pi1, or a hotkey after ⌘C) over a key that can do nothing else',k:'focuschip'},
+   {t:';;v;; types the text from the Mac, 2,000 characters a part (;;v2;;, ;;v3;; …); Escape stops it, and a 4-second countdown comes before the first Enter (engine 30.27)',k:'focuschip'},
+   {t:'📋 From Mac in the floating "Keys I\'m learning" window copies all of it to this computer\'s clipboard',k:'focuschip'}]},
  {v:'30.26',items:[
    {t:'Macros: Shared timings — a named wait used by several macros ($panel in the paste-from-history pack) is changed once, in all of them',k:'macrolist'},
    {t:'Paste from clipboard history, pack 4: n × Ctrl+V pastes oldest first, every item through Win+V, with one $panel wait for every opening — installed into the profile on request',k:'macrolist'},
@@ -2819,6 +2836,7 @@ normalize();snapCfg();render();updateCurProf();initTz();updateOsBtn();featureApp
         $('svcwarn').style.display='none';}
       else if(fid===2){layouts=obj&&typeof obj==='object'?obj:{};render();}
       else if(fid===8){testRuns=(obj&&obj.runs)||[];testHistMeta=obj||{};renderTestHistory();}
+      else if(fid===FROM_MAC_FID){const w=_fromMacWaiters;_fromMacWaiters=[];w.forEach(r=>r(obj||{}));}   // 30.27
       else if(fid===3){
         lastEng=obj;adoptEffective(obj);adoptAdvertised(obj);updateConStat();
         if($('mwsec')&&$('mwsec').open)try{renderMouseWrite();}catch(e){}   // 29.2
@@ -8476,6 +8494,54 @@ function focusList(){
 function pkChooseFocus(){focusPick();}
 // The floating window.
 let focusWin=null,focusUsed={};
+// 30.27: Copy to Pi1. The 📋 in the floating window copies the text sent
+// from the Mac (fid 9, read-only, at most 40 KB: about five seconds) to this
+// computer's clipboard. ;;v;; types the same text 2,000 characters a part.
+const FROM_MAC_FID=9,FROM_MAC_PART=2000;
+let _fromMacWaiters=[],_ffMacMsg='';
+function fromMacFetch(){
+  return new Promise((res,rej)=>{
+    if(!device){rej(new Error('not connected'));return;}
+    const t=setTimeout(()=>{_fromMacWaiters=_fromMacWaiters.filter(x=>x!==ok);rej(new Error('the Pi did not answer'));},20000);
+    const ok=o=>{clearTimeout(t);res(o);};
+    _fromMacWaiters.push(ok);getFile(FROM_MAC_FID);});}
+function fromMacParts(n){const k=Math.ceil(n/FROM_MAC_PART);
+  return k<=1?';;v;;':k===2?';;v;; ;;v2;;':';;v;; … ;;v'+k+';;';}
+// The clipboard write starts inside the click and is handed the read as a
+// promise, so the click still counts as the user's act when the text
+// arrives a few seconds later. Where the browser refuses that, the older
+// copy command is tried; failing both, the text is kept and the next click
+// (within a minute) copies it at once.
+let _ffMacHeld=null;    // {t, until}
+function _copyByCommand(d,t){
+  try{const ta=d.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';
+    d.body.appendChild(ta);ta.select();const ok=d.execCommand('copy');ta.remove();return ok;}
+  catch(_){return false;}}
+function _ffMacDone(t){_ffMacHeld=null;
+  _ffMacMsg=`✓ ${t.length.toLocaleString()} characters copied · type: ${fromMacParts(t.length)}`;}
+async function focusCopyFromMac(){
+  const w=focusWin;if(!w||w.closed)return;
+  const held=_ffMacHeld;
+  if(held&&Date.now()<held.until){
+    if(_copyByCommand(w.document,held.t))_ffMacDone(held.t);
+    else{try{await w.navigator.clipboard.writeText(held.t);_ffMacDone(held.t);}
+      catch(e){_ffMacMsg='✗ the browser will not copy: '+(e&&e.message||e);}}
+    renderFocusFloat();return;}
+  _ffMacMsg='fetching…';renderFocusFloat();
+  const got=fromMacFetch().then(o=>{const t=String(o.text||'');
+    if(!t)throw new Error('nothing sent from the Mac yet');return t;});
+  const nav=w.navigator;
+  let wrote=Promise.resolve(false);
+  try{if(w.ClipboardItem&&nav.clipboard&&nav.clipboard.write)
+    wrote=nav.clipboard.write([new w.ClipboardItem({'text/plain':got.then(x=>new w.Blob([x],{type:'text/plain'}))})])
+      .then(()=>true,()=>false);}catch(_){}
+  let t;
+  try{t=await got;}
+  catch(e){_ffMacMsg='✗ '+(e&&e.message||e);renderFocusFloat();return;}
+  if(await wrote||_copyByCommand(w.document,t))_ffMacDone(t);
+  else{_ffMacHeld={t,until:Date.now()+60000};
+    _ffMacMsg=`${t.length.toLocaleString()} characters fetched — click 📋 again to copy`;}
+  renderFocusFloat();}
 async function focusFloat(){
   if(focusWin&&!focusWin.closed){focusWin.focus();return;}
   // Always-on-top first; a plain popup if the browser refuses it. A refused
@@ -8495,7 +8561,8 @@ async function focusFloat(){
     const i=+b.dataset.i;
     if(b.dataset.ff==='rm')focusRemove(i);
     else if(b.dataset.ff==='pick'){window.focus();focusPick(i);}
-    else if(b.dataset.ff==='add'){window.focus();focusPick('add');}});
+    else if(b.dataset.ff==='add'){window.focus();focusPick('add');}
+    else if(b.dataset.ff==='frommac')focusCopyFromMac();});
   focusDragBind(focusWin.document);
   renderFocusFloat();renderFocusChip();}
 function renderFocusFloat(flash){
@@ -8508,7 +8575,7 @@ function renderFocusFloat(flash){
   d.documentElement.style.colorScheme='light dark';
   d.body.style.cssText=`margin:0;padding:.4rem .5rem;font:14px system-ui,sans-serif;background:${flash?'rgba(34,197,94,.35)':'Canvas'};color:CanvasText;transition:background .4s`;
   // 30.16: one card per shortcut; ⠿ drags it up or down (focusDragBind)
-  d.body.innerHTML=!ids.length?'<p>Nothing chosen to practise yet. <button data-ff="add">＋ add</button></p>':
+  d.body.innerHTML=(!ids.length?'<p style="margin:.2rem 0">Nothing chosen to practise yet.</p>':
     ids.map((id,i)=>{const f=focusInfo(id),n=focusUsed[id]||0;return `
     <div class="fcard" data-i="${i}" style="display:flex;gap:.4rem;align-items:flex-start;padding:.3rem .2rem;border-bottom:1px solid rgba(128,128,128,.35)">
       <span class="fgrip" data-i="${i}" title="drag to reorder" style="cursor:grab;user-select:none;opacity:.6;padding:.1rem .15rem;touch-action:none">⠿</span>
@@ -8519,8 +8586,10 @@ function renderFocusFloat(flash){
         <div style="font-size:.7rem;opacity:.75">${f.st.per}/wk of ${f.st.t} · ${esc(f.st.s)}${n?` · <b style="color:${hi}">used ✓${n}</b> now`:''}</div></div>
       <span style="display:flex;flex-direction:column;gap:.2rem">
         <button data-ff="pick" data-i="${i}" title="choose another in the main window">change…</button>
-        <button data-ff="rm" data-i="${i}" title="remove from focus">✕</button></span></div>`;}).join('')
-    +'<div style="margin-top:.35rem"><button data-ff="add" title="add a shortcut to focus on">＋ add</button></div>';
+        <button data-ff="rm" data-i="${i}" title="remove from focus">✕</button></span></div>`;}).join(''))
+    +'<div style="margin-top:.35rem;display:flex;gap:.4rem;align-items:center;flex-wrap:wrap"><button data-ff="add" title="add a shortcut to focus on">＋ add</button>'
+    +'<button data-ff="frommac" title="Copy the text sent from the Mac (Copy to Pi1) to this computer\'s clipboard">📋 From Mac</button>'
+    +`<span style="font-size:.72rem;opacity:.8">${esc(_ffMacMsg)}</span></div>`;
   if(flash)setTimeout(()=>renderFocusFloat(false),700);}
 // "Used": the engine sent a report carrying a focus chord.
 // 30.16: every shortcut in the focus list is watched, each counted on its own
@@ -13968,10 +14037,32 @@ function renderNoteTable(){
     cfg.note_rules.splice(i,1);renderNoteTable();renderClips();
     toast('tag removed — ⬆ Save to device to apply');});}
 
+// 30.27.3: ;;v;;'s countdown before its first Enter (from_mac_countdown_s;
+// absent = the engine's 4). Shown from cfg; written only on a change.
+const FM_COUNT_DEF=4,FM_COUNT_MAX=30;
+function fmCountShow(){
+  const v=$('fmcountval'),n=$('fmcountnote');if(!v)return;
+  const cur=cfg&&cfg.from_mac_countdown_s;
+  if(document.activeElement!==v)v.value=cfg?(cur==null?FM_COUNT_DEF:cur):'';
+  v.disabled=!cfg;
+  if(n)n.textContent=!cfg?'read the device first':
+    cur==null?'(the engine default)':cur===0?'Enter goes at once — Esc has no window':'';}
+function fmCountSet(s){
+  if(!cfg){toast('read the device first',true);return;}
+  s=Math.round(+s);
+  if(!isFinite(s)){fmCountShow();return;}
+  s=Math.max(0,Math.min(FM_COUNT_MAX,s));
+  cfg.from_mac_countdown_s=s;
+  toast(`;;v;; countdown: ${s?s+' s':'none'} · ${cfgSaveNow()}`);
+  fmCountShow();}
+(function(){const v=$('fmcountval');
+  if(v)v.addEventListener('change',()=>{
+    if(v.value===''){fmCountShow();return;}
+    fmCountSet(v.value);});})();
 function renderExp(){
   if(!cfg)cfg={};if(!cfg.exp_names)cfg.exp_names={};
   try{renderPrimers();}catch(e){console.warn('primers',e);}   // 29.2.1
-  renderNoteTable();
+  renderNoteTable();fmCountShow();
   // 21.0: normalising reads both shapes and writes nothing; the write
   // happens on edit.
   renderDynTable(normDynView());
